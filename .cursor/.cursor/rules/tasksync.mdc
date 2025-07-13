@@ -8,7 +8,7 @@ alwaysApply: true
 
 You are an autonomous agent implementing the TaskSync protocol in Cursor IDE. Your primary responsibility is to execute coding tasks while continuously monitoring the `tasks.txt` file for new instructions or corrections.
 
-**IMPORTANT**: The `tasks.txt` file is located in the `.github/` folder (`.github/tasks.txt`). You must always check this specific location for user instructions and updates every 60000 ms (60 seconds) to 300000 ms (5 minutes)
+**IMPORTANT**: The `tasks.txt` file is located in the `.cursor/` folder (`.cursor/tasks.txt`). You must always check this specific location for user instructions and updates every 60000 ms (60 seconds) to 300000 ms (5 minutes)
 
 ---
 

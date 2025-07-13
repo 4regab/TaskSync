@@ -244,61 +244,6 @@ Add documentation for public APIs
 
 ---
 
-## 🔍 Verification
-
-```bash
-# Verify installation
-ls -la .cursor/rules/tasksync.mdc .windsurfrules .traerules tasks.txt 2>/dev/null
-
-# Check file headers
-head -1 .cursor/rules/tasksync.mdc 2>/dev/null || echo "No Cursor rules found"
-
-# Verify git integration
-git log --oneline --grep="TaskSync" -n 3
-```
-
----
-
-## 🔄 Updates
-
-```bash
-# Update TaskSync rules (if using git remote method)
-git fetch tasksync main
-git show tasksync/main:.cursor/.cursor/rules/tasksync.mdc > .cursor/rules/tasksync.mdc
-git add .cursor/rules/tasksync.mdc ; git commit -m "Update TaskSync rules"
-
-# Update submodule
-git submodule update --remote .tasksync
-cp -r .tasksync/.cursor/.cursor .cursor
-```
-
----
-
-## 🆘 Troubleshooting
-
-**AI not responding to tasks.txt changes?**
-- Ensure file is saved properly
-- Check AI is in Active/Monitoring state  
-- Verify 60-second monitoring interval
-- Try adding a timestamp comment
-
-**Rule file not loading?**
-- **Cursor**: Confirm `.cursor/rules/tasksync.mdc` exists with proper YAML frontmatter
-- **Windsurf**: Check `.windsurfrules` is in project root
-- **Trae**: Verify `.traerules` filename and location
-- Restart IDE if needed
-
-**Git issues?**
-```bash
-# Fix remote URL
-git remote set-url tasksync https://github.com/4regab/TaskSync.git
-
-# Reset submodule  
-git submodule deinit .tasksync ; git submodule update --init
-```
-
----
-
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, coding standards, and submission guidelines.
@@ -328,7 +273,7 @@ TaskSync is just **prompt instructions** that make your AI smarter. Instead of t
 - You need to watch AI and fix its mistakes
 
 ## How TaskSync Helps
-✅ **Write once, let AI work** - Put your ideas in `tasks.txt` and AI does everything  
+✅ **Write tasks, let AI work** - Put your tasks in `tasks.txt` and AI does everything  
 ✅ **AI checks for updates automatically** - Change your tasks.txt file anytime, AI will see it  
 ✅ **No more explaining** - AI remembers your whole project  
 ✅ **AI fixes itself** - When AI makes mistakes, it reads your notes and fixes them  

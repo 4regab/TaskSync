@@ -19,7 +19,7 @@ TaskSync is just **prompt instructions** that make your AI smarter. Instead of t
 
 ## How It Works
 
-https://github.com/user-attachments/assets/b0e2cbd1-1029-4f2e-94d4-25ae5af2bd12
+https://github.com/user-attachments/assets/5f307fcd-052b-4b6b-940e-a0e946913c77
 
 1. **Drag the tasksync instructions** to chat
 2. **Add tasks in tasks.txt file** 

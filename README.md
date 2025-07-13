@@ -83,8 +83,6 @@ git sparse-checkout set .global
 - **Real-Time Communication**: Edit `tasks.txt` anytime to communicate with AI
 - **Autonomous Execution**: Independent task completion  
 - **State Management**: Active → Monitoring → Terminating
-- **Security First**: No hardcoded secrets, OWASP compliance
-
 ---
 
 ## 🔧 Usage Examples

@@ -63,10 +63,6 @@ git sparse-checkout set .cursor
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .global
-cp .global/global_rules.md ../
-cp .global/tasks.txt ../
-cd ..
-rm -rf TaskSync
 ```
 ---
 ### 🎯 IDE-Specific Documentation

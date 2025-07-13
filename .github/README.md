@@ -1,5 +1,5 @@
 # TaskSync
-This Instructions helps your AI work smarter and saves you 80-90% of premium requests. Just write tasks in a tasks.txt file, and AI will check it automatically every 60 seconds to 5 minutes. When you want to change something, edit the file - no need to start new chats or waste more requests.
+This Prompt Instructions helps your AI work smarter and saves you 80-90% of premium requests. Just write tasks in a tasks.txt file, and AI will check it automatically every 60 seconds to 5 minutes. When you want to change something, edit the file - no need to start new chats or waste more requests.
 
 ## Why You Need This
 - Every time you chat with AI, it costs money. Most people waste requests because:

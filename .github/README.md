@@ -60,14 +60,6 @@ git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .global
 ```
----
-
-### 🎯 IDE-Specific Documentation
-- **[GitHub Copilot (VS Code)](.github/)** - `.github/instructions/` setup for maximum premium usage
-- **[Cursor IDE](.cursor/)** - Modern `.cursor/rules/*.mdc` setup
-- **[Universal](.global/)** - `global_rules.md` for any IDE
-
----
 
 ## 📁 Repository Structure
 

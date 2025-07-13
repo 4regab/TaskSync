@@ -308,47 +308,4 @@ Security & Testing:
 # RESTART: Continue working on current tasks
 # STATUS: Please report current progress
 ```
-
----
-
-## 🔄 Advanced Workflows
-
-### Team Collaboration
-```text
-# TEAM WORKFLOW - Multiple developers
-# Assigned to: [Developer Name]
-# Review by: [Reviewer Name]
-# Due date: [Date]
-
-Current Sprint Tasks:
-- [Developer A]: User authentication module
-- [Developer B]: Payment processing
-- [Developer C]: Admin dashboard
-
-Code Review Checklist:
-- TypeScript types properly defined
-- Unit tests included
-- Documentation updated
-- Performance considerations addressed
-```
-
-### CI/CD Integration
-```text
-# AUTOMATED DEPLOYMENT TASKS
-# Trigger: On push to main branch
-
-Pre-deployment:
-- Run all unit tests
-- Check code coverage (minimum 80%)
-- Run linting and type checking
-- Build production bundle
-- Run security audit
-
-Deployment:
-- Deploy to staging environment
-- Run integration tests
-- Deploy to production
-- Send notification to team
-```
-
 Remember: TaskSync works best when you provide clear, detailed instructions and maintain regular communication through your tasks.txt file!

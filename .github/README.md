@@ -38,10 +38,6 @@ This Instructions helps your AI work smarter and saves you 80-90% of premium req
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .github
-cp -r .github ../
-cp .github/instructions/tasks.txt ../
-cd ..
-rm -rf TaskSync
 ```
 
 **Files created:** `.github/instructions/protocol.instructions.md` and `tasks.txt`
@@ -54,10 +50,6 @@ rm -rf TaskSync
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .cursor
-cp -r .cursor/.cursor ../
-cp .cursor/tasks.txt ../
-cd ..
-rm -rf TaskSync
 ```
 
 **Files created:** `.cursor/rules/tasksync.mdc` and `tasks.txt`
@@ -70,10 +62,6 @@ rm -rf TaskSync
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .windsurf
-cp .windsurf/.windsurfrules ../
-cp .windsurf/tasks.txt ../
-cd ..
-rm -rf TaskSync
 ```
 
 **Files created:** `.windsurfrules` and `tasks.txt`
@@ -86,10 +74,6 @@ rm -rf TaskSync
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .trae
-cp .trae/.traerules ../
-cp .trae/tasks.txt ../
-cd ..
-rm -rf TaskSync
 ```
 
 **Files created:** `.traerules` and `tasks.txt`
@@ -102,14 +86,7 @@ rm -rf TaskSync
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .global
-cp .global/global_rules.md ../
-cp .global/tasks.txt ../
-cd ..
-rm -rf TaskSync
 ```
-
-**Files created:** `global_rules.md` and `tasks.txt`
-
 ---
 
 ### 🔗 Alternative Installation Methods

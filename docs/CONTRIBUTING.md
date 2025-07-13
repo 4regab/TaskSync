@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Contributing to TaskSync
 
 Thank you for your interest in contributing to TaskSync! This guide will help you get started with development, coding standards, and submission guidelines.

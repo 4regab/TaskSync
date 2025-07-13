@@ -19,7 +19,7 @@ This Instructions helps your AI work smarter and saves you 80-90% of premium req
 1. **Drag the prompt file** to chat
 2. **Add a tasks/instructions in tasks.txt file** 
 3. **Let AI work alone** - it checks tasks.txt for updates automatically
-4. **Change tasks.txt anytime** to guide or fix the AI mistakes
+4. **Change tasks.txt anytime** to give new tasks or fix the AI mistakes
 
 **Start saving money today.** Get the better results with way fewer premium requests.
 

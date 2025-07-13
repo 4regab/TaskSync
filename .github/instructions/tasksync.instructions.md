@@ -97,16 +97,6 @@ Begin each response with internal state assessment:
 
 Then provide user-facing content appropriate to current state and task requirements.
 
-### <thinking_process>
-For complex tasks or when integrating `tasks.txt` instructions:
-
-<thinking>
-- Analyze current progress and requirements
-- Evaluate any new instructions from `tasks.txt`
-- Determine optimal integration approach
-- Plan next steps with monitoring schedule
-</thinking>
-
 ---
 
 ## Success Criteria

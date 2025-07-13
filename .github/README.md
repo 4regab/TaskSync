@@ -62,53 +62,9 @@ git sparse-checkout set .global
 ```
 ---
 
-### 🔗 Alternative Installation Methods
-
-<details>
-<summary>Click to expand Git Submodule method</summary>
-
-```bash
-git submodule add https://github.com/4regab/TaskSync.git .tasksync
-
-# Then copy files for your IDE:
-# GitHub Copilot: cp -r .tasksync/.github .github ; cp .tasksync/.github/instructions/tasks.txt tasks.txt
-# Cursor: cp -r .tasksync/.cursor/.cursor .cursor ; cp .tasksync/.cursor/tasks.txt tasks.txt
-# Windsurf: cp .tasksync/.windsurf/.windsurfrules . ; cp .tasksync/.windsurf/tasks.txt .
-# Trae: cp .tasksync/.trae/.traerules . ; cp .tasksync/.trae/tasks.txt .
-# Universal: cp .tasksync/.global/global_rules.md . ; cp .tasksync/.global/tasks.txt .
-
-git add . ; git commit -m "Add TaskSync protocol"
-```
-
-</details>
-
-<details>
-<summary>Click to expand Direct Git Integration method</summary>
-
-```bash
-git remote add tasksync https://github.com/4regab/TaskSync.git
-git fetch tasksync main
-
-# GitHub Copilot (VS Code):
-git show tasksync/main:.github/instructions/protocol.instructions.md > .github/instructions/protocol.instructions.md
-git show tasksync/main:.github/instructions/tasks.txt > tasks.txt
-
-# Cursor IDE:
-git show tasksync/main:.cursor/.cursor/rules/tasksync.mdc > .cursor/rules/tasksync.mdc
-git show tasksync/main:.cursor/tasks.txt > tasks.txt
-
-git add . ; git commit -m "Integrate TaskSync protocol"
-```
-
-</details>
-
----
-
 ### 🎯 IDE-Specific Documentation
 - **[GitHub Copilot (VS Code)](.github/)** - `.github/instructions/` setup for maximum premium usage
 - **[Cursor IDE](.cursor/)** - Modern `.cursor/rules/*.mdc` setup
-- **[Windsurf IDE](.windsurf/)** - `.windsurfrules` setup  
-- **[Trae IDE](.trae/)** - `.traerules` setup
 - **[Universal](.global/)** - `global_rules.md` for any IDE
 
 ---
@@ -119,17 +75,14 @@ git add . ; git commit -m "Integrate TaskSync protocol"
 TaskSync/
 ├── .github/          # GitHub Copilot (VS Code) instructions 
 ├── .cursor/          # Cursor IDE (.cursor/rules/tasksync.mdc)
-├── .windsurf/        # Windsurf IDE (.windsurfrules)  
-├── .trae/            # Trae IDE (.traerules)
 ├── .global/          # Universal (global_rules.md)
 └── docs/             # Documentation
 ```
-
 ---
 
 ## 🛠️ How It Works
 
-1. **Copy rule file** to your project root
+1. **Drag the tasksync file** to chat give instructions in chat to follow taskync 
 2. **Edit `tasks.txt`** anytime to give AI new instructions in real-time
 3. **AI monitors** `tasks.txt` every 60 seconds
 4. **Autonomous execution** with state management

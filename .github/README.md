@@ -16,11 +16,10 @@ This Instructions helps your AI work smarter and saves you 80-90% of premium req
 ✅ **Save 80-90% of your premium AI requests.** Instead of 50 messages, you might only need 5-10.
 
 ## How It Works
-1. **Copy the prompt** to chat
-2. **Add a tasks.txt file** 
-3. **Write what you want** 
-4. **Let AI work alone** - it checks for updates automatically
-5. **Change tasks.txt anytime** to guide or fix the AI mistakes
+1. **Drag the prompt file** to chat
+2. **Add a tasks/instructions in tasks.txt file** 
+3. **Let AI work alone** - it checks tasks.txt for updates automatically
+4. **Change tasks.txt anytime** to guide or fix the AI mistakes
 
 **Start saving money today.** Get the better results with way fewer premium requests.
 

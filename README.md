@@ -172,9 +172,7 @@ git add . ; git commit -m "Integrate TaskSync protocol"
 ### 🎯 IDE-Specific Documentation
 - **[GitHub Copilot (VS Code)](.github/)** - `.github/instructions/` setup for maximum premium usage
 - **[Cursor IDE](.cursor/)** - Modern `.cursor/rules/*.mdc` setup
-- **[Windsurf IDE](.windsurf/)** - `.windsurfrules` setup  
-- **[Trae IDE](.trae/)** - `.traerules` setup
-- **[Universal](.global/)** - `global_rules.md` for any IDE
+- **[Global](.global/)** - `global_rules.md` for any IDE
 
 ---
 

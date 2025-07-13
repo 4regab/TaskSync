@@ -1,8 +1,7 @@
 # TaskSync
-**Save money on your AI coding IDEs.** This simple prompt insutrctions helps your AI work better and use less premium requests.
-
+**Save premium requests on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests and give the agent new instructions while its currently working.
 ## What This Does
-TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write tasks in `tasks.txt`. Your AI agent reads this file and does the work by itself.
+TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write tasks in `tasks.txt`. Your AI agent reads this file and does the new tasks.
 
 ## How TaskSync Helps
 ✅ **AI checks for updates automatically** - checks your tasks.txt file anytime for new tasks.
@@ -62,14 +61,6 @@ git sparse-checkout set .global
 - **[Global](.global/)** - `global_rules.md` for any IDE
 
 ---
-
-## 🛠️ How It Works
-
-1. **Copy rule file** to your project root
-2. **Edit `tasks.txt`** anytime to give AI new instructions in real-time
-3. **AI monitors** `tasks.txt` every 60 seconds
-4. **Autonomous execution** with state management
-
 ### TaskSync Protocol Features
 - **Real-Time Communication**: Edit `tasks.txt` anytime to communicate with AI
 - **Autonomous Execution**: Independent task completion  

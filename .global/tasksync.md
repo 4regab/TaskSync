@@ -105,4 +105,4 @@ Then provide user-facing content appropriate to current state and task requireme
 
 ## Initialization
 Confirm understanding of this protocol and request initial task assignment. Begin monitoring `tasks.txt` immediately upon task receipt.
-```
+

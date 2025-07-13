@@ -1,5 +1,5 @@
 # TaskSync
-**Save money on your AI coding IDEs.** This simple prompt insutrctions helps your AI work better and use less premium requests.
+**Save money on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests.
 
 ## What This Does
 TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write what you want in a simple text file called `tasks.txt`. Your AI reads this file and does the work by itself.

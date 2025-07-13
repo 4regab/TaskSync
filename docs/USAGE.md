@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Usage Guide: Autonomous Agent with Task File Monitoring
 
 ## 1. Agent Initialization
@@ -216,4 +215,3 @@ Implement user registration with email verification.
 This protocol empowers you to maximize the value of premium coding IDEs by enabling autonomous, file-driven task execution with robust monitoring, seamless instruction integration, and transparent communication. Use it to automate, accelerate, and enhance your development workflow.
 
 **For best results, always keep `tasks.txt` up to date and use clear, actionable language.**
->>>>>>> de134b1b6cab3497d2f5e0ea5f2b0d11db76b88e

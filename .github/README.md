@@ -25,7 +25,7 @@ This Instructions helps your AI work smarter and saves you 80-90% of premium req
 
 ---
 
-## �🚀 Quick Start
+## 🚀 Quick Start
 
 **Choose your IDE and copy-paste the installation commands:**
 

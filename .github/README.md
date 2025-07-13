@@ -54,33 +54,7 @@ git sparse-checkout set .cursor
 
 **Files created:** `.cursor/rules/tasksync.mdc` and `tasks.txt`
 
----
-
-### 🎯 Windsurf IDE
-
-```bash
-git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
-cd TaskSync
-git sparse-checkout set .windsurf
-```
-
-**Files created:** `.windsurfrules` and `tasks.txt`
-
----
-
-### 🎯 Trae IDE
-
-```bash
-git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
-cd TaskSync
-git sparse-checkout set .trae
-```
-
-**Files created:** `.traerules` and `tasks.txt`
-
----
-
-### 🎯 Universal (Any IDE)
+### 🎯 Global (Any IDE)
 
 ```bash
 git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git

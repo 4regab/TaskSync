@@ -1,18 +1,14 @@
 # TaskSync
-**Save money on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests.
-
-## What This Does
-TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write what you want in a simple text file called `tasks.txt`. Your AI reads this file and does the work by itself.
+This Instructions helps your AI work smarter and saves you 80-90% of premium requests. Just write tasks in a tasks.txt file, and AI will check it automatically every 60 seconds to 5 minutes. When you want to change something, edit the file - no need to start new chats or waste more requests.
 
 ## Why You Need This
-**Premium AI tools are expensive.** Every time you chat with AI, it costs money. Most people waste requests because:
+- Every time you chat with AI, it costs money. Most people waste requests because:
 - AI doesn't understand what you want
 - You have to explain the same thing many times  
 - AI forgets what you're building
-- You need to watch AI and fix its mistakes
 
 ## How TaskSync Helps
-✅ **Write once, let AI work** - Put your ideas in `tasks.txt` and AI does everything  
+✅ **Write once, let AI work** - Put your tasks in `tasks.txt` and AI does everything  
 ✅ **AI checks for updates automatically** - Change your tasks.txt file anytime, AI will see it  
 ✅ **No more explaining** - AI remembers your whole project  
 ✅ **AI fixes itself** - When AI makes mistakes, it reads your notes and fixes them  
@@ -25,17 +21,6 @@ TaskSync is just **prompt instructions** that make your AI smarter. Instead of t
 3. **Write what you want** in simple words
 4. **Let AI work alone** - it checks for updates automatically
 5. **Change tasks.txt anytime** to guide or fix the AI
-
-## You Can Control How Often AI Checks
-
-Don't want AI checking every 60 seconds? You can tell it to check every 2 minutes, 5 minutes, or whatever works for you.
-
-## Perfect For
-
-- Building websites and apps
-- Long coding projects  
-- When you're on a budget
-- Anyone tired of wasting AI requests
 
 **Start saving money today.** Get the better results with way fewer premium requests.
 

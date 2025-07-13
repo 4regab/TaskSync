@@ -5,7 +5,8 @@
 TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write tasks in `tasks.txt`. Your AI agent reads this file and does the work by itself.
 
 ## How TaskSync Helps
-✅ **AI checks for updates automatically** - Change your tasks.txt file anytime, AI will see it and follows the new instructions.  
+✅ **AI checks for updates automatically** - checks your tasks.txt file anytime for new tasks.
+✅ **Automatically follows the new instructions** without needing the use another request.  
 ✅ **AI fixes itself** - When AI makes mistakes, it reads your notes and fixes them  
 ✅ **Works with any AI tool** - GitHub Copilot, Cursor, Windsurf, Trae IDE, and more  
 

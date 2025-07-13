@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # TaskSync
 **Save money on your AI coding IDEs.** This simple prompt insutrctions helps your AI work better and use less premium requests.
 
@@ -185,8 +184,6 @@ git add . ; git commit -m "Integrate TaskSync protocol"
 TaskSync/
 ├── .github/          # GitHub Copilot (VS Code) instructions 
 ├── .cursor/          # Cursor IDE (.cursor/rules/tasksync.mdc)
-├── .windsurf/        # Windsurf IDE (.windsurfrules)  
-├── .trae/            # Trae IDE (.traerules)
 ├── .global/          # Universal (global_rules.md)
 └── docs/             # Documentation
 ```

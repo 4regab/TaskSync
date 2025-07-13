@@ -4,13 +4,6 @@
 ## What This Does
 TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write tasks in `tasks.txt`. Your AI agent reads this file and does the work by itself.
 
-## Why You Need This
-**Premium AI tools are expensive.** Every time you chat with AI, it costs money. Most people waste requests because:
-- AI doesn't understand what you want
-- You have to explain the same thing many times  
-- AI forgets what you're building
-- You need to watch AI and fix its mistakes
-
 ## How TaskSync Helps
 ✅ **Write once, let AI work** - Put your ideas in `tasks.txt` and AI does everything  
 ✅ **AI checks for updates automatically** - Change your tasks.txt file anytime, AI will see it  

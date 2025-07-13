@@ -15,9 +15,8 @@ https://github.com/user-attachments/assets/5f307fcd-052b-4b6b-940e-a0e946913c77
 
 1. **Drag the tasksync instructions** to chat
 2. **Add tasks in tasks.txt file** 
-3. **Write what you want** 
-4. **Let AI work alone** - it checks for updates automatically
-5. **Change tasks.txt anytime** to follow next insutructions or make it fix its mistakes.
+3. **Write what you want** it checks tasks.txt for updates automatically
+4. **Change tasks.txt anytime** to follow next insutructions or make it fix its mistakes.
 
 **Start saving money today.** Get the better results with way fewer premium requests.
 

@@ -20,22 +20,14 @@ TaskSync is just **prompt instructions** that make your AI smarter. Instead of t
 ✅ **Save 80-90% of your premium AI requests.** Instead of 50 messages, you might only need 5-10.
 
 ## How It Works
-1. **Copy the prompt** to your AI tool
-2. **Create a tasks.txt file** in your project
-3. **Write what you want** in simple words
+
+https://github.com/user-attachments/assets/b0e2cbd1-1029-4f2e-94d4-25ae5af2bd12
+
+1. **Drag the tasksync instructions** to chat
+2. **Add tasks in tasks.txt file** 
+3. **Write what you want** 
 4. **Let AI work alone** - it checks for updates automatically
-5. **Change tasks.txt anytime** to guide or fix the AI
-
-## You Can Control How Often AI Checks
-
-Don't want AI checking every 60 seconds? You can tell it to check every 2 minutes, 5 minutes, or whatever works for you.
-
-## Perfect For
-
-- Building websites and apps
-- Long coding projects  
-- When you're on a budget
-- Anyone tired of wasting AI requests
+5. **Change tasks.txt anytime** to follow next insutructions or make it fix its mistakes.
 
 **Start saving money today.** Get the better results with way fewer premium requests.
 

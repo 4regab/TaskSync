@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # TaskSync
 **Save money on your AI coding IDEs.** This simple prompt insutrctions helps your AI work better and use less premium requests.
 

@@ -73,12 +73,9 @@ git sparse-checkout set .global
 <<<<<<< HEAD
 ## 🔧 Usage Examples
 
-**Real-time task communication with status logging - edit `.github/instructions/tasks.txt` anytime:**
-=======
-**Real-time task communication - edit `tasks.txt` anytime:**
->>>>>>> b92e7abfb769aeedb14cce0fb845bc412f931092
+**Real-time task communication with status logging - edit `tasks.txt` anytime:**
 
-## 🔧 Example content of `.github/instructions/tasks.txt`
+## 🔧 Example content of `tasks.txt`
 
 ```text
 # Current Priority

@@ -79,9 +79,15 @@ git sparse-checkout set .global
 - **State Management**: Active → Monitoring → Manual Termination Only
 ---
 
+<<<<<<< HEAD
 ## 🔧 Usage Examples
 
 **Real-time task communication with status logging - edit `tasks.txt` anytime:**
+=======
+**Real-time task communication - edit `tasks.txt` anytime:**
+>>>>>>> b92e7abfb769aeedb14cce0fb845bc412f931092
+
+## 🔧 Example content of tasks.txt
 
 ```text
 # Current Priority
@@ -168,10 +174,6 @@ Check #5: - Read tasks.txt containing 9 lines. Authentication bug fix 80% comple
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, coding standards, and submission guidelines.
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
 
 ## 📚 Documentation
 

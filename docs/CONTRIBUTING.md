@@ -65,80 +65,6 @@ TaskSync/
 
 ---
 
-## 🔄 Contribution Workflow
-
-### 1. Issue Creation
-
-- **Bug Reports**: Include protocol version and reproduction steps
-- **Feature Requests**: Explain compatibility with infinite monitoring
-- **Documentation**: Specify which files need updates
-
-### 2. Development Process
-
-- **Protocol First**: Ensure changes align with PROTOCOL.md
-- **Documentation Updates**: Update all related documentation files
-- **Testing**: Verify functionality with actual AI assistants
-- **Status Logging**: Test the count-based monitoring system
-
-### 3. Pull Request Guidelines
-
-#### Required Information
-
-- **Description**: Clear explanation of changes
-- **Protocol Impact**: How changes affect core protocol behavior
-- **Testing Results**: Evidence of successful protocol testing
-- **Documentation**: List of updated documentation files
-
-
-### 4. Review Process
-
-- **Protocol Compliance Review**: Verification against PROTOCOL.md
-- **Documentation Review**: Accuracy and completeness check
-- **Testing Verification**: Confirmation of working examples with dual file system
-
----
-
-## 🧪 Testing Guidelines
-
-### Core Protocol Testing
-
-1. **Initialize agent** with TaskSync protocol
-2. **Assign test task** and verify execution
-3. **Monitor status logging** in tasks.txt file
-4. **Test infinite monitoring** (wait 10+ minutes)
-5. **Verify manual termination** works correctly
-6. **Check file reading completeness** (1000+ lines)
-
-### Cross-Platform Testing
-
-Test with multiple AI assistants:
-
-- GitHub Copilot (VS Code)
-- Cursor IDE
-- Windsurf
-- Other compatible IDEs
-
-### Edge Case Testing
-
-- File permission errors
-- Large tasks.txt files (>1000 lines)
-- Rapid task updates
-- Network interruptions
-- IDE restarts during monitoring
-
----
-
-## 📚 Documentation Guidelines
-
-### Protocol Documentation
-
-- **Accuracy**: All documentation must reflect current PROTOCOL.md
-- **Completeness**: Cover all protocol features and behaviors
-- **Examples**: Include working code samples with status logs
-- **Clarity**: Use clear, actionable language
-
----
-
 ## 🐛 Bug Reports
 
 ### Required Information
@@ -170,7 +96,6 @@ Test with multiple AI assistants:
 3. **Protocol Integration**: How it fits with current protocol
 4. **Implementation Ideas**: Suggested approach or solution
 5. **Documentation Changes**: Which docs need updates
-
 ---
 
 ## 📄 License

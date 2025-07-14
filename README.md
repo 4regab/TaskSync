@@ -36,6 +36,7 @@ https://github.com/user-attachments/assets/5f307fcd-052b-4b6b-940e-a0e946913c77
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect?url=vscode%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md) [![Install in VS Code](https://img.shields.io/badge/VS_Code_Insiders-Install-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md)
 
 Create tasks.txt and log.txt file inside instructions folder. Add your tasks in tasks.txt.
+Make tasks.txt inside the instructions folder and add your tasks/instructions there.
 ---
 
 ### 🎯 Cursor IDE
@@ -74,7 +75,6 @@ git sparse-checkout set .global
 - **State Management**: Active → Monitoring → Manual Termination Only
 ---
 
-<<<<<<< HEAD
 ## 🔧 Usage Examples
 
 **Real-time task communication with separate log file - edit `tasks.txt` anytime:**

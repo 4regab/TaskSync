@@ -1,8 +1,8 @@
 # TaskSync Examples & Workflows
 
-Complete examples showing how to use TaskSync effectively with your AI coding assistant.
+Complete examples showing how to use TaskSync effectively with your AI coding assistant, featuring the new infinite monitoring and status logging capabilities.
 
-## 🚀 Example 1: Web Application Development
+## 🚀 Example 1: Web Application Development with Status Monitoring
 
 ### Initial Task Assignment
 Start by creating or editing your `tasks.txt` file:
@@ -17,37 +17,49 @@ Create a modern web application with:
 5. Responsive design with modern UI
 
 Tech stack: React, Node.js, MongoDB
+
+--- STATUS LOG ---
+Check #1: - Read tasks.txt containing 8 lines. Beginning project setup.
 ```
 
-### Real-Time Corrections
+### Real-Time Corrections with Persistent Monitoring
 As the AI works, you can provide corrections without stopping:
 
 ```text
 # CORRECTION: Use TypeScript instead of JavaScript
 # CORRECTION: Add input validation for all forms
 # CORRECTION: Use bcrypt for password hashing
+
+--- STATUS LOG ---
+Check #7: - Read tasks.txt containing 11 lines. Applying TypeScript conversion and security improvements.
 ```
 
-### Adding New Requirements
+### Adding New Requirements During Development
 Append new tasks as the project evolves:
 
 ```text
 # NEW TASK: Add OAuth2 login (Google, GitHub)
 # NEW TASK: Implement role-based access control
 # NEW TASK: Add unit tests with Jest
+
+--- STATUS LOG ---
+Check #15: - Read tasks.txt containing 14 lines. OAuth2 integration 80% complete.
 ```
 
 ### The AI Will Automatically:
-- ✅ Read your updates every 60 seconds
-- ✅ Integrate new requirements seamlessly  
+- ✅ Read your updates every 30-60 seconds continuously
+- ✅ Integrate new requirements seamlessly without stopping
 - ✅ Apply corrections without losing context
+- ✅ Log status updates directly in tasks.txt with check counting
+- ✅ **Continue indefinitely** until you manually terminate
 - ✅ Report progress and ask for clarification if needed
 
 ---
 
-## 🔄 Example 2: API Development Workflow
+## 🔄 Example 2: API Development Workflow with Infinite Monitoring
 
 ### Project Setup
+
 ```text
 # Project: E-commerce API
 Build a RESTful API with:
@@ -64,14 +76,21 @@ Requirements:
 - Rate limiting
 - Comprehensive error handling
 - Unit and integration tests
+
+--- STATUS LOG ---
+Check #3: - Read tasks.txt containing 13 lines. JWT authentication middleware complete.
 ```
 
-### Iterative Development
+### Iterative Development with Continuous Operation
+
 ```text
 # PHASE 1 COMPLETE - Moving to Phase 2
 # NEW TASK: Add inventory management
 # NEW TASK: Implement search and filtering
 # PRIORITY: Fix the authentication middleware bug
+
+--- STATUS LOG ---
+Check #28: - Read tasks.txt containing 17 lines. Inventory management API endpoints 60% complete.
 ```
 
 ---
@@ -149,21 +168,47 @@ Priority: Medium (technical debt)
 
 ---
 
-## 🔍 Understanding AI Internal States
+## 🔍 Understanding AI Internal States and Status Logging
 
-Your AI assistant reports its internal state with each response:
+Your AI assistant reports its internal state with each response and logs monitoring activity:
 
 ```text
 [INTERNAL: Current state - Active]
-[INTERNAL: Last tasks.txt check - 2025-07-14T10:00:00Z]
-[INTERNAL: Next check scheduled - 2025-07-14T10:01:00Z]
+[INTERNAL: Next check scheduled every 60 seconds to 5 minutes]
 ```
 
 ### State Meanings
 
-- **Active**: AI is working on tasks and monitoring for updates
-- **Monitoring**: AI completed current tasks, waiting for new instructions
-- **Terminating**: Session ending due to inactivity (5-minute timeout)
+- **Active**: AI is working on tasks and monitoring for updates continuously
+- **Monitoring**: AI completed current tasks, waiting for new instructions indefinitely
+
+### Status Log Format in tasks.txt
+
+The AI automatically adds status entries in this format:
+
+```text
+--- STATUS LOG ---
+Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
+```
+
+### Status Log Examples
+
+```text
+--- STATUS LOG ---
+Check #1: - Read tasks.txt containing 7 lines. No new instructions found.
+Check #2: - Read tasks.txt containing 7 lines. No new instructions found.
+Check #3: - Read tasks.txt containing 12 lines. NEW INSTRUCTIONS FOUND!
+Check #15: - Read tasks.txt containing 14 lines. Authentication system 90% complete.
+Check #42: - Read tasks.txt containing 18 lines. All tasks completed, monitoring for new instructions.
+```
+
+### Key Features
+
+- **Count-Based Monitoring**: Each check increments from #1 indefinitely
+- **Line Count Verification**: Reports exact count of original content (excluding status logs)
+- **Real-Time Updates**: Status written directly to tasks.txt file with each check
+- **Infinite Operation**: AI continues monitoring until manually terminated
+- **No Automatic Termination**: You must explicitly say "stop" to end the session
 
 ---
 
@@ -270,21 +315,28 @@ Security & Testing:
 ### AI Not Responding to tasks.txt Changes
 
 **Possible Causes:**
+
 - File permissions issue
-- AI not properly monitoring
+- AI monitoring disrupted 
 - File encoding problems
 - Tasks.txt not in correct location
 
 **Solutions:**
+
 ```text
 # Add this to your tasks.txt to test monitoring:
 # TEST: If you can read this, monitoring is working
 # Current time: [your current time]
+
+# Check STATUS LOG for monitoring activity:
+--- STATUS LOG ---
+Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
 ```
 
 ### AI Misunderstanding Instructions
 
 **Improve Your Instructions:**
+
 ```text
 # Instead of: "Add validation"
 # Use this: "Add form validation with these rules:
@@ -294,18 +346,42 @@ Security & Testing:
 - All fields required before submission"
 ```
 
-### Session Ending Unexpectedly
+### Wanting to End Session
+
+**Remember - No Automatic Termination:**
+
+- AI operates indefinitely until manually stopped
+- Check STATUS LOG for ongoing monitoring activity
+- Monitor incrementing check numbers to verify operation
+
+**To Stop the AI:**
+
+```text
+# Add to tasks.txt or say directly:
+# TERMINATE: Stop monitoring and end session
+# Or say: "stop", "end", "terminate", or "quit"
+```
+
+### Monitoring Issues
 
 **Check For:**
-- 5-minute timeout reached
-- AI waiting for clarification
-- Error in tasks.txt formatting
-- IDE connection issues
+
+- STATUS LOG entries not incrementing
+- File write permission errors
+- Missing check count progression
+- AI not reading complete file content
 
 **Quick Fix:**
+
 ```text
 # Add to tasks.txt to restart monitoring:
 # RESTART: Continue working on current tasks
 # STATUS: Please report current progress
+# VERIFY: Read this entire file and log status
+
+--- STATUS LOG ---
+Check #1: - Read tasks.txt containing [X] lines. Monitoring restarted.
 ```
+
+Remember: TaskSync agents operate with infinite monitoring - they never automatically terminate and continue working until you explicitly stop them!
 Remember: TaskSync works best when you provide clear, detailed instructions and maintain regular communication through your tasks.txt file!

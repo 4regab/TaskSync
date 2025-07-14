@@ -165,6 +165,7 @@ Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
 Begin each response with internal state assessment:
 
 **[INTERNAL: Current state - {Active/Monitoring}]**
+
 **[INTERNAL: Next check scheduled every 60 seconds to 5 minutes]**
 
 When reading tasks.txt, always:

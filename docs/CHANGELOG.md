@@ -38,12 +38,6 @@ All notable changes to this project will be documented in this file.
 - Enhanced troubleshooting guide with proactive task management techniques
 - Provided recovery actions for session interruption scenarios
 
-### Breaking Changes
-- Sessions no longer automatically terminate after inactivity
-- Status logging is now mandatory - agents must edit tasks.txt file
-- Minimum file reading requirement of 1000 lines per operation
-- Changed from timestamp-based to count-based monitoring
-
 ## [1.0.0] - 2025-07-14
 
 ### Initial Release

@@ -5,7 +5,7 @@ Complete examples showing how to use TaskSync effectively with your AI coding as
 ## 🚀 Example 1: Web Application Development with Status Monitoring
 
 ### Initial Task Assignment
-Start by creating or editing your `tasks.txt` file:
+Start by creating or editing your `.github/instructions/tasks.txt` file:
 
 ```text
 # Project: User Management System
@@ -50,7 +50,7 @@ Check #15: - Read tasks.txt containing 14 lines. OAuth2 integration 80% complete
 - ✅ Read your updates every 30-60 seconds continuously
 - ✅ Integrate new requirements seamlessly without stopping
 - ✅ Apply corrections without losing context
-- ✅ Log status updates directly in tasks.txt with check counting
+- ✅ Log status updates directly in `.github/instructions/tasks.txt` with check counting
 - ✅ **Continue indefinitely** until you manually terminate
 - ✅ Report progress and ask for clarification if needed
 

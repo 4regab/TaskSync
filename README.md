@@ -4,7 +4,7 @@
 TaskSync is just **prompt instructions** that make your AI smarter. Instead of typing lots of messages back and forth, you write tasks in `tasks.txt`. Your AI agent reads this file and does the new tasks.
 
 ## How TaskSync Helps
-✅ **AI checks for updates automatically** - checks your tasks.txt file anytime for new tasks.
+✅ **AI checks for updates automatically** - checks your tasks.txt file anytime for new tasks. 
 ✅ **Automatically follows the new instructions** without needing the use another request.  
 ✅ **AI fixes itself** - When AI makes mistakes, it reads your notes and fixes them  
 ✅ **Works with any AI tool** - GitHub Copilot, Cursor, Windsurf, Trae IDE, and more  
@@ -66,9 +66,9 @@ git sparse-checkout set .global
 - **State Management**: Active → Monitoring → Terminating
 ---
 
-## 🔧 Usage Examples
-
 **Real-time task communication - edit `tasks.txt` anytime:**
+
+## 🔧 Example content of tasks.txt
 
 ```text
 # Current Priority
@@ -110,10 +110,6 @@ Add documentation for public APIs
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, coding standards, and submission guidelines.
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
 
 ## 📚 Documentation
 

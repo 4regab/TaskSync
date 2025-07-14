@@ -70,7 +70,6 @@ git sparse-checkout set .global
 - **State Management**: Active → Monitoring → Manual Termination Only
 ---
 
-<<<<<<< HEAD
 ## 🔧 Usage Examples
 
 **Real-time task communication with status logging - edit `tasks.txt` anytime:**

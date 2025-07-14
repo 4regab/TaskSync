@@ -20,9 +20,9 @@ TaskSync is an **autonomous agent protocol** that creates persistent AI assistan
 
 ## How It Works
 
-https://github.com/user-attachments/assets/5f307fcd-052b-4b6b-940e-a0e946913c77
+https://github.com/user-attachments/assets/77f953ae-8c67-48bc-8673-4ec66486f35d
 
-1. **Drag the tasksync instructions** to chat
+1. **Drag the tasksync instructions** to chat and ask the agent to follow the tasksync.
 2. **Add tasks in your `tasks.txt` file**
 3. **Write what you want** - it checks `tasks.txt` for updates automatically
 4. **Change `tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
@@ -42,7 +42,6 @@ https://github.com/user-attachments/assets/5f307fcd-052b-4b6b-940e-a0e946913c77
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect?url=vscode%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md) [![Install in VS Code](https://img.shields.io/badge/VS_Code_Insiders-Install-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md)
 ```text
 Create tasks.txt and log.txt file inside instructions folder. Add your tasks in tasks.txt.
-
 ```
 ---
 

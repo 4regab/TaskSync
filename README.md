@@ -1,7 +1,7 @@
 # TaskSync
 **Save premium requests on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests and give the agent new instructions while its currently working.
 ## What This Does
-TaskSync is an **autonomous agent protocol** that creates persistent AI assistants. Instead of typing lots of messages back and forth, you write tasks in a `tasks.txt` file. Your AI agent continuously monitors this file, executes tasks autonomously, and maintains persistent operation until manually terminated.
+TaskSync is an **autonomous agent protocol** that creates persistent agent. Instead of typing lots of messages back and forth, you write tasks in a `tasks.txt` file. Your AI agent continuously monitors this file, executes tasks autonomously, and maintains persistent operation until manually terminated.
 
 ## How TaskSync Helps
 **Tasks monitoring** - continuously checks your `tasks.txt` file every 60 seconds to 5 minutes for new tasks.

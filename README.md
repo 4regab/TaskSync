@@ -133,7 +133,7 @@ Add accessibility improvements
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, coding standards, and submission guidelines.
+Feel free to submit PR! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, coding standards, and submission guidelines.
 
 ## 📚 Documentation
 
@@ -141,3 +141,7 @@ See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, coding standa
 - [Usage Examples](docs/EXAMPLES.md)  
 - [Implementation Guide](docs/USAGE.md)
 - [Contributing Guidelines](docs/CONTRIBUTING.md)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=4regab/TaskSync&type=Date)](https://www.star-history.com/#4regab/TaskSync&Date)

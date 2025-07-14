@@ -6,7 +6,8 @@ TaskSync is an **autonomous agent protocol** that creates persistent AI assistan
 ## How TaskSync Helps
 ✅ **Infinite AI monitoring** - continuously checks your `tasks.txt` file every 30-60 seconds forever
 ✅ **Autonomous task execution** - AI works independently without constant user interaction  
-✅ **Real-time status logging** - AI writes progress directly into `tasks.txt` with count-based monitoring
+✅ **Dual file system** - AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
+✅ **Real-time status logging** - AI writes progress monitoring into dedicated `log.txt` with count-based monitoring
 ✅ **Never terminates automatically** - maintains persistent operation until you explicitly stop it
 ✅ **Self-correcting behavior** - when AI makes mistakes, it reads your corrections and fixes them
 ✅ **Works with any AI tool** - GitHub Copilot, Cursor, Windsurf, Trae IDE, and more  
@@ -26,13 +27,15 @@ https://github.com/user-attachments/assets/5f307fcd-052b-4b6b-940e-a0e946913c77
 
 ## 🚀 Quick Start
 
-**Choose your IDE and copy-paste the installation commands:**
+**Click install or copy-paste the installation commands for other IDEs:**
 
 ---
 
 ### 🎯 GitHub Copilot (VS Code)
 
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect?url=vscode%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md) [![Install in VS Code](https://img.shields.io/badge/VS_Code_Insiders-Install-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md)
+
+Create tasks.txt and log.txt file inside instructions folder. Add your tasks in tasks.txt.
 ---
 
 ### 🎯 Cursor IDE
@@ -61,11 +64,12 @@ git sparse-checkout set .global
 ### TaskSync Protocol Features
 
 - **Infinite Monitoring**: AI never terminates automatically - operates continuously until manually stopped
-- **Status Logging**: AI writes check counts directly into `.github/instructions/tasks.txt` file with each monitoring cycle
+- **Dual File System**: AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
+- **Status Logging**: AI writes check counts directly into dedicated `log.txt` file with each monitoring cycle
 - **Count-Based Monitoring**: Systematic counting from Check #1 incrementing indefinitely
 - **File Editing Protocol**: Mandatory physical file editing with each monitoring check
 - **Complete File Reading**: Always reads entire files (minimum 1000 lines) for comprehensive analysis
-- **Real-Time Communication**: Edit `.github/instructions/tasks.txt` anytime to communicate with AI during execution
+- **Real-Time Communication**: Edit `tasks.txt` anytime to communicate with AI during execution
 - **Autonomous Execution**: Independent task completion with persistent operation
 - **State Management**: Active → Monitoring → Manual Termination Only
 ---
@@ -73,7 +77,7 @@ git sparse-checkout set .global
 <<<<<<< HEAD
 ## 🔧 Usage Examples
 
-**Real-time task communication with status logging - edit `tasks.txt` anytime:**
+**Real-time task communication with separate log file - edit `tasks.txt` anytime:**
 
 ## 🔧 Example content of `tasks.txt`
 
@@ -88,9 +92,19 @@ Create a dashboard component with charts
 # Quick Corrections
 The button color should be blue, not red
 Use const instead of let in the helper functions
+```
 
---- STATUS LOG ---
+**Separate `log.txt` file for status monitoring:**
+
+```text
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---
 Check #1: - Read tasks.txt containing 8 lines. No new instructions found.
+Check #2: - Read tasks.txt containing 8 lines. Dashboard component 50% complete.
+Check #3: - Read tasks.txt containing 8 lines. Authentication bug fix applied.
 ```
 
 **Multi-Step Project with continuous monitoring:**
@@ -105,8 +119,6 @@ Check #1: - Read tasks.txt containing 8 lines. No new instructions found.
 # Current Focus
 Working on step 2 - focus on responsive design
 
---- STATUS LOG ---
-Check #15: - Read tasks.txt containing 9 lines. Continuing step 2 implementation.
 ```
 
 **Code Review with persistent operation:**
@@ -119,8 +131,6 @@ Add documentation for public APIs
 
 # Priority: Security audit of API endpoints
 
---- STATUS LOG ---
-Check #7: - Read tasks.txt containing 7 lines. Security audit in progress.
 ```
 
 ---
@@ -151,8 +161,6 @@ Add unit tests for authentication
 Optimize login page performance
 Add accessibility improvements
 
---- STATUS LOG ---
-Check #5: - Read tasks.txt containing 9 lines. Authentication bug fix 80% complete.
 ```
 
 **Monitoring Tip**: Watch the STATUS LOG check numbers - if they stop incrementing, the AI may have ended the session despite the infinite monitoring protocol.

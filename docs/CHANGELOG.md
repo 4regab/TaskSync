@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2025-07-14
+
+### Major Enhancement: Dual File System
+- **Separate Log File**: Introduced dedicated `log.txt` file for monitoring status while keeping `tasks.txt` clean
+- **Enhanced File Management**: Clean separation between task instructions and monitoring history
+- **Improved User Experience**: Users can edit `tasks.txt` without interference from status logs
+- **Better Organization**: Structured log format with session tracking and monitoring history
+
+### Log File Features
+- Automatic creation and management of `log.txt` file by agent
+- Comprehensive session tracking with incremental check counting
+- Structured log format with header and monitoring status sections
+- Preservation of complete monitoring history across sessions
+
+### Protocol Updates
+- Updated all documentation to reflect dual file system
+- Enhanced file management protocols in PROTOCOL.md
+- Revised examples to show separate task and log files
+- Updated usage guidelines for new file structure
+
+### Documentation Changes
+- Complete update of README.md with dual file system examples
+- Enhanced USAGE.md with log file management section
+- Updated EXAMPLES.md with separate file examples
+- Revised CONTRIBUTING.md testing guidelines
+
 ## [2.0.0] - 2025-07-14
 
 ### Major Protocol Enhancements

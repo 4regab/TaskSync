@@ -1,11 +1,11 @@
 # TaskSync Examples & Workflows
 
-Complete examples showing how to use TaskSync effectively with your AI coding assistant, featuring the new infinite monitoring and status logging capabilities.
+Complete examples showing how to use TaskSync effectively with your AI coding assistant, featuring the new infinite monitoring and separate log file system.
 
-## 🚀 Example 1: Web Application Development with Status Monitoring
+## 🚀 Example 1: Web Application Development with Dual File System
 
 ### Initial Task Assignment
-Start by creating or editing your `.github/instructions/tasks.txt` file:
+Start by creating or editing your `tasks.txt` file:
 
 ```text
 # Project: User Management System
@@ -17,48 +17,62 @@ Create a modern web application with:
 5. Responsive design with modern UI
 
 Tech stack: React, Node.js, MongoDB
+```
 
---- STATUS LOG ---
+### Separate Log File for Status Monitoring
+The AI automatically creates and maintains `log.txt`:
+
+```text
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---
 Check #1: - Read tasks.txt containing 8 lines. Beginning project setup.
+Check #2: - Read tasks.txt containing 8 lines. User registration component 30% complete.
+Check #3: - Read tasks.txt containing 8 lines. Authentication system in progress.
 ```
 
 ### Real-Time Corrections with Persistent Monitoring
-As the AI works, you can provide corrections without stopping:
+As the AI works, you can provide corrections without stopping by editing `tasks.txt`:
 
 ```text
 # CORRECTION: Use TypeScript instead of JavaScript
 # CORRECTION: Add input validation for all forms
 # CORRECTION: Use bcrypt for password hashing
+```
 
---- STATUS LOG ---
+### The log.txt file continues tracking:
+
+```text
 Check #7: - Read tasks.txt containing 11 lines. Applying TypeScript conversion and security improvements.
+Check #8: - Read tasks.txt containing 11 lines. Input validation implementation 70% complete.
 ```
 
 ### Adding New Requirements During Development
-Append new tasks as the project evolves:
+Append new tasks as the project evolves by editing `tasks.txt`:
 
 ```text
 # NEW TASK: Add OAuth2 login (Google, GitHub)
 # NEW TASK: Implement role-based access control
 # NEW TASK: Add unit tests with Jest
-
---- STATUS LOG ---
-Check #15: - Read tasks.txt containing 14 lines. OAuth2 integration 80% complete.
 ```
 
 ### The AI Will Automatically:
 - ✅ Read your updates every 30-60 seconds continuously
 - ✅ Integrate new requirements seamlessly without stopping
 - ✅ Apply corrections without losing context
-- ✅ Log status updates directly in `.github/instructions/tasks.txt` with check counting
+- ✅ Log status updates in separate `log.txt` file with check counting
 - ✅ **Continue indefinitely** until you manually terminate
 - ✅ Report progress and ask for clarification if needed
 
 ---
 
-## 🔄 Example 2: API Development Workflow with Infinite Monitoring
+## 🔄 Example 2: API Development Workflow with Dual File System
 
 ### Project Setup
+
+Edit your `tasks.txt` file:
 
 ```text
 # Project: E-commerce API
@@ -76,21 +90,38 @@ Requirements:
 - Rate limiting
 - Comprehensive error handling
 - Unit and integration tests
+```
 
---- STATUS LOG ---
+### Corresponding log.txt monitoring:
+
+```text
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---
+Check #1: - Read tasks.txt containing 13 lines. API project initialization started.
+Check #2: - Read tasks.txt containing 13 lines. Express.js setup complete.
 Check #3: - Read tasks.txt containing 13 lines. JWT authentication middleware complete.
 ```
 
 ### Iterative Development with Continuous Operation
+
+Update `tasks.txt` for new phases:
 
 ```text
 # PHASE 1 COMPLETE - Moving to Phase 2
 # NEW TASK: Add inventory management
 # NEW TASK: Implement search and filtering
 # PRIORITY: Fix the authentication middleware bug
+```
 
---- STATUS LOG ---
+### Log continues tracking automatically:
+
+```text
 Check #28: - Read tasks.txt containing 17 lines. Inventory management API endpoints 60% complete.
+Check #29: - Read tasks.txt containing 17 lines. Authentication bug fix applied.
+Check #30: - Read tasks.txt containing 17 lines. Search functionality implementation started.
 ```
 
 ---
@@ -168,9 +199,9 @@ Priority: Medium (technical debt)
 
 ---
 
-## 🔍 Understanding AI Internal States and Status Logging
+## 🔍 Understanding AI Internal States and Dual File System
 
-Your AI assistant reports its internal state with each response and logs monitoring activity:
+Your AI assistant reports its internal state with each response and maintains separate log file tracking:
 
 ```text
 [INTERNAL: Current state - Active]
@@ -182,19 +213,36 @@ Your AI assistant reports its internal state with each response and logs monitor
 - **Active**: AI is working on tasks and monitoring for updates continuously
 - **Monitoring**: AI completed current tasks, waiting for new instructions indefinitely
 
-### Status Log Format in tasks.txt
+### Dual File System Format
 
-The AI automatically adds status entries in this format:
-
+**tasks.txt** (clean, user-editable):
 ```text
---- STATUS LOG ---
+# Current Priority
+Fix the authentication bug in login.tsx
+Add TypeScript types for user profile
+
+# New Feature Request  
+Create a dashboard component with charts
+```
+
+**log.txt** (agent-managed monitoring):
+```text
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---
 Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
 ```
 
 ### Status Log Examples
 
 ```text
---- STATUS LOG ---
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---
 Check #1: - Read tasks.txt containing 7 lines. No new instructions found.
 Check #2: - Read tasks.txt containing 7 lines. No new instructions found.
 Check #3: - Read tasks.txt containing 12 lines. NEW INSTRUCTIONS FOUND!
@@ -205,8 +253,9 @@ Check #42: - Read tasks.txt containing 18 lines. All tasks completed, monitoring
 ### Key Features
 
 - **Count-Based Monitoring**: Each check increments from #1 indefinitely
-- **Line Count Verification**: Reports exact count of original content (excluding status logs)
-- **Real-Time Updates**: Status written directly to tasks.txt file with each check
+- **Line Count Verification**: Reports exact count of tasks.txt content
+- **Separate File System**: tasks.txt stays clean, log.txt contains all monitoring history
+- **Real-Time Updates**: Status written to log.txt with each check
 - **Infinite Operation**: AI continues monitoring until manually terminated
 - **No Automatic Termination**: You must explicitly say "stop" to end the session
 

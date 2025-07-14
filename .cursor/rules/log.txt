@@ -1,0 +1,5 @@
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---

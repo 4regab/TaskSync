@@ -1,10 +1,11 @@
-# Usage Guide: Autonomous Agent with Persistent Task File Monitoring
+# Usage Guide: Autonomous Agent with Separate Log File Monitoring
 
 ## 1. Agent Initialization
 
 - **Start the agent** in your IDE with the TaskSync protocol.
 - **Confirm understanding**: The agent should acknowledge the protocol and request your initial task.
 - **Begin infinite monitoring**: The agent immediately starts watching `tasks.txt` and never terminates automatically.
+- **Dual file system**: The agent uses `tasks.txt` for instructions and creates a separate `log.txt` for status tracking.
 
 ## 2. Task Assignment & Execution
 
@@ -14,16 +15,27 @@
   - Tracks progress and provides periodic updates.
   - Ensures all requirements are met before marking the task complete.
   - **Continuously monitors**: Checks `tasks.txt` every 60 seconds during active work.
+  - **Status logging**: Writes monitoring status to separate `log.txt` file.
 
-## 3. Continuous File Monitoring with Status Logging
+## 3. Dual File System with Separate Log File Monitoring
 
-- **Active Work**: Every 60 seconds to 5 minutes, the agent reads the entire `tasks.txt` file (minimum 1000 lines).
-- **After Completion**: The agent checks `tasks.txt` continuously every 30 seconds, waiting indefinitely for new instructions.
-- **Status Logging**: The agent **physically edits** `tasks.txt` to add status entries in the format:
-  ```
-  --- STATUS LOG ---
-  Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
-  ```
+- **tasks.txt**: Contains only task instructions and content (kept clean for user editing)
+- **log.txt**: Contains all monitoring status logs and check history (agent-managed)
+- **Separation benefits**: Clean task file while maintaining comprehensive monitoring history
+
+**Active Work**: Every 60 seconds to 5 minutes, the agent reads the entire `tasks.txt` file (minimum 1000 lines).
+**After Completion**: The agent checks `tasks.txt` continuously every 30 seconds, waiting indefinitely for new instructions.
+**Status Logging**: The agent **physically creates/updates** `log.txt` to add status entries in the format:
+
+```
+=== TASKSYNC MONITORING LOG ===
+Session: #1
+Task file: tasks.txt
+
+--- MONITORING STATUS ---
+Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
+```
+
 - **Count-Based Monitoring**: Each check increments from #1 indefinitely.
 - **No Automatic Termination**: Agent operates in perpetual monitoring mode until manually stopped.
 
@@ -50,25 +62,32 @@
 - **Progress Updates**: For long tasks, the agent provides periodic status reports.
 - **No Timeout Warnings**: Agent operates indefinitely - no automatic termination.
 
-## 6. File Status Update Protocol
+## 6. Log File Management Protocol
 
 The agent follows this strict process for each monitoring check:
 
 1. **Read entire tasks.txt file** from first to last line
-2. **Extract original content** (everything before "--- STATUS LOG ---")
-3. **Count lines of original content** only (excluding status logs)  
-4. **Remove existing STATUS LOG** section completely
-5. **Create new STATUS LOG** section with only current check entry
-6. **Save updated file** with format:
+2. **Count lines of task content** (all content in tasks.txt)
+3. **Read current log.txt file** (create if doesn't exist)
+4. **Append new status entry** to log.txt with incremental check number
+5. **Save updated log.txt** with format:
 
    ```text
-   [Original task instructions and content above]
+   === TASKSYNC MONITORING LOG ===
+   Session: #1
+   Task file: tasks.txt
 
-   --- STATUS LOG ---
+   --- MONITORING STATUS ---
    Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
    ```
 
-7. **Report to user**: "Updated tasks.txt containing [Y] lines with Check #[X] status"
+6. **Report to user**: "Updated log.txt with Check #[X] status - tasks.txt contains [Y] lines"
+
+**Log File Structure:**
+- **Header**: Session information and task file reference
+- **Monitoring Status**: Chronological list of all monitoring checks
+- **Check Format**: `Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]`
+- **Incremental Counting**: Continuous counting from Check #1 indefinitely
 
 ## 7. Error Handling
 
@@ -92,12 +111,13 @@ The agent follows this strict process for each monitoring check:
 - **Task completion**: Primary objectives met to specification
 - **Monitoring reliability**: Consistent monitoring intervals maintained  
 - **Complete file reading**: Read entire tasks.txt from first to last line (minimum 1000 lines)
-- **Status logging**: All check statuses written directly into tasks.txt file
-- **Line count verification**: Accurate counting and reporting of tasks.txt original content lines
+- **Log file management**: All check statuses written to separate `log.txt` file with proper formatting
+- **Line count verification**: Accurate counting and reporting of tasks.txt content lines
 - **Instruction integration**: Seamless incorporation of `tasks.txt` guidance
 - **User experience**: Smooth interaction without monitoring disruption
 - **Infinite monitoring**: Continuous tasks.txt monitoring without automatic termination
 - **Manual termination only**: Session ends only when user explicitly requests
+- **Dual file separation**: Clean separation between task instructions and monitoring logs
 
 ## 10. Best Practices
 

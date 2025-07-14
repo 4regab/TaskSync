@@ -100,46 +100,6 @@ Create a dashboard component with charts
 The button color should be blue, not red
 Use const instead of let in the helper functions
 ```
-
-**Separate `log.txt` file for status monitoring:**
-
-```text
-=== TASKSYNC MONITORING LOG ===
-Session: #1
-Task file: tasks.txt
-
---- MONITORING STATUS ---
-Check #1: - Read tasks.txt containing 8 lines. No new instructions found.
-Check #2: - Read tasks.txt containing 8 lines. Dashboard component 50% complete.
-Check #3: - Read tasks.txt containing 8 lines. Authentication bug fix applied.
-```
-
-**Multi-Step Project with continuous monitoring:**
-
-```text  
-# Project Setup
-1. Set up Next.js project with TypeScript
-2. Configure Tailwind CSS and shadcn/ui
-3. Create user authentication system
-4. Add comprehensive testing
-
-# Current Focus
-Working on step 2 - focus on responsive design
-
-```
-
-**Code Review with persistent operation:**
-
-```text
-# Review Tasks
-Review codebase for performance issues
-Implement optimization recommendations  
-Add documentation for public APIs
-
-# Priority: Security audit of API endpoints
-
-```
-
 ---
 
 ## ⚠️ Known Issues
@@ -147,10 +107,10 @@ Add documentation for public APIs
 ### AI Model Termination Behavior
 **Issue**: AI models tend to end conversations quickly, especially after completing tasks.
 
-**Solution**: Continuously add new tasks to `.github/instructions/tasks.txt` before the AI finishes its current work to maintain persistent operation.
+**Solution**: Continuously add new tasks to `tasks.txt` before the AI finishes its current work to maintain persistent operation.
 
 **Best Practices**:
-- Queue multiple tasks in `.github/instructions/tasks.txt` from the beginning
+- Queue multiple tasks in `tasks.txt` from the beginning
 - Add new tasks while AI is working on current ones  
 - Use the STATUS LOG to monitor AI progress and add tasks proactively
 - Keep a backlog of improvements, optimizations, or additional features ready

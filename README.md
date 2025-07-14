@@ -142,6 +142,8 @@ Feel free to submit PR! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for developm
 - [Implementation Guide](docs/USAGE.md)
 - [Contributing Guidelines](docs/CONTRIBUTING.md)
 
-## Star History
+## 📊 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=4regab/TaskSync&type=Date)](https://www.star-history.com/#4regab/TaskSync&Date)
+
+⭐ Drop a star if you find this useful!

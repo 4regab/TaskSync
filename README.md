@@ -4,9 +4,7 @@
 TaskSync is an **autonomous agent protocol** that creates persistent AI assistants. Instead of typing lots of messages back and forth, you write tasks in a `tasks.txt` file. Your AI agent continuously monitors this file, executes tasks autonomously, and maintains persistent operation until manually terminated.
 
 ## How TaskSync Helps
-**Infinite AI monitoring** - continuously checks your `tasks.txt` file every 30-60 seconds forever
-
-**Autonomous task execution** - AI works independently without constant user interaction  
+**Tasks monitoring** - continuously checks your `tasks.txt` file every 60 seconds to 5 minutes for new tasks.
 
 **Dual file system** - AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
 
@@ -14,9 +12,9 @@ TaskSync is an **autonomous agent protocol** that creates persistent AI assistan
 
 **Never terminates automatically** - maintains persistent operation until you explicitly stop it
 
-**Self-correcting behavior** - when AI makes mistakes, it reads your corrections and fixes them
+**Self-correcting behavior** - when AI makes mistakes, it reads your corrections and fixes its mistakes
 
-**Works with any AI tool** - GitHub Copilot, Cursor, Windsurf, Trae IDE, and more  
+**Works with any AI IDEs** - GitHub Copilot, Cursor, Windsurf, Trae IDE, and more  
 
 ## How It Works
 

@@ -83,9 +83,6 @@ git sparse-checkout set .global
 ## 🔧 Usage Examples
 
 **Real-time task communication with status logging - edit `tasks.txt` anytime:**
-=======
-**Real-time task communication - edit `tasks.txt` anytime:**
->>>>>>> b92e7abfb769aeedb14cce0fb845bc412f931092
 
 ## 🔧 Example content of tasks.txt
 

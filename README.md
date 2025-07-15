@@ -24,9 +24,9 @@ TaskSync is an **autonomous agent protocol** that creates persistent agents. Ins
 https://github.com/user-attachments/assets/a4737779-b877-4e12-8990-1a70a7b09dcc
 
 1. **Drag the tasksync instructions** to chat and ask the agent to strictly follow the tasksync.md.
-2. **Add tasks in your `.github/tasks.txt` file**
-3. **Write what you want** - it checks `.github/tasks.txt` for updates automatically using PowerShell word count
-4. **Change `.github/tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
+2. **Add tasks in your `tasks.txt` file**
+3. **Write Tasks** - it checks `tasks.txt` for updates automatically using PowerShell word count
+4. **Change `tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
 ENJOY!**Getting the better results with way fewer premium requests.**
 
 ---
@@ -78,14 +78,14 @@ git sparse-checkout set .global
 ### TaskSync Protocol Features
 
 - **Infinite Monitoring**: AI never terminates automatically - operates continuously until manually stopped
-- **PowerShell Word Count Monitoring**: Efficient `Get-Content .github\tasks.txt | Measure-Object -Word` checks
+- **PowerShell Word Count Monitoring**: Efficient `Get-Content .global\tasks.txt | Measure-Object -Word` checks
 - **Task Continuation Priority**: Complete current tasks before processing new instructions (unless urgent override)
-- **Dual File System**: AI uses `.github/tasks.txt` for instructions and separate `.github/log.txt` for status tracking
+- **Dual File System**: AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
 - **Status Logging**: AI writes check counts directly into dedicated log.txt file with each monitoring cycle
 - **Count-Based Monitoring**: Systematic counting from Check #1 incrementing indefinitely
 - **Urgent Override Detection**: Keywords like "stop current task", "correction", "fix" interrupt current work
 - **Complete File Reading**: Always reads entire files (minimum 1000 lines) for comprehensive analysis
-- **Real-Time Communication**: Edit `.github/tasks.txt` anytime to communicate with AI during execution
+- **Real-Time Communication**: Edit `tasks.txt` anytime to communicate with AI during execution
 - **Autonomous Execution**: Independent task completion with persistent operation
 - **State Management**: Active → Monitoring → Manual Termination Only
 
@@ -115,7 +115,7 @@ git sparse-checkout set .global
 
 ## 🔧 Usage Examples
 
-**Real-time task communication with separate log file - edit `.github/tasks.txt` anytime:**
+**Real-time task communication with separate log file - edit `tasks.txt` anytime:**
 
 ## 🔧 Example content of `.github/tasks.txt`
 

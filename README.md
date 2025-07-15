@@ -2,14 +2,14 @@
 **Save premium requests on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests and give the agent new instructions while its currently working.
 
 ## What This Does
-TaskSync is an **autonomous agent protocol** that creates persistent agents. Instead of typing lots of messages back and forth, you write tasks in a `.github/tasks.txt` file. Your AI agent continuously monitors this file using PowerShell word count checks, executes tasks autonomously, and maintains persistent operation until manually terminated.
+TaskSync is an **autonomous agent protocol** that creates persistent agents. Instead of typing lots of messages back and forth, you write tasks in a tasks.txt file. Your AI agent continuously monitors this file using PowerShell word count checks, executes tasks autonomously, and maintains persistent operation until manually terminated.
 
 ## How TaskSync Helps
-**PowerShell-based monitoring** - efficiently checks your `.github/tasks.txt` file every 60-300 seconds using word count detection
+**PowerShell-based monitoring** - efficiently checks your `tasks.txt` file every 60-300 seconds using word count detection
 
 **Task continuation priority** - completes current tasks before processing new instructions (unless urgent override detected)
 
-**Dual file system** - AI uses `.github/tasks.txt` for instructions and separate `.github/log.txt` for status tracking
+**Dual file system** - AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
 
 **Real-time status logging** - AI writes progress monitoring into dedicated log.txt with PowerShell-based count tracking
 

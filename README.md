@@ -45,11 +45,9 @@ git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
 cd TaskSync
 git sparse-checkout set .github
 ```
-
-**Create files**:
-```text
+If you use one click install you must:
 Create tasks.txt and log.txt inside the folder. Add your tasks in tasks.txt.
-```
+
 **For optimal results with Copilot**, enable "Auto Approve" and set "Max Requests" to 100 in your settings. This allows the agent to execute commands and handle long tasks without interruption. Adjust these settings via the UI or your user settings JSON file:
 
 "chat.tools.autoApprove": true,

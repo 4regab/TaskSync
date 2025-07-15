@@ -5,7 +5,7 @@
 TaskSync is an **autonomous agent protocol** that creates persistent agents. Instead of typing lots of messages back and forth, you write tasks in a tasks.txt file. Your AI agent continuously monitors this file using PowerShell word count checks, executes tasks autonomously, and maintains persistent operation until manually terminated.
 
 ## How TaskSync Helps
-**PowerShell-based monitoring** - efficiently checks your `tasks.txt` file every 60-300 seconds using word count detection
+**Multiple Tasks in one request** - You can provide new instructions to the agent without sending a new chat message by simply adding tasks to the tasks.txt file.
 
 **Task continuation priority** - completes current tasks before processing new instructions (unless urgent override detected)
 

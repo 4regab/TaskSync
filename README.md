@@ -8,15 +8,10 @@ TaskSync is an **autonomous agent protocol** that creates persistent agents. Ins
 **Multiple Tasks in one request** - You can provide new instructions to the agent without sending a new chat message by simply adding tasks to the tasks.txt file.
 
 **Task continuation priority** - completes current tasks before processing new instructions (unless urgent override detected)
-
-**Dual file system** - AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
-
-**Real-time status logging** - AI writes progress monitoring into dedicated log.txt with PowerShell-based count tracking
-
+**Dual file system** - uses `tasks.txt` for instructions and separate `log.txt` for status tracking
+**Real-time status logging** - it writes progress monitoring into dedicated log.txt 
 **Never terminates automatically** - maintains persistent operation until you explicitly stop it
-
 **Self-correcting behavior** - when AI makes mistakes, it reads your corrections and fixes its mistakes
-
 **Works with any AI IDEs** - GitHub Copilot, Cursor, Windsurf, Trae IDE, and more  
 
 ## How It Works
@@ -27,7 +22,7 @@ https://github.com/user-attachments/assets/a4737779-b877-4e12-8990-1a70a7b09dcc
 2. **Add tasks in your `tasks.txt` file**
 3. **Write Tasks** - it checks `tasks.txt` for updates automatically using PowerShell word count
 4. **Change `tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
-ENJOY!**Getting the better results with way fewer premium requests.**
+**ENJOY Getting better results with way fewer premium requests!**
 
 ---
 
@@ -131,37 +126,6 @@ Create a dashboard component with charts
 The button color should be blue, not red
 Use const instead of let in the helper functions
 ```
----
-
-## ⚠️ Known Issues
-
-### Chat Termination Behavior
-**Issue**: Agent models tend to end conversations quickly, especially after completing tasks.
-
-**Solution**: Continuously add new tasks to `tasks.txt` before the AI finishes its current work to maintain persistent operation.
-
-**Best Practices**:
-- Queue multiple tasks in `tasks.txt` from the beginning
-- Add new tasks while AI is working on current ones  
-- Use the STATUS LOG to monitor AI progress and add tasks proactively
-- Keep a backlog of improvements, optimizations, or additional features ready
-
-**Continuous Task Management**:
-
-```text
-# Current Task
-Fix authentication bug in login.tsx
-
-# Queued Tasks (add these before current task completes)
-Add TypeScript types for user profile
-Implement password reset functionality
-Add unit tests for authentication
-Optimize login page performance
-Add accessibility improvements
-```
-
-**Monitoring Tip**: Watch the STATUS LOG check numbers in `log.txt` - if they stop incrementing, the AI may have ended the session despite the infinite monitoring protocol.
-
 ---
 
 ## 🤝 Contributing

@@ -117,7 +117,7 @@ git sparse-checkout set .global
 
 **Real-time task communication with separate log file - edit `tasks.txt` anytime:**
 
-## 🔧 Example content of `.github/tasks.txt`
+## 🔧 Example content of tasks.txt`
 
 ```text
 # Current Priority
@@ -160,7 +160,7 @@ Optimize login page performance
 Add accessibility improvements
 ```
 
-**Monitoring Tip**: Watch the STATUS LOG check numbers in `.github/log.txt` - if they stop incrementing, the AI may have ended the session despite the infinite monitoring protocol.
+**Monitoring Tip**: Watch the STATUS LOG check numbers in `log.txt` - if they stop incrementing, the AI may have ended the session despite the infinite monitoring protocol.
 
 ---
 

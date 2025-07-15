@@ -37,7 +37,7 @@
 
 ---
 
-For full protocol details, see [`.global/tasksync.md`](./tasksync.md).
+For full protocol details, see [`docs/PROTOCOL.md`](./PROTOCOl.md).
 For ready-to-use task templates and best practices, see [`docs/EXAMPLES.md`](./EXAMPLES.md).
 
 ---

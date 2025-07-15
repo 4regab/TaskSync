@@ -1,4 +1,4 @@
-# TaskSync
+# TaskSync V2 
 **Save premium requests on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests and give the agent new instructions while its currently working.
 
 ## What This Does

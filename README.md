@@ -48,7 +48,7 @@ git sparse-checkout set .github
 
 **Create files**:
 ```text
-Create .github/tasks.txt and .github/log.txt files. Add your tasks in .github/tasks.txt.
+Create tasks.txt and log.txt inside the folder. Add your tasks in .github/tasks.txt.
 ```
 ---
 

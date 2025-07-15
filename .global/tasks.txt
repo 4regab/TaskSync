@@ -1,2 +1,15 @@
-﻿# Add tasks here
+﻿# TaskSync Instructions
+# Edit this file to give new instructions to your AI agent
+# The agent monitors this file using PowerShell word count detection
 
+# Example tasks:
+Fix the authentication bug in login.tsx
+Add TypeScript types for user profile
+Create a responsive dashboard component
+Implement error handling for API calls
+
+# Urgent override keywords:
+Use "STOP CURRENT TASK", "CORRECTION", or "FIX" to interrupt current work
+
+# Current task:
+# Add your task here...

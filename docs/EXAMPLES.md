@@ -1,11 +1,11 @@
 # TaskSync Examples & Workflows
 
-Complete examples showing how to use TaskSync effectively with your AI coding assistant, featuring the new infinite monitoring and separate log file system.
+Complete examples showing how to use TaskSync effectively with your AI coding assistant, featuring PowerShell word count monitoring, task continuation priority system, and the new infinite monitoring protocol.
 
-## 🚀 Example 1: Web Application Development with Dual File System
+## 🚀 Example 1: Web Application Development with Word Count Monitoring
 
 ### Initial Task Assignment
-Start by creating or editing your `tasks.txt` file:
+Start by creating or editing your `.github/tasks.txt` file:
 
 ```text
 # Project: User Management System
@@ -19,22 +19,32 @@ Create a modern web application with:
 Tech stack: React, Node.js, MongoDB
 ```
 
-### Separate Log File for Status Monitoring
-The AI automatically creates and maintains `log.txt`:
+
+### PowerShell Word Count Monitoring System (Updated Protocol)
+The AI automatically creates and maintains `.github/log.txt` using efficient word count detection and the new infinite monitoring protocol:
+
 
 ```text
 === TASKSYNC MONITORING LOG ===
 Session: #1
-Task file: tasks.txt
+Baseline word count: 47
 
 --- MONITORING STATUS ---
-Check #1: - Read tasks.txt containing 8 lines. Beginning project setup.
-Check #2: - Read tasks.txt containing 8 lines. User registration component 30% complete.
-Check #3: - Read tasks.txt containing 8 lines. Authentication system in progress.
+Check #1: Word count: 47 words (baseline). Initial task received.
+Check #2: Word count: 47 words (no change). Task in progress.
+Check #3: Word count: 63 words (CHANGE DETECTED). Reading tasks.txt...
+Check #4: Word count: 63 words (no change). Implementing changes.
 ```
 
-### Real-Time Corrections with Persistent Monitoring
-As the AI works, you can provide corrections without stopping by editing `tasks.txt`:
+**Key Protocol Updates:**
+- The agent never ends the session automatically. It continues monitoring and logging indefinitely until you explicitly say "stop", "end", "terminate", or "quit".
+- In State 2 (monitoring mode), the agent always executes `Start-Sleep -Seconds 30` before each check, then logs the result, and repeats forever.
+- All log entries are written to `log.txt` with incremental check numbers. Each new session increments the session number.
+- The agent only reads `tasks.txt` when the word count changes, for efficiency.
+
+
+### Real-Time Corrections with Task Continuation Priority (Updated)
+As the AI works, you can provide corrections by editing `.github/tasks.txt`. The AI will complete its current task before processing new instructions, unless you use urgent override keywords (e.g., "STOP CURRENT TASK"). Corrections are always treated as highest priority after the current task completes.
 
 ```text
 # CORRECTION: Use TypeScript instead of JavaScript
@@ -42,15 +52,25 @@ As the AI works, you can provide corrections without stopping by editing `tasks.
 # CORRECTION: Use bcrypt for password hashing
 ```
 
-### The log.txt file continues tracking:
+
+### The log.txt file detects the change:
 
 ```text
-Check #7: - Read tasks.txt containing 11 lines. Applying TypeScript conversion and security improvements.
-Check #8: - Read tasks.txt containing 11 lines. Input validation implementation 70% complete.
+Check #7: Word count: 63 words (CHANGE DETECTED). Reading tasks.txt...
+Check #8: Word count: 63 words (no change). Applying TypeScript conversion and security improvements.
 ```
 
+
+### Urgent Override for Immediate Changes
+Use urgent override keywords (e.g., "STOP CURRENT TASK") to interrupt current work immediately. The agent will process the urgent instruction as soon as it detects the change in `tasks.txt`.
+
+```text
+STOP CURRENT TASK - Fix the authentication bug in login.tsx immediately
+```
+
+
 ### Adding New Requirements During Development
-Append new tasks as the project evolves by editing `tasks.txt`:
+Append new tasks as the project evolves by editing `.github/tasks.txt`. The agent will detect the word count change, read the new instructions, and log the update. It will always finish the current task before starting new ones, unless an urgent override is present.
 
 ```text
 # NEW TASK: Add OAuth2 login (Google, GitHub)
@@ -58,21 +78,25 @@ Append new tasks as the project evolves by editing `tasks.txt`:
 # NEW TASK: Add unit tests with Jest
 ```
 
-### The AI Will Automatically:
-- ✅ Read your updates every 30-60 seconds continuously
-- ✅ Integrate new requirements seamlessly without stopping
+
+### The AI Will Automatically (per Updated Protocol):
+- ✅ Use PowerShell `Get-Content .github\tasks.txt | Measure-Object -Word` for efficient monitoring (every 180s in State 1, every 30s with `Start-Sleep` in State 2)
+- ✅ Read full file content only when word count changes
+- ✅ Complete current tasks before processing new instructions (unless urgent override)
+- ✅ Integrate new requirements seamlessly
 - ✅ Apply corrections without losing context
-- ✅ Log status updates in separate `log.txt` file with check counting
-- ✅ **Continue indefinitely** until you manually terminate
+- ✅ Log status updates in separate `.github/log.txt` file with check counting
+- ✅ **Continue indefinitely** until you manually terminate (never ends session automatically)
+- ✅ Always execute `Start-Sleep -Seconds 30` before each monitoring check in State 2
 - ✅ Report progress and ask for clarification if needed
 
 ---
 
-## 🔄 Example 2: API Development Workflow with Dual File System
+## 🔄 Example 2: API Development Workflow with Task Priority System
 
 ### Project Setup
 
-Edit your `tasks.txt` file:
+Edit your `.github/tasks.txt` file:
 
 ```text
 # Project: E-commerce API
@@ -92,17 +116,18 @@ Requirements:
 - Unit and integration tests
 ```
 
-### Corresponding log.txt monitoring:
+
+### Corresponding .github/log.txt monitoring (per Updated Protocol):
 
 ```text
 === TASKSYNC MONITORING LOG ===
 Session: #1
-Task file: tasks.txt
+Baseline word count: 82
 
 --- MONITORING STATUS ---
-Check #1: - Read tasks.txt containing 13 lines. API project initialization started.
-Check #2: - Read tasks.txt containing 13 lines. Express.js setup complete.
-Check #3: - Read tasks.txt containing 13 lines. JWT authentication middleware complete.
+Check #1: Word count: 82 words (baseline). API project initialization started.
+Check #2: Word count: 82 words (no change). Express.js setup complete.
+Check #3: Word count: 82 words (no change). JWT authentication middleware complete.
 ```
 
 ### Iterative Development with Continuous Operation
@@ -116,12 +141,13 @@ Update `tasks.txt` for new phases:
 # PRIORITY: Fix the authentication middleware bug
 ```
 
+
 ### Log continues tracking automatically:
 
 ```text
-Check #28: - Read tasks.txt containing 17 lines. Inventory management API endpoints 60% complete.
-Check #29: - Read tasks.txt containing 17 lines. Authentication bug fix applied.
-Check #30: - Read tasks.txt containing 17 lines. Search functionality implementation started.
+Check #28: Word count: 102 words (no change). Inventory management API endpoints 60% complete.
+Check #29: Word count: 102 words (no change). Authentication bug fix applied.
+Check #30: Word count: 102 words (no change). Search functionality implementation started.
 ```
 
 ---
@@ -201,19 +227,22 @@ Priority: Medium (technical debt)
 
 ## 🔍 Understanding AI Internal States and Dual File System
 
-Your AI assistant reports its internal state with each response and maintains separate log file tracking:
+
+Your AI assistant reports its internal state with each response and maintains separate log file tracking. Example:
 
 ```text
-[INTERNAL: Current state - Active]
-[INTERNAL: Next check scheduled every 60 seconds to 5 minutes]
+[INTERNAL: State - Active]
+[INTERNAL: Next check scheduled in 180s (180000ms)]
 ```
 
-### State Meanings
 
-- **Active**: AI is working on tasks and monitoring for updates continuously
-- **Monitoring**: AI completed current tasks, waiting for new instructions indefinitely
+### State Meanings (per Protocol)
+
+- **Active**: AI is working on tasks and monitoring for updates every 180 seconds (no Start-Sleep)
+- **Monitoring**: AI completed current tasks, enters monitoring mode, and checks every 30 seconds with `Start-Sleep -Seconds 30` before each check. Never ends session automatically.
 
 ### Dual File System Format
+
 
 **tasks.txt** (clean, user-editable):
 ```text
@@ -229,35 +258,41 @@ Create a dashboard component with charts
 ```text
 === TASKSYNC MONITORING LOG ===
 Session: #1
-Task file: tasks.txt
+Baseline word count: 27
 
 --- MONITORING STATUS ---
-Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
+Check #1: Word count: 27 words (baseline). Initial task received.
+Check #2: Word count: 27 words (no change). Task in progress.
+Check #3: Word count: 35 words (CHANGE DETECTED). Reading tasks.txt...
+Check #4: Word count: 35 words (no change). Implementing changes.
 ```
 
-### Status Log Examples
+
+### Status Log Examples (per Updated Protocol)
 
 ```text
 === TASKSYNC MONITORING LOG ===
 Session: #1
-Task file: tasks.txt
+Baseline word count: 7
 
 --- MONITORING STATUS ---
-Check #1: - Read tasks.txt containing 7 lines. No new instructions found.
-Check #2: - Read tasks.txt containing 7 lines. No new instructions found.
-Check #3: - Read tasks.txt containing 12 lines. NEW INSTRUCTIONS FOUND!
-Check #15: - Read tasks.txt containing 14 lines. Authentication system 90% complete.
-Check #42: - Read tasks.txt containing 18 lines. All tasks completed, monitoring for new instructions.
+Check #1: Word count: 7 words (baseline). No new instructions found.
+Check #2: Word count: 7 words (no change). No new instructions found.
+Check #3: Word count: 12 words (CHANGE DETECTED). NEW INSTRUCTIONS FOUND!
+Check #15: Word count: 14 words (no change). Authentication system 90% complete.
+Check #42: Word count: 18 words (no change). All tasks completed, monitoring for new instructions.
 ```
 
-### Key Features
+
+### Key Features (per Updated Protocol)
 
 - **Count-Based Monitoring**: Each check increments from #1 indefinitely
-- **Line Count Verification**: Reports exact count of tasks.txt content
+- **Word Count Verification**: Reports exact word count of tasks.txt content (not just line count)
 - **Separate File System**: tasks.txt stays clean, log.txt contains all monitoring history
 - **Real-Time Updates**: Status written to log.txt with each check
-- **Infinite Operation**: AI continues monitoring until manually terminated
-- **No Automatic Termination**: You must explicitly say "stop" to end the session
+- **Infinite Operation**: AI continues monitoring until manually terminated (never ends session automatically)
+- **No Automatic Termination**: You must explicitly say "stop", "end", "terminate", or "quit" to end the session
+- **Mandatory Sleep in State 2**: Always executes `Start-Sleep -Seconds 30` before each monitoring check in State 2
 
 ---
 
@@ -403,6 +438,7 @@ Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
 - Check STATUS LOG for ongoing monitoring activity
 - Monitor incrementing check numbers to verify operation
 
+
 **To Stop the AI:**
 
 ```text
@@ -432,5 +468,29 @@ Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
 Check #1: - Read tasks.txt containing [X] lines. Monitoring restarted.
 ```
 
+
 Remember: TaskSync agents operate with infinite monitoring - they never automatically terminate and continue working until you explicitly stop them!
 Remember: TaskSync works best when you provide clear, detailed instructions and maintain regular communication through your tasks.txt file!
+
+---
+
+## 🆕 Protocol v2.0: Infinite Monitoring and Logging Example
+
+Below is a new example showing the updated protocol in action:
+
+```text
+[INTERNAL: State - Monitoring]
+[INTERNAL: Next check scheduled in 30s (30000ms)]
+
+=== TASKSYNC MONITORING LOG ===
+Session: #2
+Baseline word count: 35
+
+--- MONITORING STATUS ---
+Check #1: Word count: 35 words (baseline). New session started - no conversation history found.
+Check #2: Word count: 35 words (no change). Task in progress.
+Check #3: Word count: 47 words (CHANGE DETECTED). Reading tasks.txt...
+Check #4: Word count: 47 words (no change). Task complete - monitoring mode.
+Check #5: Word count: 47 words (no change). No file read needed.
+Check #6: Word count: 63 words (CHANGE DETECTED). Reading tasks.txt...
+```

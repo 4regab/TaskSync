@@ -1,11 +1,48 @@
-# Usage Guide: Autonomous Agent with Separate Log File Monitoring
 
-## 1. Agent Initialization
+# TaskSync Quick Start & Usage
 
-- **Start the agent** in your IDE with the TaskSync protocol.
-- **Confirm understanding**: The agent should acknowledge the protocol and request your initial task.
-- **Begin infinite monitoring**: The agent immediately starts watching `tasks.txt` and never terminates automatically.
-- **Dual file system**: The agent uses `tasks.txt` for instructions and creates a separate `log.txt` for status tracking.
+## How to Use TaskSync in Your Chat Workflow
+
+1. **Add TaskSync Protocol as Context**
+   - Drag only the TaskSync instructions file (e.g., `tasksync.md`) into your chat as context. This gives your AI assistant access to the TaskSync rules it must follow.
+
+2. **Strictly Follow the Protocol**
+   - Instruct your AI: `Strictly follow tasksync.md`.
+   - This ensures the agent operates with infinite monitoring, proper logging, and task continuation priority.
+
+3. **Add Your Tasks**
+   - Open or create `tasks.txt` (in `.github/`, `.cursor/rules/`, or `.global/` depending on your IDE.
+   - Write your tasks, corrections, or urgent overrides in plain text. See `EXAMPLES.md` for templates and best practices.
+
+4. **Start TaskSync**
+   - After adding your tasks, send a message in chat: `Strictly follow tasksync.md, add tasks in tasks.txt and then send.`
+   - TaskSync will now begin executing your tasks, monitoring for changes, and logging all activity.
+
+5. **Add New Instructions Anytime**
+   - You can add new tasks or corrections to `tasks.txt` at any time—before or after the current task is done.
+   - TaskSync will always finish the current task (unless you use an urgent override), then process new instructions automatically.
+   - This saves you from sending repeated requests—just update `tasks.txt` and TaskSync will handle the rest.
+
+6. **Session Never Ends Automatically**
+   - TaskSync will continue monitoring and executing tasks indefinitely until you explicitly say `stop`, `end`, `terminate`, or `quit`.
+
+---
+
+## Example Workflow
+
+1. Drag only the TaskSync instructions file (e.g., `tasksync.md`) into your chat as context.
+2. Instruct: `Strictly follow tasksync.md, add tasks in tasks.txt and then send.`
+3. Add your tasks to `tasks.txt`.
+4. TaskSync starts, logs progress, and lets you add new instructions at any time.
+
+---
+
+For full protocol details, see [`tasksync.md`](./tasksync.md).
+For ready-to-use task templates and best practices, see [`docs/EXAMPLES.md`](./EXAMPLES.md).
+
+---
+
+# Legacy/Advanced Details
 
 ## 2. Task Assignment & Execution
 
@@ -14,74 +51,97 @@
   - Focuses on the assigned task with full attention.
   - Tracks progress and provides periodic updates.
   - Ensures all requirements are met before marking the task complete.
-  - **Continuously monitors**: Checks `tasks.txt` every 60 seconds during active work.
-  - **Status logging**: Writes monitoring status to separate `log.txt` file.
+  - **Task continuation priority**: Completes current tasks before processing new instructions (unless urgent override).
+  - **PowerShell monitoring**: Checks tasks.txt word count every 180 seconds (180000ms) during active work.
+  - **Status logging**: Writes monitoring status to separate log.txt file.
 
-## 3. Dual File System with Separate Log File Monitoring
+## 3. PowerShell Word Count Monitoring System
 
-- **tasks.txt**: Contains only task instructions and content (kept clean for user editing)
-- **log.txt**: Contains all monitoring status logs and check history (agent-managed)
-- **Separation benefits**: Clean task file while maintaining comprehensive monitoring history
+- **Efficient monitoring**: Uses `Get-Content [path]\tasks.txt | Measure-Object -Word` to detect changes
+- **Change detection**: Only reads full file content when word count changes from baseline
+- **Urgent override detection**: Keywords like "stop current task", "correction", "fix" interrupt current work
+- **File locations**: 
+  - **tasks.txt**: Contains only task instructions (user-editable)
+  - **log.txt**: Contains monitoring history (agent-managed)
 
-**Active Work**: Every 60 seconds to 5 minutes, the agent reads the entire `tasks.txt` file (minimum 1000 lines).
-**After Completion**: The agent checks `tasks.txt` continuously every 30 seconds, waiting indefinitely for new instructions.
-**Status Logging**: The agent **physically creates/updates** `log.txt` to add status entries in the format:
+**Active Work (State 1)**: Every 180 seconds (180000ms), the agent checks word count and reads full file if changes detected.
+**After Completion (State 2)**: **MANDATORY SLEEP COMMAND** - `Start-Sleep -Seconds 30; Get-Content [path]\tasks.txt | Measure-Object -Word` every 30 seconds (30000ms).
+**Status Logging**: The agent **physically creates/updates** log.txt to add status entries in the format:
 
-```
+```text
 === TASKSYNC MONITORING LOG ===
 Session: #1
-Task file: tasks.txt
+Baseline word count: 47
 
 --- MONITORING STATUS ---
-Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
+Check #1: Word count: 47 words (baseline). Initial task received.
+Check #2: Word count: 47 words (no change). Task in progress.
+Check #3: Word count: 63 words (CHANGE DETECTED). Reading tasks.txt...
 ```
 
 - **Count-Based Monitoring**: Each check increments from #1 indefinitely.
 - **No Automatic Termination**: Agent operates in perpetual monitoring mode until manually stopped.
+- **CRITICAL ENFORCEMENT**: Agent must use Start-Sleep command in State 2 before each check.
 
-## 4. Instruction Integration
+## 4. Task Continuation Priority System
 
-- **Upon detecting new content in `tasks.txt`**:
-  - The agent parses the file for new tasks, corrections, or process changes.
-  - Highest priority is given to corrections and new tasks.
-  - The agent immediately integrates these into its workflow, even if mid-task.
+- **Primary Rule**: Complete current task OR reach explicit stopping point before processing new instructions
+- **Completion Criteria**: Task is ready for new instructions when:
+  1. Current task fully completed to specification
+  2. User provides explicit correction or redirection
+  3. tasks.txt contains urgent override: "stop current task", "correction", or "fix"
+- **Exception**: Urgent override commands take immediate priority
 
-## 5. Communication Protocol
+## 5. Instruction Integration
+
+- **Upon detecting word count change in `.github/tasks.txt`**:
+  - The agent reads the full file content FIRST
+  - Parses for new tasks, corrections, or process changes
+  - Identifies urgent override keywords
+  - Highest priority is given to corrections and urgent tasks
+  - Writes status to log.txt SECOND
+  - Integrates instructions seamlessly (unless urgent override interrupts current work)
+
+## 6. Communication Protocol
 
 - **Internal State Reporting**: Each response begins with an internal state summary:
 
   ```text
-  [INTERNAL: Current state - {Active/Monitoring}]
-  [INTERNAL: Next check scheduled every 60 seconds to 5 minutes]
+  [INTERNAL: State - {Active/Monitoring}]
+  [INTERNAL: Next check scheduled in {60-300s}]
   ```
 
-- **File Status Logging**: The agent writes all check statuses directly into `tasks.txt` file in STATUS LOG section.
-- **Complete File Confirmation**: Agent demonstrates full file reading by processing entire content (minimum 1000 lines).
-- **User Transparency**: The agent informs you of significant changes or new instructions found in `tasks.txt`.
-- **Stealth Monitoring**: Routine checks do not interrupt your workflow unless new instructions found.
+- **PowerShell Command Execution**: The agent uses PowerShell commands for efficient monitoring:
+  - State 1: `Get-Content .github\tasks.txt | Measure-Object -Word`
+  - State 2: `Start-Sleep -Seconds 30; Get-Content .github\tasks.txt | Measure-Object -Word`
+- **Complete File Reading**: Agent reads entire file content only when word count changes (minimum 1000 lines for comprehensive analysis).
+- **User Transparency**: The agent informs you of significant changes or new instructions found in `.github/tasks.txt`.
+- **Stealth Monitoring**: Routine word count checks do not interrupt your workflow unless changes detected.
 - **Progress Updates**: For long tasks, the agent provides periodic status reports.
 - **No Timeout Warnings**: Agent operates indefinitely - no automatic termination.
 
-## 6. Log File Management Protocol
+## 7. Log File Management Protocol
 
 The agent follows this strict process for each monitoring check:
 
-1. **Read entire tasks.txt file** from first to last line
-2. **Count lines of task content** (all content in tasks.txt)
-3. **Read current log.txt file** (create if doesn't exist)
-4. **Append new status entry** to log.txt with incremental check number
-5. **Save updated log.txt** with format:
+1. **Run PowerShell word count check**: `Get-Content .github\tasks.txt | Measure-Object -Word`
+2. **Compare with baseline**: Only proceed if word count changed
+3. **IF CHANGE: Read full tasks.txt content FIRST** (entire file from first to last line)
+4. **Process new instructions immediately**
+5. **Write status entry to log.txt SECOND** with incremental check number
+6. **Save updated log.txt** with format:
 
    ```text
    === TASKSYNC MONITORING LOG ===
    Session: #1
-   Task file: tasks.txt
+   Baseline word count: 47
 
-   --- MONITORING STATUS ---
-   Check #[X]: - Read tasks.txt containing [Y] lines. [Status message]
+   Check #1: Word count: 47 words (baseline). Initial task received.
+   Check #2: Word count: 47 words (no change). Task in progress.
+   Check #3: Word count: 63 words (CHANGE DETECTED). Reading tasks.txt...
    ```
 
-6. **Report to user**: "Updated log.txt with Check #[X] status - tasks.txt contains [Y] lines"
+7. **Report to user**: "Updated log.txt with Check #[X] status - [Y] words"
 
 **Log File Structure:**
 - **Header**: Session information and task file reference

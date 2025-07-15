@@ -1,5 +1,5 @@
 === TASKSYNC MONITORING LOG ===
-Session: #1
-Task file: tasks.txt
+Session: #
+Baseline word count: 
 
 --- MONITORING STATUS ---

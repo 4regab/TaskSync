@@ -1,14 +1,17 @@
 # TaskSync
 **Save premium requests on your AI coding IDEs.** This simple prompt instructions helps your AI work better and use less premium requests and give the agent new instructions while its currently working.
+
 ## What This Does
-TaskSync is an **autonomous agent protocol** that creates persistent agent. Instead of typing lots of messages back and forth, you write tasks in a `tasks.txt` file. Your AI agent continuously monitors this file, executes tasks autonomously, and maintains persistent operation until manually terminated.
+TaskSync is an **autonomous agent protocol** that creates persistent agents. Instead of typing lots of messages back and forth, you write tasks in a `.github/tasks.txt` file. Your AI agent continuously monitors this file using PowerShell word count checks, executes tasks autonomously, and maintains persistent operation until manually terminated.
 
 ## How TaskSync Helps
-**Tasks monitoring** - continuously checks your `tasks.txt` file every 60 seconds to 5 minutes for new tasks.
+**PowerShell-based monitoring** - efficiently checks your `.github/tasks.txt` file every 60-300 seconds using word count detection
 
-**Dual file system** - AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
+**Task continuation priority** - completes current tasks before processing new instructions (unless urgent override detected)
 
-**Real-time status logging** - AI writes progress monitoring into dedicated `log.txt` with count-based monitoring
+**Dual file system** - AI uses `.github/tasks.txt` for instructions and separate `.github/log.txt` for status tracking
+
+**Real-time status logging** - AI writes progress monitoring into dedicated log.txt with PowerShell-based count tracking
 
 **Never terminates automatically** - maintains persistent operation until you explicitly stop it
 
@@ -20,10 +23,10 @@ TaskSync is an **autonomous agent protocol** that creates persistent agent. Inst
 
 https://github.com/user-attachments/assets/77f953ae-8c67-48bc-8673-4ec66486f35d
 
-1. **Drag the tasksync instructions** to chat and ask the agent to follow the tasksync.
-2. **Add tasks in your `tasks.txt` file**
-3. **Write what you want** - it checks `tasks.txt` for updates automatically
-4. **Change `tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
+1. **Drag the tasksync instructions** to chat and ask the agent to strictly follow the tasksync.md.
+2. **Add tasks in your `.github/tasks.txt` file**
+3. **Write what you want** - it checks `.github/tasks.txt` for updates automatically using PowerShell word count
+4. **Change `.github/tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
 
 **Start saving money today.** Get the better results with way fewer premium requests.
 
@@ -38,8 +41,15 @@ https://github.com/user-attachments/assets/77f953ae-8c67-48bc-8673-4ec66486f35d
 ### 🎯 GitHub Copilot (VS Code)
 
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect?url=vscode%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md) [![Install in VS Code](https://img.shields.io/badge/VS_Code_Insiders-Install-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Achat-instructions%2Finstall%3Furl%3Dhttps%3A%2F%2Fraw.githubusercontent.com%2F4regab%2FTaskSync%2Fmain%2F.github%2Finstructions%2Ftasksync.instructions.md)
+```bash
+git clone --filter=blob:none --sparse https://github.com/4regab/TaskSync.git
+cd TaskSync
+git sparse-checkout set .github
+```
+
+**Create files**:
 ```text
-Create tasks.txt and log.txt file inside instructions folder. Add your tasks in tasks.txt.
+Create .github/tasks.txt and .github/log.txt files. Add your tasks in .github/tasks.txt.
 ```
 ---
 
@@ -69,21 +79,46 @@ git sparse-checkout set .global
 ### TaskSync Protocol Features
 
 - **Infinite Monitoring**: AI never terminates automatically - operates continuously until manually stopped
-- **Dual File System**: AI uses `tasks.txt` for instructions and separate `log.txt` for status tracking
-- **Status Logging**: AI writes check counts directly into dedicated `log.txt` file with each monitoring cycle
+- **PowerShell Word Count Monitoring**: Efficient `Get-Content .github\tasks.txt | Measure-Object -Word` checks
+- **Task Continuation Priority**: Complete current tasks before processing new instructions (unless urgent override)
+- **Dual File System**: AI uses `.github/tasks.txt` for instructions and separate `.github/log.txt` for status tracking
+- **Status Logging**: AI writes check counts directly into dedicated log.txt file with each monitoring cycle
 - **Count-Based Monitoring**: Systematic counting from Check #1 incrementing indefinitely
-- **File Editing Protocol**: Mandatory physical file editing with each monitoring check
+- **Urgent Override Detection**: Keywords like "stop current task", "correction", "fix" interrupt current work
 - **Complete File Reading**: Always reads entire files (minimum 1000 lines) for comprehensive analysis
-- **Real-Time Communication**: Edit `tasks.txt` anytime to communicate with AI during execution
+- **Real-Time Communication**: Edit `.github/tasks.txt` anytime to communicate with AI during execution
 - **Autonomous Execution**: Independent task completion with persistent operation
 - **State Management**: Active → Monitoring → Manual Termination Only
+
+---
+
+## ⚙️ Configuration & Timing
+
+### Monitoring Intervals
+
+**State 1 (Active Task Execution):**
+- **Interval**: 180 seconds (180000ms) fixed
+- **Command**: `Get-Content [tasks.txt] | Measure-Object -Word`
+- **Purpose**: Monitor for new instructions while working on current tasks
+
+**State 2 (Monitoring Mode):**
+- **Interval**: 30 seconds (30000ms) fixed  
+- **Command**: `Start-Sleep -Seconds 30; Get-Content [tasks.txt] | Measure-Object -Word`
+- **Purpose**: Rapid response after task completion
+
+### Performance Recommendations
+
+- **180 seconds (3 minutes)**: Balanced performance without overwhelming the AI
+- **30 seconds**: Quick response for new tasks after completion
+- **Shorter intervals**: More responsive but may impact AI performance
+- **Longer intervals**: Better performance but slower response to changes
 ---
 
 ## 🔧 Usage Examples
 
-**Real-time task communication with separate log file - edit `tasks.txt` anytime:**
+**Real-time task communication with separate log file - edit `.github/tasks.txt` anytime:**
 
-## 🔧 Example content of `tasks.txt`
+## 🔧 Example content of `.github/tasks.txt`
 
 ```text
 # Current Priority
@@ -101,8 +136,8 @@ Use const instead of let in the helper functions
 
 ## ⚠️ Known Issues
 
-### AI Model Termination Behavior
-**Issue**: AI models tend to end conversations quickly, especially after completing tasks.
+### Chat Termination Behavior
+**Issue**: Agent models tend to end conversations quickly, especially after completing tasks.
 
 **Solution**: Continuously add new tasks to `tasks.txt` before the AI finishes its current work to maintain persistent operation.
 
@@ -112,7 +147,7 @@ Use const instead of let in the helper functions
 - Use the STATUS LOG to monitor AI progress and add tasks proactively
 - Keep a backlog of improvements, optimizations, or additional features ready
 
-**Example of Continuous Task Management**:
+**Continuous Task Management**:
 
 ```text
 # Current Task
@@ -124,10 +159,9 @@ Implement password reset functionality
 Add unit tests for authentication
 Optimize login page performance
 Add accessibility improvements
-
 ```
 
-**Monitoring Tip**: Watch the STATUS LOG check numbers - if they stop incrementing, the AI may have ended the session despite the infinite monitoring protocol.
+**Monitoring Tip**: Watch the STATUS LOG check numbers in `.github/log.txt` - if they stop incrementing, the AI may have ended the session despite the infinite monitoring protocol.
 
 ---
 

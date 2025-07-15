@@ -21,14 +21,13 @@ TaskSync is an **autonomous agent protocol** that creates persistent agents. Ins
 
 ## How It Works
 
-https://github.com/user-attachments/assets/77f953ae-8c67-48bc-8673-4ec66486f35d
+https://github.com/user-attachments/assets/a4737779-b877-4e12-8990-1a70a7b09dcc
 
 1. **Drag the tasksync instructions** to chat and ask the agent to strictly follow the tasksync.md.
 2. **Add tasks in your `.github/tasks.txt` file**
 3. **Write what you want** - it checks `.github/tasks.txt` for updates automatically using PowerShell word count
 4. **Change `.github/tasks.txt` anytime** to follow next instructions or make it fix its mistakes.
-
-**Start saving money today.** Get the better results with way fewer premium requests.
+ENJOY!**Getting the better results with way fewer premium requests.**
 
 ---
 

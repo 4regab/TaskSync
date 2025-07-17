@@ -1,5 +1,5 @@
 # TaskSync V2 
-**Save premium requests on your AI coding IDEs.** An alternative to Interactive Feedback MCP or feedback enhanced MCP. This simple prompt instructions helps your AI work better and use less premium requests and give the agent new instructions while its currently working.
+**Save premium requests on your AI coding IDEs** with this alternative to Interactive Feedback MCP or Enhanced Feedback MCP. This simple prompt instructions help your AI work more efficiently, reduce premium request usage, and allow you to give the agent new instructions while it's currently working or after completing a task.
 
 ## What This Does
 TaskSync is an **autonomous agent protocol** that creates persistent agents. Instead of typing lots of messages back and forth, you write tasks in a tasks.txt file. Your AI agent continuously monitors this file using PowerShell word count checks, executes tasks autonomously, and maintains persistent operation until manually terminated.

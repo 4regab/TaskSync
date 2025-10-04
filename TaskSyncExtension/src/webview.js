@@ -6,7 +6,7 @@
     const vscode = acquireVsCodeApi();
 
     // Global DOM elements
-    let taskInput, submitBtn, reloadBtn, fileIcon, messages;
+    let taskInput, submitBtn, reloadBtn, fileIcon, urlIcon, messages;
     let currentFiles = [];
     let isProcessing = false;
 
@@ -57,6 +57,7 @@
         submitBtn = document.getElementById('submitBtn');
         reloadBtn = document.getElementById('reloadBtn');
         fileIcon = document.getElementById('fileIcon');
+        urlIcon = document.getElementById('urlIcon');
         messages = document.getElementById('messages');
 
         if (!taskInput || !submitBtn || !reloadBtn || !fileIcon || !messages) {
@@ -78,6 +79,10 @@
 
         if (fileIcon) {
             fileIcon.addEventListener('click', showFileSelector);
+        }
+
+        if (urlIcon) {
+            urlIcon.addEventListener('click', extractUrlData);
         }
 
         if (taskInput) {
@@ -121,6 +126,9 @@
                     break;
                 case 'fileReferencesAdded':
                     showFileReferencesNotification(message.count);
+                    break;
+                case 'urlExtractionComplete':
+                    handleUrlExtractionComplete(message);
                     break;
                 default:
                     console.log('🔍 webview: Unknown message command:', message.command);
@@ -225,6 +233,27 @@
         vscode.postMessage({
             command: 'showFileSelector'
         });
+    }
+
+    function extractUrlData() {
+        const url = prompt('Enter the URL to extract data from:');
+        if (url && url.trim()) {
+            addMessage(`Extracting data from: ${url}`, 'system');
+            setProcessing(true);
+            vscode.postMessage({
+                command: 'extractUrlData',
+                data: { url: url.trim() }
+            });
+        }
+    }
+
+    function handleUrlExtractionComplete(message) {
+        setProcessing(false);
+        if (message.success) {
+            addMessage(`Data extraction completed successfully! Check tasksync/extracted-data.txt for the full content.`, 'system');
+        } else {
+            addMessage(`Failed to extract data: ${message.error}`, 'error');
+        }
     }
 
     // Track the number of messages currently displayed

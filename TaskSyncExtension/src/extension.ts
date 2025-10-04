@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
+import * as https from 'https';
 import { WebSocketServer, WebSocket as NodeWebSocket } from 'ws';
 import { copilotPrompt } from './copilot-prompt';
 
@@ -448,6 +449,10 @@ class TaskSyncChatProvider implements vscode.WebviewViewProvider {
                     console.log('🔍 DEBUG: Calling openCopilotChat from message handler');
                     await this.openCopilotChat(message.data.prompt);
                     break;
+                case 'extractUrlData':
+                    console.log('🔍 DEBUG: Calling extractUrlData from message handler');
+                    await this.extractUrlData(message.data.url, webview);
+                    break;
                 default:
                     console.log('🔍 DEBUG: Unknown command received:', message.command);
             }
@@ -767,6 +772,115 @@ class TaskSyncChatProvider implements vscode.WebviewViewProvider {
             console.error('🔍 DEBUG: Error in showFileSelector:', error);
             vscode.window.showErrorMessage(`Error loading files: ${error}`);
         }
+    }
+
+    private async extractUrlData(url: string, webview: vscode.Webview) {
+        console.log('🔍 DEBUG: extractUrlData called with URL:', url);
+        
+        if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+            vscode.window.showErrorMessage('Invalid URL. Please provide a valid HTTP or HTTPS URL.');
+            webview.postMessage({
+                command: 'urlExtractionComplete',
+                success: false,
+                error: 'Invalid URL format'
+            });
+            return;
+        }
+
+        try {
+            // Show progress notification
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Extracting data from ${url}...`,
+                cancellable: false
+            }, async () => {
+                const data = await this.fetchUrlData(url);
+                
+                // Create a log entry for the extracted data
+                const extractedEntry: LogEntry = {
+                    timestamp: new Date().toISOString(),
+                    type: 'system',
+                    content: `Successfully extracted data from: ${url}\n\nData Preview:\n${data.substring(0, 500)}${data.length > 500 ? '...' : ''}\n\nTotal length: ${data.length} characters`
+                };
+                
+                this._logEntries.push(extractedEntry);
+                this.updateWebview();
+                
+                // Save the full extracted data to a file
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                if (workspaceFolder) {
+                    const extractedDataPath = path.join(workspaceFolder.uri.fsPath, 'tasksync', 'extracted-data.txt');
+                    await fs.promises.writeFile(extractedDataPath, data, 'utf8');
+                    
+                    // Also write to log.md
+                    const logPath = path.join(workspaceFolder.uri.fsPath, 'tasksync', 'log.md');
+                    const logEntry = `\n\n---\n**[${new Date().toISOString()}] URL Data Extraction**\n\nExtracted from: ${url}\n\nData saved to: tasksync/extracted-data.txt\nTotal size: ${data.length} characters\n\nPreview:\n\`\`\`\n${data.substring(0, 1000)}${data.length > 1000 ? '\n... (truncated)' : ''}\n\`\`\`\n`;
+                    await fs.promises.appendFile(logPath, logEntry, 'utf8');
+                    
+                    vscode.window.showInformationMessage(`Data extracted successfully! Saved to: tasksync/extracted-data.txt`);
+                }
+                
+                webview.postMessage({
+                    command: 'urlExtractionComplete',
+                    success: true,
+                    data: data
+                });
+            });
+        } catch (error) {
+            console.error('🔍 DEBUG: Error in extractUrlData:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to extract data: ${errorMessage}`);
+            
+            webview.postMessage({
+                command: 'urlExtractionComplete',
+                success: false,
+                error: errorMessage
+            });
+        }
+    }
+
+    private async fetchUrlData(url: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const protocol = url.startsWith('https://') ? https : http;
+            
+            const request = protocol.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            }, (response) => {
+                // Handle redirects
+                if (response.statusCode === 301 || response.statusCode === 302) {
+                    if (response.headers.location) {
+                        console.log('Following redirect to:', response.headers.location);
+                        this.fetchUrlData(response.headers.location).then(resolve).catch(reject);
+                        return;
+                    }
+                }
+                
+                if (response.statusCode !== 200) {
+                    reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+                    return;
+                }
+
+                let data = '';
+                response.on('data', (chunk) => {
+                    data += chunk.toString();
+                });
+
+                response.on('end', () => {
+                    resolve(data);
+                });
+            });
+
+            request.on('error', (error) => {
+                reject(error);
+            });
+
+            request.setTimeout(10000, () => {
+                request.destroy();
+                reject(new Error('Request timeout'));
+            });
+        });
     }
     
 
@@ -1458,6 +1572,12 @@ class TaskSyncChatProvider implements vscode.WebviewViewProvider {
                 <div class="icon" id="fileIcon" title="Attach File">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                    </svg>
+                </div>
+                <div class="icon" id="urlIcon" title="Extract URL Data">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                     </svg>
                 </div>
             </div>

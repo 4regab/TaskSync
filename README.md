@@ -43,7 +43,7 @@ You can do that through the settings UI or via your user settings json file:
 
 It's best to keep the TaskSync session for 1-2 hours maximum since the longer the conversation, the more hallucinations may occur. Start it in a new chat session when needed for optimal performance. This works best as custom chatmode.
 
-### Alternative Option 1
+### Alternative Option 
 
 <summary><strong>TaskSync MCP Server</strong></summary>
 
@@ -51,39 +51,11 @@ For users who prefer MCP (Model Context Protocol) Server integration for feedbac
 
 [![TaskSync MCP](https://badge.mcpx.dev?type=server)](https://github.com/4regab/tasksync-mcp)
 
-This MCP server enables continuous feedback loops during AI-assisted development by letting users provide real-time feedback through a `feedback.md` file. It reduces costly requests and makes development more efficient by guiding the AI with feedback instead of speculative operations.
+This MCP server enables continuous feedback loops during AI-assisted development by letting users provide real-time feedback through a `feedback.md` file. 
 
-**Key Features:**
-
-- 🔄 **Continuous Review Feedback**: Real-time feedback collection during development
-- 🖼️ **Media Processing**: View images in the workspace
-- 📝 **File-based Communication**: Uses `feedback.md` for seamless interaction
-- ⚡ **Efficient Workflow**: Reduces premium requests through interactive feedback
 
 _Source code and setup instructions available at: [TaskSync MCP Server](https://github.com/4regab/tasksync-mcp)_
 
-
-### Alternative Option 2
-
-<summary><strong>TaskSync VS Code Extension</strong></summary>
-
-This version is using Version 3 that uses tasks.md for task input and log.md for updates.
-For VS Code users who prefer an integrated sidebar extension experience:
-
-[![TaskSync Extension](https://img.shields.io/badge/VS_Code-Install_TaskSync-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat)
-
-If you have issues installing the extension on other IDEs follow this guide: [VSIX Installation Guide](https://docs.trae.ai/ide/manage-extensions)
-
-_Source code available in the [TaskSyncExtension](https://github.com/4regab/TaskSync/tree/main/TaskSyncExtension) folder - this is an open source project._
-
-**Features:**
-
-- 🎯 **Integrated Chat Interface**: Send tasks directly through VS Code sidebar
-- 🤖 **One-Click Copilot Activation**: Click/send for initialization
-- 📁 **Automatic File Management**: Creates and manages files
-- 📎 **File Attachment Support**: Reference files for context
-- 🏷️ **Task Categorization**: Organize tasks by type
-- 💬 **Real-time Chat**: View conversation history instantly
 
 📋 **[View Full Changelog](CHANGELOG.md)** - See detailed release notes and version history
 

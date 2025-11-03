@@ -1,7 +1,5 @@
-<div align="left">
-  <img src="https://github.com/4regab/TaskSync/blob/main/TaskSyncExtension/icon.png" alt="TaskSync Logo" width="120" height="120">
-  <h1>TaskSync</h1>
-</div>
+
+<h1>TaskSync</h1>
 
 This simple prompt instructions helps you work more efficiently, reduce premium request usage, and allow you to give the agent new instructions or feedback after completing a task. This is similar to Interactive/Enhanced Feedback MCP.
 
@@ -45,7 +43,7 @@ It's best to keep the TaskSync session for 1-2 hours maximum since the longer th
 
 ### Alternative Option 
 
-<summary><strong>TaskSync MCP Server</strong></summary>
+#### TaskSync MCP Server
 
 For users who prefer MCP (Model Context Protocol) Server integration for feedback-oriented development workflows:
 
@@ -54,29 +52,8 @@ For users who prefer MCP (Model Context Protocol) Server integration for feedbac
 This MCP server enables continuous feedback loops during AI-assisted development by letting users provide real-time feedback through a `feedback.md` file. 
 
 
-_Source code and setup instructions available at: [TaskSync MCP Server](https://github.com/4regab/tasksync-mcp)_
+_Setup instructions available at: [TaskSync MCP Server](https://github.com/4regab/tasksync-mcp)_
 
-
-📋 **[View Full Changelog](CHANGELOG.md)** - See detailed release notes and version history
-
-## 📦 Previous Versions
-
-If you prefer older versions of TaskSync, you can access them directly:
-
-**TaskSync V3 (Web UI version added)**
-
-- [V3 Protocol](https://github.com/4regab/TaskSync/blob/1c3e0ab73517cb856607077b47ed77de0d05fb22/)
-- File monitoring system with web UI
-
-**TaskSync V2 (Enhanced)**
-
-- [V2 Protocol](https://github.com/4regab/TaskSync/blob/c6a9561b747eefaf6bfcf7a8a0a12dc07d549691/.global/tasksync.md)
-- Terminal monitoring system with enhanced session management
-
-**TaskSync V1 (Original)**
-
-- [V1 Protocol](https://github.com/4regab/TaskSync/blob/ac778f1c417f1239e38c15ca195862094a37bf76/.global/tasksync.md)
-- Simple autonomous agent protocol with basic monitoring
 
 ## 🤝 Discussions
 

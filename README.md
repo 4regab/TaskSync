@@ -22,9 +22,9 @@ https://github.com/user-attachments/assets/659fcd62-edef-4b94-bcd3-a99a6ae29c4e
 
 **Optional: Specs Workflow** _(Alternative structured approach)_: For users who prefer Kiro-style spec-driven development, you can use the [Specs-Tasksync](https://github.com/4regab/TaskSync/blob/main/Prompt/specs-tasksync.md) instead. This approach transforms ideas into structured requirements, design documents, and task lists before implementation. Simply provide the TaskSync or Specs Workflow file as context, then specify in chat which file your agent will follow.
 
-3. **Initialize Agent**: Provide the TaskSync v4 protocol file (`tasksync.md`) or (`specs-tasksync.md`) as context to your AI IDE or agent and type in chat: `Strictly follow TaskSync Protocol #tasksync.md or specs-tasksync.md` to activate. For copilot: use it as custom chat mode.
+3. **Initialize Agent**: Provide the TaskSync v4 protocol file (`tasksync.md`) or (`specs-tasksync.md`) as context to your AI IDE or agent and type in chat: `Strictly follow TaskSync Protocol #tasksync.md or specs-tasksync.md` to activate or copy the prompt use it as custom chat mode in copilot.
 4. **Agent Activation**: The agent immediately becomes a terminal-based autonomous agent and announces initialization.
-5. **Task Input**: Agent executes `$task = Read-Host "Enter your task"` or `read -p "Enter your task: " task` for macOS/Linux and waits for your input.
+5. **Task Input**: Agent executes `python -c "task = input('')"` and waits for your input.
 
 **Note:** Task must be entered as a single line. When pasting in terminal, click "Paste as One Line".
 

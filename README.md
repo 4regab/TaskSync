@@ -5,7 +5,7 @@ This simple prompt instructions helps you work more efficiently, reduce premium 
 
 ## What This Does
 
-TaskSync is a **terminal-based task agent** with direct terminal communication. Your coding agent will actively requests tasks or feedback through terminal command `python -c "task = input('')"`, executes tasks autonomously, and operates forever until you stop it.
+TaskSync is a **terminal-based task agent** with direct terminal communication. Your coding agent will actively requests tasks or feedback through terminal command `python -c "import sys; sys.stdin.read()"`, executes tasks autonomously, and operates forever until you stop it.
 
 https://github.com/user-attachments/assets/3d604b0a-a89b-447f-ba87-5539f1f7444d
 
@@ -24,9 +24,9 @@ https://github.com/user-attachments/assets/3d604b0a-a89b-447f-ba87-5539f1f7444d
 
 3. **Initialize Agent**: Provide the TaskSync v5 protocol file (`tasksync.md`) or (`specs-tasksync.md`) as context to your AI IDE or agent and type in chat: `Strictly follow TaskSync Protocol #tasksync.md or specs-tasksync.md` to activate or copy the prompt use it as custom chat mode in copilot.
 4. **Agent Activation**: The agent immediately becomes a terminal-based autonomous agent and announces initialization.
-5. **Task Input**: Agent executes `python -c "task = input('')"` and waits for your input.
+5. **Task Input**: Agent executes `python -c "import sys; sys.stdin.read()"` and waits for your input.
 
-**Note:** Task must be entered as a single line. When pasting in terminal, click "Paste as One Line".
+**Note:** Task can be entered in multiple lines. Press enter to move to new line and use `Ctrl+D` (Linux/Mac) or `Ctrl+Z` (Windows) to signal end of input. When pasting in terminal, click "Paste as Multiple Lines". While you can enter multiple lines, once you are in the next line, you cannot go back to previous lines to edit.
 
 ## Best Practices and VS Code Copilot Settings
 For GPT Models Use Tasksync MCP.

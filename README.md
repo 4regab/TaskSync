@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/3d604b0a-a89b-447f-ba87-5539f1f7444d
 4. **Agent Activation**: The agent immediately becomes a terminal-based autonomous agent and announces initialization.
 5. **Task Input**: Agent executes `python -c "import sys; sys.stdin.read()"` and waits for your input.
 
-**Note:** Task can be entered in multiple lines. Press enter to move to new line and use `Ctrl+D` (Linux/Mac) or `Ctrl+Z` (Windows) to signal end of input. When pasting in terminal, click "Paste as Multiple Lines". While you can enter multiple lines, once you are in the next line, you cannot go back to previous lines to edit.
+**Note:** Task can be entered in multiple lines. Press enter to move to new line and use `Ctrl+D` (Linux/Mac) or `Ctrl+Z + Enter` (Windows) to signal end of input. When pasting in terminal, click "Paste as Multiple Lines". While you can enter multiple lines, once you are in the next line, you cannot go back to previous lines to edit.
 
 ## Best Practices and VS Code Copilot Settings
 For GPT Models Use Tasksync MCP.

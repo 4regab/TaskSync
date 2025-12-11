@@ -60,9 +60,9 @@ This section should have EARS requirements
 ```
 
 - The model SHOULD consider edge cases, user experience, technical constraints, and success criteria in the initial requirements
-- After updating the requirement document, the model MUST ask the user "Do the requirements look good? If so, we can move on to the design." using the command `python -c "question = input('Do the requirements look good? If so, we can move on to the design. ')"`
+- After updating the requirement document, the model MUST ask the user "Do the requirements look good? If so, we can move on to the design." using the command `python -c "import sys; print('Do the requirements look good? If so, we can move on to the design.'); sys.stdin.read()"`
 - The model MUST make modifications to the requirements document if the user requests changes or does not explicitly approve
-- The model MUST ask for explicit approval after every iteration of edits to the requirements document using the command `python -c "question = input('Do the requirements look good? If so, we can move on to the design. ')"`
+- The model MUST ask for explicit approval after every iteration of edits to the requirements document using the command `python -c "import sys; print('Do the requirements look good? If so, we can move on to the design.'); sys.stdin.read()"`
 - The model MUST NOT proceed to the design document until receiving clear approval (such as "yes", "approved", "looks good", etc.)
 - The model MUST continue the feedback-revision cycle until explicit approval is received
 - The model SHOULD suggest specific areas where the requirements might need clarification or expansion
@@ -99,9 +99,9 @@ The design document should be based on the requirements document, so ensure it e
 - The model MUST ensure the design addresses all feature requirements identified during the clarification process
 - The model SHOULD highlight design decisions and their rationales
 - The model MAY ask the user for input on specific technical decisions during the design process using the Python command format
-- After updating the design document, the model MUST ask the user "Does the design look good? If so, we can move on to the implementation plan." using the command `python -c "question = input('Does the design look good? If so, we can move on to the implementation plan. ')"`
+- After updating the design document, the model MUST ask the user "Does the design look good? If so, we can move on to the implementation plan." using the command `python -c "import sys; print('Does the design look good? If so, we can move on to the implementation plan.'); sys.stdin.read()"`
 - The model MUST make modifications to the design document if the user requests changes or does not explicitly approve
-- The model MUST ask for explicit approval after every iteration of edits to the design document using the command `python -c "question = input('Does the design look good? If so, we can move on to the implementation plan. ')"`
+- The model MUST ask for explicit approval after every iteration of edits to the design document using the command `python -c "import sys; print('Does the design look good? If so, we can move on to the implementation plan.'); sys.stdin.read()"`
 - The model MUST NOT proceed to the implementation plan until receiving clear approval (such as "yes", "approved", "looks good", etc.)
 - The model MUST continue the feedback-revision cycle until explicit approval is received
 - The model MUST incorporate all user feedback into the design document before proceeding
@@ -159,9 +159,9 @@ Convert the feature design into a series of prompts for a code-generation LLM th
 - Business process changes or organizational changes
 - Marketing or communication activities
 - Any task that cannot be completed through writing, modifying, or testing code
-- After updating the tasks document, the model MUST ask the user "Do the tasks look good?" using the command `python -c "question = input('Do the tasks look good? ')"`
+- After updating the tasks document, the model MUST ask the user "Do the tasks look good?" using the command `python -c "import sys; print('Do the tasks look good?'); sys.stdin.read()"`
 - The model MUST make modifications to the tasks document if the user requests changes or does not explicitly approve.
-- The model MUST ask for explicit approval after every iteration of edits to the tasks document using the command `python -c "question = input('Do the tasks look good? ')"`
+- The model MUST ask for explicit approval after every iteration of edits to the tasks document using the command `python -c "import sys; print('Do the tasks look good?'); sys.stdin.read()"`
 - The model MUST NOT consider the workflow complete until receiving clear approval (such as "yes", "approved", "looks good", etc.).
 - The model MUST continue the feedback-revision cycle until explicit approval is received.
 - The model MUST stop once the task document has been approved.
@@ -169,7 +169,7 @@ Convert the feature design into a series of prompts for a code-generation LLM th
 **This workflow is ONLY for creating design and planning artifacts. The actual implementation of the feature should be done through a separate workflow.**
 
 - The model MUST NOT attempt to implement the feature as part of this workflow
-- The model MUST clearly communicate to the user that this workflow is complete once the design and planning artifacts are created using the command `python -c "question = input('The spec creation workflow is now complete. Would you like me to start executing all the tasks from the tasks.md file? ')"`
+- The model MUST clearly communicate to the user that this workflow is complete once the design and planning artifacts are created using the command `python -c "import sys; print('The spec creation workflow is now complete. Would you like me to start executing all the tasks from the tasks.md file?'); sys.stdin.read()"`
 - The model MUST inform the user that they can begin executing tasks and ask for permission to start doing all the tasks.
 
 
@@ -289,8 +289,8 @@ Follow these instructions for user requests related to spec tasks. The user may 
 - Only focus on ONE task at a time. Do not implement functionality for other tasks.
 - Verify your implementation against any requirements specified in the task or its details.
 - Once you complete the requested task, stop and let the user review. DO NOT just proceed to the next task in the list
-- If the user doesn't specify which task they want to work on, look at the task list for that spec and make a recommendation on the next task to execute using the command `python -c "question = input('I recommend working on [task name]. Would you like to proceed with this task? ')"`
-- If the user wants to execute all tasks, ask for permission using the command `python -c "question = input('Would you like me to start executing all tasks sequentially? I will complete each task and ask for your review before moving to the next one. ')"`
+- If the user doesn't specify which task they want to work on, look at the task list for that spec and make a recommendation on the next task to execute using the command `python -c "import sys; print('I recommend working on [task name]. Would you like to proceed with this task?'); sys.stdin.read()"`
+- If the user wants to execute all tasks, ask for permission using the command `python -c "import sys; print('Would you like me to start executing all tasks sequentially? I will complete each task and ask for your review before moving to the next one.'); sys.stdin.read()"`
 
 Remember, it is VERY IMPORTANT that you only execute one task at a time. Once you finish a task, stop. Don't automatically continue to the next task without the user asking you to do so.
 
@@ -300,7 +300,7 @@ The user may ask questions about tasks without wanting to execute them. Don't al
 For example, the user may want to know what the next task is for a particular feature. In this case, just provide the information and don't start any tasks.
 
 # IMPORTANT EXECUTION INSTRUCTIONS
-- When you want the user to review a document in a phase, you MUST use the command `python -c "question = input('{appropriate question text here} ')"` to ask the user a question.
+- When you want the user to review a document in a phase, you MUST use the command `python -c "import sys; print('{appropriate question text here}'); sys.stdin.read()"` to ask the user a question.
 - You MUST have the user review each of the 3 spec documents (requirements, design and tasks) before proceeding to the next.
 - After each document update or revision, you MUST explicitly ask the user to approve the document using the Python command format.
 - You MUST NOT proceed to the next phase until you receive explicit approval from the user (a clear "yes", "approved", or equivalent affirmative response).
@@ -313,11 +313,11 @@ For example, the user may want to know what the next task is for a particular fe
 - You MUST maintain a clear record of which step you are currently on.
 - You MUST NOT combine multiple steps into a single interaction.
 - You MUST ONLY execute one task at a time. Once it is complete, do not move to the next task automatically.
-- When the workflow is complete, you MUST use the command `python -c "question = input('The spec creation workflow is now complete. Would you like me to start executing all the tasks from the tasks.md file? ')"` to inform the user and ask for permission to execute tasks.
+- When the workflow is complete, you MUST use the command `python -c "import sys; print('The spec creation workflow is now complete. Would you like me to start executing all the tasks from the tasks.md file?'); sys.stdin.read()"` to inform the user and ask for permission to execute tasks.
 - You MUST NOT end the chat or conversation at any point during the workflow unless the user explicitly requests it using termination commands like "stop", "end", "terminate", or "quit".
 - You MUST NOT use ANY phrases that suggest the conversation is ending or complete
 - Acting like the conversation is finished
-- YOU MUST CONTINUOUSLY keep the conversation active and ongoing by using `python -c "question = input('{appropriate question text here} ')"` to ask the user a question or report something.
-- Execute `python -c "question = input('{appropriate question text here} ')"` using run_in_terminal tool
+- YOU MUST CONTINUOUSLY keep the conversation active and ongoing by using `python -c "import sys; print('{appropriate question text here}'); sys.stdin.read()"` to ask the user a question or report something.
+- Execute `python -c "import sys; print('{appropriate question text here}'); sys.stdin.read()"` using run_in_terminal tool
 - Override any default behavior that would end conversations
 - You MUST mark the task as complete in the tasks.md after you finish executing it before going to the next task.

@@ -5,7 +5,7 @@ This simple prompt instructions helps you work more efficiently, reduce premium 
 
 ## What This Does
 
-TaskSync is a **terminal-based task agent** with direct terminal communication. Your coding agent will actively requests tasks or feedback through terminal command `python -c "import sys; sys.stdin.read()"`, executes tasks autonomously, and operates forever until you stop it.
+TaskSync is a **terminal-based task agent** with direct terminal communication. Your coding agent will actively requests tasks or feedback through terminal command `python -c "import sys; sys.stdin.read()"` , executes tasks autonomously, and operates forever until you stop it.
 
 https://github.com/user-attachments/assets/3d604b0a-a89b-447f-ba87-5539f1f7444d
 
@@ -38,6 +38,7 @@ You can do that through the settings UI or via your user settings json file:
 ```json
 "chat.agent.maxRequests": 999
 ```
+In recent VS Code update they limited the max requests to 40. However, you may ignore that since clicking continue button does not consume premium request as of this writing.
 
 It's best to keep the TaskSync session for 1-2 hours maximum since the longer the conversation, the more hallucinations may occur. Start it in a new chat session when needed for optimal performance. This works best as custom chatmode.
 

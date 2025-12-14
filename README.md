@@ -38,7 +38,6 @@ You can do that through the settings UI or via your user settings json file:
 ```json
 "chat.agent.maxRequests": 999
 ```
-In recent VS Code update they limited the max requests to 40. However, you may ignore that since clicking continue button does not consume premium request as of this writing.
 
 It's best to keep the TaskSync session for 1-2 hours maximum since the longer the conversation, the more hallucinations may occur. Start it in a new chat session when needed for optimal performance. This works best as custom chatmode.
 

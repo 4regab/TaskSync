@@ -5,16 +5,15 @@ Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop wo
 
 ## Choose Your Option
 
-### Option 1: TaskSync Chat (VS Code Extension) - Recommended
+### Option 1: [TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat) (VS Code Extension) - Recommended
 
-A dedicated VS Code sidebar extension with smart prompt queue system. Located in the `tasksync-chat/` folder.
+A dedicated VS Code sidebar extension with smart prompt queue system. Located in the [tasksync-chat](https://github.com/4regab/TaskSync/tree/main/tasksync-chat) folder.
 
 **Features:**
 - Smart Queue Mode - batch responses for AI agents
 - Normal Mode - direct interaction with tool calls
 - File/folder references with `#` autocomplete
-- Image paste/drop support
-- Built-in MCP server (auto-registers with Kiro/Cursor)
+- Image paste support (copilot will view your image)
 - Tool call history with session tracking
 
 **Installation:** Install from VS Code Marketplace or build from source with `npx vsce package`.

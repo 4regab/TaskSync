@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync Chat Extension v2.0.0 (12-17-25)
+- New VS Code sidebar extension with dedicated UI (`tasksync-chat/` folder)
+- Smart Queue Mode: batch responses for AI agents automatically
+- Normal Mode: direct interaction with tool calls
+- File/folder references with `#` autocomplete
+- Image paste and drag-drop support
+- Built-in MCP server with SSE transport (auto-registers with Kiro/Cursor)
+- Tool call history with session tracking
+- Performance optimizations: O(1) lookups, file search caching, async disk I/O
+
+## TaskSync Prompt v5.2
+- Added `readline` import for better terminal input handling (arrow keys, history)
+- Added reminder message after input: "Once done, ensure to follow ./tasksync.md file and ask for input again"
+- Uses `python3` instead of `python` for better cross-platform compatibility
+
+## TaskSync Prompt v5.1
+- Changed from `input()` to `sys.stdin.read()` for better multi-line input support
+- Added "Enter Task:" prompt before input
+- Improved cross-platform terminal compatibility
+
+## TaskSync Prompt v5.0
+- Simplified terminal command: `python -c "task = input('')"`
+- 20 PRIMARY DIRECTIVES for absolute protocol compliance
+- Emergency anti-termination protocols
+- Task continuation priority system
+- Urgent override handling
+
 ## Version 4.0 (08-12-25)
 - Terminal-based autonomous agent protocol: AI becomes persistent terminal application using PowerShell Read-Host commands
 - PRIMARY DIRECTIVE system: Eight critical behavioral rules ensuring absolute protocol compliance

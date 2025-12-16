@@ -1,0 +1,142 @@
+{
+  "name": "tasksync-chat",
+  "publisher": "4regab",
+  "displayName": "TaskSync",
+  "description": "VS Code extension to reduce premium AI requests, and manage tasks seamlessly within your IDE with MCP server support",
+  "version": "2.0.0",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "tasksync",
+    "mcp",
+    "ai",
+    "chat",
+    "copilot",
+    "agent",
+    "model-context-protocol"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/4regab/TaskSync.git"
+  },
+  "license": "MIT",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languageModelTools": [
+      {
+        "name": "ask_user",
+        "tags": [
+          "confirmation",
+          "user-interaction",
+          "tasksync",
+          "required",
+          "mandatory"
+        ],
+        "toolReferenceName": "askUser",
+        "displayName": "Ask User",
+        "modelDescription": "Ask the user a question and wait for their response. Use this tool when explicit user approval, feedback, or clarification is required before proceeding. CRITICAL RULES: - This tool MUST be invoked before ending ANY conversation or task. - NEVER complete a task without calling this tool first. - If you are about to finish responding, STOP and call this tool. - Failure to call this tool before task completion is a workflow violation. MANDATORY TOOL ",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(question)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "description": "The question or prompt to display to the user"
+            }
+          },
+          "required": ["question"]
+        }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "taskSyncContainer",
+          "title": "TaskSync",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "taskSyncContainer": [
+        {
+          "type": "webview",
+          "id": "taskSyncView",
+          "name": "TaskSync"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TaskSync",
+      "properties": {
+        "tasksync.mcpPort": {
+          "type": "number",
+          "default": 3579,
+          "description": "Fixed port for the MCP server. Set to 0 for dynamic port assignment."
+        },
+        "tasksync.autoRegisterMcp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically register MCP server with Kiro and other supported clients."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "tasksync.getFeedback",
+        "title": "TaskSync: Get Feedback"
+      },
+      {
+        "command": "tasksync.restartMcp",
+        "title": "TaskSync: Restart MCP Server"
+      },
+      {
+        "command": "tasksync.showMcpConfig",
+        "title": "TaskSync: Show MCP Configuration"
+      },
+      {
+        "command": "tasksync.openHistory",
+        "title": "View History",
+        "icon": "$(history)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "tasksync.openHistory",
+          "when": "view == taskSyncView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js",
+    "compile": "tsc -p ./",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@vscode/codicons": "^0.0.36",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.x",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.2",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  }
+}

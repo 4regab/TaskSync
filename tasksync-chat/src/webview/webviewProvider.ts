@@ -79,17 +79,17 @@ type FromWebviewMessage =
 
 export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'taskSyncView';
-    
+
     private _view?: vscode.WebviewView;
     private _pendingRequests: Map<string, (result: UserResponseResult) => void> = new Map();
-    
+
     // Prompt queue state
     private _promptQueue: QueuedPrompt[] = [];
     private _queueEnabled: boolean = true; // Default to queue mode
-    
+
     // Attachments state
     private _attachments: AttachmentInfo[] = [];
-    
+
     // Current session tool calls (memory only - not persisted during session)
     private _currentSessionCalls: ToolCallEntry[] = [];
     // Map for O(1) lookup by ID
@@ -99,19 +99,19 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
     private _currentToolCallId: string | null = null;
     // Session ID to track current session
     private _sessionId: string = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    
+
     // Webview ready state - prevents race condition on first message
     private _webviewReady: boolean = false;
     private _pendingToolCallMessage: { id: string; prompt: string } | null = null;
-    
+
     // Debounce timer for queue persistence
     private _queueSaveTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly _QUEUE_SAVE_DEBOUNCE_MS = 300;
-    
+
     // Performance limits
     private readonly _MAX_HISTORY_ENTRIES = 100;
     private readonly _MAX_FILE_SEARCH_RESULTS = 500;
-    
+
     // File search cache with TTL
     private _fileSearchCache: Map<string, { results: FileSearchResult[], timestamp: number }> = new Map();
     private readonly _FILE_CACHE_TTL_MS = 5000;
@@ -192,7 +192,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             if (queuedPrompt) {
                 this._saveQueueToDisk();
                 this._updateQueueUI();
-                
+
                 // Create completed tool call entry for queue response
                 const entry: ToolCallEntry = {
                     id: toolCallId,
@@ -207,7 +207,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                 this._currentSessionCallsMap.set(entry.id, entry); // BUG FIX: Add to Map for O(1) lookup
                 this._updateCurrentSessionUI();
                 this._currentToolCallId = null;
-                
+
                 return {
                     value: queuedPrompt.prompt,
                     queue: true,
@@ -217,7 +217,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         this._view.show(true);
-        
+
         // Add pending entry to current session (so we have the prompt when completing)
         const pendingEntry: ToolCallEntry = {
             id: toolCallId,
@@ -230,13 +230,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         };
         this._currentSessionCalls.unshift(pendingEntry);
         this._currentSessionCallsMap.set(toolCallId, pendingEntry); // O(1) lookup
-        
+
         // Send pending tool call to webview (or queue if not ready)
         if (this._webviewReady) {
-            this._view.webview.postMessage({ 
-                type: 'toolCallPending', 
+            this._view.webview.postMessage({
+                type: 'toolCallPending',
                 id: toolCallId,
-                prompt: question 
+                prompt: question
             });
         } else {
             // Webview JS not initialized yet - queue the message
@@ -337,17 +337,17 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
      */
     private _handleWebviewReady(): void {
         this._webviewReady = true;
-        
+
         // Send initial queue state and current session (not persisted history - that's for modal)
         this._updateQueueUI();
         this._updateCurrentSessionUI();
-        
+
         // If there's a pending tool call message, send it now
         if (this._pendingToolCallMessage) {
-            this._view?.webview.postMessage({ 
-                type: 'toolCallPending', 
+            this._view?.webview.postMessage({
+                type: 'toolCallPending',
                 id: this._pendingToolCallMessage.id,
-                prompt: this._pendingToolCallMessage.prompt 
+                prompt: this._pendingToolCallMessage.prompt
             });
             this._pendingToolCallMessage = null;
         }
@@ -362,7 +362,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             if (resolve) {
                 // O(1) lookup using Map instead of O(n) findIndex
                 const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
-                
+
                 let completedEntry: ToolCallEntry;
                 if (pendingEntry && pendingEntry.status === 'pending') {
                     // Update existing pending entry
@@ -384,13 +384,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                     this._currentSessionCalls.unshift(completedEntry);
                     this._currentSessionCallsMap.set(completedEntry.id, completedEntry);
                 }
-                
+
                 // Send toolCallCompleted to trigger "Working...." state in webview
                 this._view?.webview.postMessage({
                     type: 'toolCallCompleted',
                     entry: completedEntry
                 } as ToWebviewMessage);
-                
+
                 this._updateCurrentSessionUI();
                 resolve({ value, queue: this._queueEnabled, attachments });
                 this._pendingRequests.delete(this._currentToolCallId);
@@ -420,7 +420,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
      */
     private async _handleAddAttachment(): Promise<void> {
         const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 1000);
-        
+
         if (files.length === 0) {
             vscode.window.showInformationMessage('No files found in workspace');
             return;
@@ -472,7 +472,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         try {
             const queryLower = query.toLowerCase();
             const cacheKey = queryLower || '__all__';
-            
+
             // Check cache first (TTL-based)
             const cached = this._fileSearchCache.get(cacheKey);
             if (cached && (Date.now() - cached.timestamp) < this._FILE_CACHE_TTL_MS) {
@@ -482,7 +482,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                 } as ToWebviewMessage);
                 return;
             }
-            
+
             // Exclude common unwanted files/folders for cleaner search results
             const excludePattern = '{**/node_modules/**,**/.vscode/**,**/*.log,**/.env,**/.env.*,**/*instructions.md,**/dist/**,**/.git/**,**/build/**,**/*.vsix}';
             // Reduced from 2000 to _MAX_FILE_SEARCH_RESULTS for better performance
@@ -537,7 +537,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                     return a.name.localeCompare(b.name);
                 })
                 .slice(0, 50);
-            
+
             // Cache results
             this._fileSearchCache.set(cacheKey, { results: allResults, timestamp: Date.now() });
             // Limit cache size to prevent memory bloat
@@ -573,7 +573,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             }
 
             const base64Data = base64Match[1];
-            
+
             // SECURITY FIX: Validate base64 size BEFORE decoding to prevent memory spike
             // Base64 encoding increases size by ~33%, so decoded size ≈ base64Length * 0.75
             const estimatedSize = Math.ceil(base64Data.length * 0.75);
@@ -582,7 +582,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showWarningMessage(`Image too large (~${sizeMB}MB). Max 10MB.`);
                 return;
             }
-            
+
             const buffer = Buffer.from(base64Data, 'base64');
 
             if (buffer.length > MAX_IMAGE_SIZE_BYTES) {
@@ -699,7 +699,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
     private _handleAddQueuePrompt(prompt: string, id: string): void {
         const trimmed = prompt.trim();
         if (!trimmed || trimmed.length > 10000) return;
-        
+
         const queuedPrompt: QueuedPrompt = {
             id: id || `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             prompt: trimmed,
@@ -725,7 +725,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
     private _handleEditQueuePrompt(promptId: string, newPrompt: string): void {
         const trimmed = newPrompt.trim();
         if (!trimmed || trimmed.length > 10000) return;
-        
+
         const prompt = this._promptQueue.find(p => p.id === promptId);
         if (prompt) {
             prompt.prompt = trimmed;
@@ -906,7 +906,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             const data = await fs.promises.readFile(historyPath, 'utf8');
             const parsed = JSON.parse(data);
             // Only load completed entries from past sessions, enforce max limit
-            this._persistedHistory = Array.isArray(parsed.history) 
+            this._persistedHistory = Array.isArray(parsed.history)
                 ? parsed.history
                     .filter((entry: ToolCallEntry) => entry.status === 'completed')
                     .slice(0, this._MAX_HISTORY_ENTRIES)

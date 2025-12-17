@@ -7,11 +7,15 @@ Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop wo
 
 ### Option 1: [TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat) (VS Code Extension) - Recommended
 
-A dedicated VS Code sidebar extension with smart prompt queue system. Located in the [tasksync-chat](https://github.com/4regab/TaskSync/tree/main/tasksync-chat) folder.
+
+https://github.com/user-attachments/assets/25b8c794-3d97-41b7-984b-2c18dadee402
+
+
+A dedicated VS Code sidebar extension with smart prompt queue system. _Setup instructions here: [tasksync-chat](https://github.com/4regab/TaskSync/tree/main/tasksync-chat) folder._
 
 **Features:**
 - Smart Queue Mode - batch responses for AI agents
-- Normal Mode - direct interaction with tool calls
+- Give new tasks/feedback using ask_user tool
 - File/folder references with `#` autocomplete
 - Image paste support (copilot will view your image)
 - Tool call history with session tracking
@@ -48,8 +52,7 @@ For spec-driven development, use [Specs-Tasksync](https://github.com/4regab/Task
 
 [![TaskSync MCP](https://badge.mcpx.dev?type=server)](https://github.com/4regab/tasksync-mcp)
 
-For MCP (Model Context Protocol) integration with feedback through a `feedback.md` file.
-
+This is an MCP server that helps with  feedback-oriented development workflows in AI-assisted development by letting users give feedback while the agent is working. It uses the `get_feedback` tool to collect your input from the `feedback.md` file in the workspace, which is sent back to the agent when you save.
 _Setup instructions: [TaskSync MCP Server](https://github.com/4regab/tasksync-mcp)_
 
 ---
@@ -63,9 +66,8 @@ Recommended settings for agent mode:
 "chat.agent.maxRequests": 999
 ```
 
-**Note:** The `maxRequests` setting requires [VS Code 1.106](https://code.visualstudio.com/updates/v1_106) or older. Newer versions introduces a 30 cap of maxrequests.
-
-Enable "Auto Approve" in settings for uninterrupted agent operation. Keep sessions to 1-2 hours max to avoid hallucinations.
+**Note:** The `maxRequests` setting on newer versions introduces a 30 cap of maxrequests. You may downgrade to [VS Code 1.106](https://code.visualstudio.com/updates/v1_106) or older to have the the 999 max request.
+**Enable "Auto Approve" in settings for uninterrupted agent operation. Keep sessions to 1-2 hours max to avoid hallucinations.**
 
 ## Discussions
 

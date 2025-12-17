@@ -820,9 +820,8 @@ body {
     border-radius: 10px;
     background-color: var(--vscode-editor-background);
     overflow: hidden;
-    /* Clip child elements to respect border-radius */
+    /* Must be hidden to preserve border-radius on corners */
     position: relative;
-    /* For autocomplete dropdown positioning */
 }
 
 .input-wrapper:focus-within {
@@ -1034,6 +1033,8 @@ body {
 .input-area-container {
     position: relative;
     flex-shrink: 0;
+    overflow: visible;
+    /* Allow autocomplete dropdown to overflow */
 }
 
 /* --- Autocomplete Dropdown --- */
@@ -1234,13 +1235,14 @@ textarea#chat-input::placeholder {
 
 .mode-check {
     width: 14px;
-    display: flex;
+    display: none;
+    /* Completely hide checkmarks */
     align-items: center;
     color: var(--vscode-testing-iconPassed, #73c991);
 }
 
 .mode-check.hidden {
-    visibility: hidden;
+    display: none;
 }
 
 /* Send Button */

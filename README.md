@@ -7,9 +7,7 @@ Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop wo
 
 ### Option 1: [TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat) (VS Code Extension) - Recommended
 
-
-https://github.com/user-attachments/assets/25b8c794-3d97-41b7-984b-2c18dadee402
-
+https://github.com/user-attachments/assets/f7e5a694-9cfe-4e7a-9065-6cc826f89031
 
 A dedicated VS Code sidebar extension with smart prompt queue system. _Setup instructions here: [tasksync-chat](https://github.com/4regab/TaskSync/tree/main/tasksync-chat) folder._
 
@@ -39,7 +37,7 @@ A terminal-based task agent protocol. Your coding agent actively requests tasks 
 **Getting Started:**
 1. Choose your preferred prompt [TaskSync Prompt](https://github.com/4regab/TaskSync/blob/main/Prompt)
 2. Provide it as context to your AI IDE
-3. Type: `Strictly follow TaskSync Protocol #tasksync.md`
+3. Send a prompt to the agent
 4. Agent executes `python -c "import sys; sys.stdin.read()"` and waits for input
 
 For spec-driven development, use [Specs-Tasksync](https://github.com/4regab/TaskSync/blob/main/Prompt/specs-tasksync.md) instead.

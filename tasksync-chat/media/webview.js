@@ -42,7 +42,7 @@
             updateModeUI();
             updateQueueVisibility();
             initCardSelection();
-            
+
             // Signal to extension that webview is ready to receive messages
             vscode.postMessage({ type: 'webviewReady' });
         } catch (err) {
@@ -84,41 +84,41 @@
         historyModalOverlay = document.createElement('div');
         historyModalOverlay.className = 'history-modal-overlay hidden';
         historyModalOverlay.id = 'history-modal-overlay';
-        
+
         // Create modal container
         historyModal = document.createElement('div');
         historyModal.className = 'history-modal';
         historyModal.id = 'history-modal';
-        
+
         // Modal header
         var modalHeader = document.createElement('div');
         modalHeader.className = 'history-modal-header';
         modalHeader.innerHTML = '<span class="history-modal-title">History</span>';
-        
+
         // Clear all button
         historyModalClearAll = document.createElement('button');
         historyModalClearAll.className = 'history-modal-clear-btn';
         historyModalClearAll.innerHTML = '<span class="codicon codicon-trash"></span> Clear All';
         historyModalClearAll.title = 'Clear all history';
         modalHeader.appendChild(historyModalClearAll);
-        
+
         // Close button
         historyModalClose = document.createElement('button');
         historyModalClose.className = 'history-modal-close-btn';
         historyModalClose.innerHTML = '<span class="codicon codicon-close"></span>';
         historyModalClose.title = 'Close';
         modalHeader.appendChild(historyModalClose);
-        
+
         // Modal body (list)
         historyModalList = document.createElement('div');
         historyModalList.className = 'history-modal-list';
         historyModalList.id = 'history-modal-list';
-        
+
         // Assemble modal
         historyModal.appendChild(modalHeader);
         historyModal.appendChild(historyModalList);
         historyModalOverlay.appendChild(historyModal);
-        
+
         // Add to DOM
         document.body.appendChild(historyModalOverlay);
     }
@@ -143,14 +143,14 @@
         if (attachBtn) attachBtn.addEventListener('click', handleAttach);
         if (modeBtn) modeBtn.addEventListener('click', toggleModeDropdown);
 
-        document.querySelectorAll('.mode-option').forEach(function(option) {
-            option.addEventListener('click', function() {
+        document.querySelectorAll('.mode-option').forEach(function (option) {
+            option.addEventListener('click', function () {
                 setMode(option.getAttribute('data-mode'), true);
                 closeModeDropdown();
             });
         });
 
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             if (dropdownOpen && !e.target.closest('.mode-selector')) closeModeDropdown();
             if (autocompleteVisible && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('#chat-input')) hideAutocomplete();
         });
@@ -160,13 +160,13 @@
         if (historyModalClose) historyModalClose.addEventListener('click', closeHistoryModal);
         if (historyModalClearAll) historyModalClearAll.addEventListener('click', clearAllPersistedHistory);
         if (historyModalOverlay) {
-            historyModalOverlay.addEventListener('click', function(e) {
+            historyModalOverlay.addEventListener('click', function (e) {
                 if (e.target === historyModalOverlay) closeHistoryModal();
             });
         }
         window.addEventListener('message', handleExtensionMessage);
     }
-    
+
     function openHistoryModal() {
         if (!historyModalOverlay) return;
         historyModalOpen = true;
@@ -175,14 +175,14 @@
         historyModalOverlay.classList.remove('hidden');
         if (historyToggleBtn) historyToggleBtn.classList.add('active');
     }
-    
+
     function closeHistoryModal() {
         if (!historyModalOverlay) return;
         historyModalOpen = false;
         historyModalOverlay.classList.add('hidden');
         if (historyToggleBtn) historyToggleBtn.classList.remove('active');
     }
-    
+
     function clearAllPersistedHistory() {
         if (persistedHistory.length === 0) return;
         vscode.postMessage({ type: 'clearPersistedHistory' });
@@ -192,17 +192,17 @@
 
     function initCardSelection() {
         if (cardVibe) {
-            cardVibe.addEventListener('click', function(e) { 
+            cardVibe.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                selectCard('normal', true); 
+                selectCard('normal', true);
             });
         }
         if (cardSpec) {
-            cardSpec.addEventListener('click', function(e) { 
+            cardSpec.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                selectCard('queue', true); 
+                selectCard('queue', true);
             });
         }
         // Don't set default here - wait for updateQueue message from extension
@@ -217,7 +217,7 @@
         updateTips(card);
         updateModeUI();
         updateQueueVisibility();
-        
+
         // Only notify extension if user clicked (not on init from persisted state)
         if (notify) {
             vscode.postMessage({ type: 'toggleQueue', enabled: queueEnabled });
@@ -376,7 +376,7 @@
                 updateChipsDisplay();
                 break;
             case 'imageSaved':
-                if (message.attachment && !currentAttachments.some(function(a) { return a.id === message.attachment.id; })) {
+                if (message.attachment && !currentAttachments.some(function (a) { return a.id === message.attachment.id; })) {
                     currentAttachments.push(message.attachment);
                     updateChipsDisplay();
                 }
@@ -393,17 +393,17 @@
     function showPendingToolCall(id, prompt) {
         pendingToolCall = { id: id, prompt: prompt };
         isProcessingResponse = false; // AI is now asking, not processing
-        
+
         if (welcomeSection) {
             welcomeSection.classList.add('hidden');
         }
-        
+
         // Show AI question as plain text (hide "Working...." since AI asked a question)
         if (pendingMessage) {
             pendingMessage.classList.remove('hidden');
             pendingMessage.innerHTML = '<div class="pending-ai-question">' + formatMarkdown(prompt) + '</div>';
         }
-        
+
         // Re-render current session (without the pending item - it's shown separately)
         renderCurrentSession();
         // Render any mermaid diagrams in pending message
@@ -414,61 +414,61 @@
 
     function addToolCallToCurrentSession(entry) {
         pendingToolCall = null;
-        
+
         // Update or add entry to current session
-        var idx = currentSessionCalls.findIndex(function(tc) { return tc.id === entry.id; });
+        var idx = currentSessionCalls.findIndex(function (tc) { return tc.id === entry.id; });
         if (idx >= 0) {
             currentSessionCalls[idx] = entry;
         } else {
             currentSessionCalls.unshift(entry);
         }
         renderCurrentSession();
-        
+
         // Show working indicator after user responds (AI is now processing the response)
         isProcessingResponse = true;
         if (pendingMessage) {
             pendingMessage.classList.remove('hidden');
             pendingMessage.innerHTML = '<div class="working-indicator">Processing your response</div>';
         }
-        
+
         // Auto-scroll to show the working indicator
         scrollToBottom();
     }
 
     function renderCurrentSession() {
         if (!toolHistoryArea) return;
-        
+
         // Only show COMPLETED calls from current session (pending is shown separately as plain text)
-        var completedCalls = currentSessionCalls.filter(function(tc) { return tc.status === 'completed'; });
-        
+        var completedCalls = currentSessionCalls.filter(function (tc) { return tc.status === 'completed'; });
+
         if (completedCalls.length === 0) {
             toolHistoryArea.innerHTML = '';
             return;
         }
-        
+
         // Reverse to show oldest first (new items stack at bottom)
         var sortedCalls = completedCalls.slice().reverse();
 
-        var cardsHtml = sortedCalls.map(function(tc, index) {
+        var cardsHtml = sortedCalls.map(function (tc, index) {
             // Get first sentence for title - let CSS handle truncation with ellipsis
             var firstSentence = tc.prompt.split(/[.!?]/)[0];
             var truncatedTitle = firstSentence.length > 120 ? firstSentence.substring(0, 120) + '...' : firstSentence;
             var queueBadge = tc.isFromQueue ? '<span class="tool-call-badge queue">Queue</span>' : '';
-            
+
             // Build card HTML - NO X button for current session cards
             var cardHtml = '<div class="tool-call-card expanded" data-id="' + escapeHtml(tc.id) + '">' +
                 '<div class="tool-call-header">' +
-                    '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
-                    '<div class="tool-call-icon"><span class="codicon codicon-comment"></span></div>' +
-                    '<div class="tool-call-header-wrapper">' +
-                        '<span class="tool-call-title">' + escapeHtml(truncatedTitle) + queueBadge + '</span>' +
-                    '</div>' +
+                '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
+                '<div class="tool-call-icon"><span class="codicon codicon-comment"></span></div>' +
+                '<div class="tool-call-header-wrapper">' +
+                '<span class="tool-call-title">' + escapeHtml(truncatedTitle) + queueBadge + '</span>' +
+                '</div>' +
                 '</div>' +
                 '<div class="tool-call-body">' +
-                    '<div class="tool-call-ai-response">' + formatMarkdown(tc.prompt) + '</div>' +
-                    '<div class="tool-call-user-section">' +
-                        '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
-                    '</div>' +
+                '<div class="tool-call-ai-response">' + formatMarkdown(tc.prompt) + '</div>' +
+                '<div class="tool-call-user-section">' +
+                '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
+                '</div>' +
                 '</div></div>';
             return cardHtml;
         }).join('');
@@ -476,71 +476,71 @@
         toolHistoryArea.innerHTML = cardsHtml;
 
         // Bind events - only expand/collapse, no remove
-        toolHistoryArea.querySelectorAll('.tool-call-header').forEach(function(header) {
-            header.addEventListener('click', function(e) {
+        toolHistoryArea.querySelectorAll('.tool-call-header').forEach(function (header) {
+            header.addEventListener('click', function (e) {
                 var card = header.closest('.tool-call-card');
                 if (card) card.classList.toggle('expanded');
             });
         });
-        
+
         // Render any mermaid diagrams
         renderMermaidDiagrams();
     }
 
     function renderHistoryModal() {
         if (!historyModalList) return;
-        
+
         if (persistedHistory.length === 0) {
             historyModalList.innerHTML = '<div class="history-modal-empty">No history yet</div>';
             if (historyModalClearAll) historyModalClearAll.classList.add('hidden');
             return;
         }
-        
+
         if (historyModalClearAll) historyModalClearAll.classList.remove('hidden');
-        
+
         // Render as expandable cards (same style as current session)
-        var cardsHtml = persistedHistory.map(function(tc) {
+        var cardsHtml = persistedHistory.map(function (tc) {
             var firstSentence = tc.prompt.split(/[.!?]/)[0];
             var truncatedTitle = firstSentence.length > 80 ? firstSentence.substring(0, 80) + '...' : firstSentence;
             var queueBadge = tc.isFromQueue ? '<span class="tool-call-badge queue">Queue</span>' : '';
-            
+
             // Build expandable card HTML (collapsed by default in modal)
             return '<div class="tool-call-card history-card" data-id="' + escapeHtml(tc.id) + '">' +
                 '<div class="tool-call-header">' +
-                    '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
-                    '<div class="tool-call-icon"><span class="codicon codicon-comment"></span></div>' +
-                    '<div class="tool-call-header-wrapper">' +
-                        '<span class="tool-call-title">' + escapeHtml(truncatedTitle) + queueBadge + '</span>' +
-                    '</div>' +
-                    '<button class="tool-call-remove" data-id="' + escapeHtml(tc.id) + '" title="Remove"><span class="codicon codicon-close"></span></button>' +
+                '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
+                '<div class="tool-call-icon"><span class="codicon codicon-comment"></span></div>' +
+                '<div class="tool-call-header-wrapper">' +
+                '<span class="tool-call-title">' + escapeHtml(truncatedTitle) + queueBadge + '</span>' +
+                '</div>' +
+                '<button class="tool-call-remove" data-id="' + escapeHtml(tc.id) + '" title="Remove"><span class="codicon codicon-close"></span></button>' +
                 '</div>' +
                 '<div class="tool-call-body">' +
-                    '<div class="tool-call-ai-response">' + formatMarkdown(tc.prompt) + '</div>' +
-                    '<div class="tool-call-user-section">' +
-                        '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
-                    '</div>' +
+                '<div class="tool-call-ai-response">' + formatMarkdown(tc.prompt) + '</div>' +
+                '<div class="tool-call-user-section">' +
+                '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
+                '</div>' +
                 '</div></div>';
         }).join('');
-        
+
         historyModalList.innerHTML = cardsHtml;
-        
+
         // Bind expand/collapse events
-        historyModalList.querySelectorAll('.tool-call-header').forEach(function(header) {
-            header.addEventListener('click', function(e) {
+        historyModalList.querySelectorAll('.tool-call-header').forEach(function (header) {
+            header.addEventListener('click', function (e) {
                 if (e.target.closest('.tool-call-remove')) return;
                 var card = header.closest('.tool-call-card');
                 if (card) card.classList.toggle('expanded');
             });
         });
-        
+
         // Bind remove buttons
-        historyModalList.querySelectorAll('.tool-call-remove').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
+        historyModalList.querySelectorAll('.tool-call-remove').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var id = btn.getAttribute('data-id');
                 if (id) {
                     vscode.postMessage({ type: 'removeHistoryItem', callId: id });
-                    persistedHistory = persistedHistory.filter(function(tc) { return tc.id !== id; });
+                    persistedHistory = persistedHistory.filter(function (tc) { return tc.id !== id; });
                     renderHistoryModal();
                 }
             });
@@ -549,74 +549,107 @@
 
     function formatMarkdown(text) {
         if (!text) return '';
-        
+
         // Normalize line endings (Windows \r\n to \n)
         var processedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        
+
         // Store code blocks BEFORE escaping HTML to preserve backticks
         var codeBlocks = [];
         var mermaidBlocks = [];
-        
+
         // Extract mermaid blocks first (before HTML escaping)
         // Match ```mermaid followed by newline or just content
-        processedText = processedText.replace(/```mermaid\s*\n([\s\S]*?)```/g, function(match, code) {
+        processedText = processedText.replace(/```mermaid\s*\n([\s\S]*?)```/g, function (match, code) {
             var index = mermaidBlocks.length;
             mermaidBlocks.push(code.trim());
             return '%%MERMAID' + index + '%%';
         });
-        
+
         // Extract other code blocks (before HTML escaping)
         // Match ```lang or just ``` followed by optional newline
-        processedText = processedText.replace(/```(\w*)\s*\n?([\s\S]*?)```/g, function(match, lang, code) {
+        processedText = processedText.replace(/```(\w*)\s*\n?([\s\S]*?)```/g, function (match, lang, code) {
             var index = codeBlocks.length;
             codeBlocks.push({ lang: lang || '', code: code.trim() });
             return '%%CODEBLOCK' + index + '%%';
         });
-        
+
         // Now escape HTML on the remaining text
         var html = escapeHtml(processedText);
-        
+
+        // Headers (## Header) - must be at start of line
+        html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+        html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+        html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+        html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+
+        // Horizontal rules (--- or ***)
+        html = html.replace(/^---+$/gm, '<hr>');
+        html = html.replace(/^\*\*\*+$/gm, '<hr>');
+
+        // Blockquotes (> text) - simple single-line support
+        html = html.replace(/^&gt;\s*(.*)$/gm, '<blockquote>$1</blockquote>');
+        // Merge consecutive blockquotes
+        html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+        // Unordered lists (- item or * item)
+        html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
+        // Wrap consecutive <li> in <ul>
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, function (match) {
+            return '<ul>' + match.replace(/\n/g, '') + '</ul>';
+        });
+
+        // Ordered lists (1. item)
+        html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>');
+        // Wrap consecutive <oli> in <ol> then convert to li
+        html = html.replace(/(<oli>.*<\/oli>\n?)+/g, function (match) {
+            return '<ol>' + match.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>').replace(/\n/g, '') + '</ol>';
+        });
+
         // Inline code (`code`)
         html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-        
+
         // Bold (**text** or __text__)
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-        
+
         // Italic (*text* or _text_)
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-        
+
         // Line breaks - but collapse multiple consecutive breaks
+        // Don't add <br> after block elements
         html = html.replace(/\n{3,}/g, '\n\n');
+        html = html.replace(/(<\/h[1-6]>|<\/ul>|<\/ol>|<\/blockquote>|<hr>)\n/g, '$1');
         html = html.replace(/\n/g, '<br>');
-        
+
         // Restore code blocks
-        codeBlocks.forEach(function(block, index) {
+        codeBlocks.forEach(function (block, index) {
             var langAttr = block.lang ? ' data-lang="' + block.lang + '"' : '';
             var escapedCode = escapeHtml(block.code);
             var replacement = '<pre class="code-block"' + langAttr + '><code>' + escapedCode + '</code></pre>';
             html = html.replace('%%CODEBLOCK' + index + '%%', replacement);
         });
-        
+
         // Restore mermaid blocks as diagrams
-        mermaidBlocks.forEach(function(code, index) {
+        mermaidBlocks.forEach(function (code, index) {
             var mermaidId = 'mermaid-' + Date.now() + '-' + index + '-' + Math.random().toString(36).substr(2, 9);
             var replacement = '<div class="mermaid-container" data-mermaid-id="' + mermaidId + '"><div class="mermaid" id="' + mermaidId + '">' + escapeHtml(code) + '</div></div>';
             html = html.replace('%%MERMAID' + index + '%%', replacement);
         });
-        
+
         // Clean up excessive <br> around block elements
-        html = html.replace(/(<br>)+(<pre|<div class="mermaid)/g, '$2');
-        html = html.replace(/(<\/pre>|<\/div>)(<br>)+/g, '$1');
-        
+        html = html.replace(/(<br>)+(<pre|<div class="mermaid|<h[1-6]|<ul|<ol|<blockquote|<hr)/g, '$2');
+        html = html.replace(/(<\/pre>|<\/div>|<\/h[1-6]>|<\/ul>|<\/ol>|<\/blockquote>|<hr>)(<br>)+/g, '$1');
+
         return html;
     }
-    
+
     // Mermaid rendering - lazy load and render
     var mermaidLoaded = false;
     var mermaidLoading = false;
-    
+
     function loadMermaid(callback) {
         if (mermaidLoaded) {
             callback();
@@ -624,7 +657,7 @@
         }
         if (mermaidLoading) {
             // Wait for existing load
-            var checkInterval = setInterval(function() {
+            var checkInterval = setInterval(function () {
                 if (mermaidLoaded) {
                     clearInterval(checkInterval);
                     callback();
@@ -633,10 +666,10 @@
             return;
         }
         mermaidLoading = true;
-        
+
         var script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
-        script.onload = function() {
+        script.onload = function () {
             window.mermaid.initialize({
                 startOnLoad: false,
                 theme: document.body.classList.contains('vscode-light') ? 'default' : 'dark',
@@ -647,30 +680,30 @@
             mermaidLoading = false;
             callback();
         };
-        script.onerror = function() {
+        script.onerror = function () {
             mermaidLoading = false;
             console.error('Failed to load mermaid.js');
         };
         document.head.appendChild(script);
     }
-    
+
     function renderMermaidDiagrams() {
         var containers = document.querySelectorAll('.mermaid-container:not(.rendered)');
         if (containers.length === 0) return;
-        
-        loadMermaid(function() {
-            containers.forEach(function(container) {
+
+        loadMermaid(function () {
+            containers.forEach(function (container) {
                 var mermaidDiv = container.querySelector('.mermaid');
                 if (!mermaidDiv) return;
-                
+
                 var code = mermaidDiv.textContent;
                 var id = mermaidDiv.id;
-                
+
                 try {
-                    window.mermaid.render(id + '-svg', code).then(function(result) {
+                    window.mermaid.render(id + '-svg', code).then(function (result) {
                         mermaidDiv.innerHTML = result.svg;
                         container.classList.add('rendered');
-                    }).catch(function(err) {
+                    }).catch(function (err) {
                         // Show code block as fallback on error
                         mermaidDiv.innerHTML = '<pre class="code-block" data-lang="mermaid"><code>' + escapeHtml(code) + '</code></pre>';
                         container.classList.add('rendered', 'error');
@@ -689,7 +722,7 @@
      */
     function updateWelcomeSectionVisibility() {
         if (!welcomeSection) return;
-        var hasCompletedCalls = currentSessionCalls.some(function(tc) { return tc.status === 'completed'; });
+        var hasCompletedCalls = currentSessionCalls.some(function (tc) { return tc.status === 'completed'; });
         var hasPendingMessage = pendingMessage && !pendingMessage.classList.contains('hidden');
         var shouldHide = hasCompletedCalls || pendingToolCall !== null || hasPendingMessage;
         welcomeSection.classList.toggle('hidden', shouldHide);
@@ -701,7 +734,7 @@
     function scrollToBottom() {
         if (!chatContainer) return;
         // Use requestAnimationFrame to ensure DOM is updated before scrolling
-        requestAnimationFrame(function() {
+        requestAnimationFrame(function () {
             chatContainer.scrollTop = chatContainer.scrollHeight;
         });
     }
@@ -717,7 +750,7 @@
     }
 
     function removeFromQueue(id) {
-        promptQueue = promptQueue.filter(function(item) { return item.id !== id; });
+        promptQueue = promptQueue.filter(function (item) { return item.id !== id; });
         renderQueue();
         vscode.postMessage({ type: 'removeQueuePrompt', promptId: id });
     }
@@ -728,7 +761,7 @@
     function renderQueue() {
         if (!queueList) return;
         if (queueCount) queueCount.textContent = promptQueue.length;
-        
+
         // Update visibility based on queue state
         updateQueueVisibility();
 
@@ -737,7 +770,7 @@
             return;
         }
 
-        queueList.innerHTML = promptQueue.map(function(item, index) {
+        queueList.innerHTML = promptQueue.map(function (item, index) {
             var bulletClass = index === 0 ? 'active' : 'pending';
             var truncatedPrompt = item.prompt.length > 80 ? item.prompt.substring(0, 80) + '...' : item.prompt;
             return '<div class="queue-item" data-id="' + escapeHtml(item.id) + '" data-index="' + index + '" tabindex="0" draggable="true">' +
@@ -749,16 +782,16 @@
                 '</div></div>';
         }).join('');
 
-        queueList.querySelectorAll('.remove-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
+        queueList.querySelectorAll('.remove-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var id = btn.getAttribute('data-id');
                 if (id) removeFromQueue(id);
             });
         });
 
-        queueList.querySelectorAll('.edit-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
+        queueList.querySelectorAll('.edit-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var id = btn.getAttribute('data-id');
                 if (id) startEditPrompt(id);
@@ -770,11 +803,11 @@
     }
 
     function startEditPrompt(id) {
-        var item = promptQueue.find(function(p) { return p.id === id; });
+        var item = promptQueue.find(function (p) { return p.id === id; });
         if (!item) return;
 
         editingPromptId = id;
-        
+
         // Find the queue item element
         var queueItem = queueList.querySelector('.queue-item[data-id="' + id + '"]');
         if (!queueItem) return;
@@ -785,7 +818,7 @@
         var index = parseInt(queueItem.getAttribute('data-index'), 10);
 
         queueItem.classList.add('editing');
-        
+
         var inputHtml = '<input type="text" class="edit-input" value="' + escapeHtml(originalText) + '" data-id="' + id + '" />';
         textSpan.innerHTML = inputHtml;
 
@@ -794,7 +827,7 @@
         input.select();
 
         // Handle save on Enter, cancel on Escape
-        input.addEventListener('keydown', function(e) {
+        input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 saveEditPrompt(id, input.value);
@@ -805,9 +838,9 @@
         });
 
         // Handle blur - save changes
-        input.addEventListener('blur', function() {
+        input.addEventListener('blur', function () {
             // Small delay to allow click events to fire first
-            setTimeout(function() {
+            setTimeout(function () {
                 if (editingPromptId === id) {
                     saveEditPrompt(id, input.value);
                 }
@@ -822,7 +855,7 @@
             removeFromQueue(id);
         } else {
             // Update the prompt
-            var item = promptQueue.find(function(p) { return p.id === id; });
+            var item = promptQueue.find(function (p) { return p.id === id; });
             if (item && item.prompt !== trimmed) {
                 item.prompt = trimmed;
                 vscode.postMessage({ type: 'editQueuePrompt', promptId: id, newPrompt: trimmed });
@@ -839,15 +872,15 @@
 
     function bindDragAndDrop() {
         if (!queueList) return;
-        queueList.querySelectorAll('.queue-item').forEach(function(item) {
-            item.addEventListener('dragstart', function(e) {
+        queueList.querySelectorAll('.queue-item').forEach(function (item) {
+            item.addEventListener('dragstart', function (e) {
                 e.dataTransfer.setData('text/plain', String(parseInt(item.getAttribute('data-index'), 10)));
                 item.classList.add('dragging');
             });
-            item.addEventListener('dragend', function() { item.classList.remove('dragging'); });
-            item.addEventListener('dragover', function(e) { e.preventDefault(); item.classList.add('drag-over'); });
-            item.addEventListener('dragleave', function() { item.classList.remove('drag-over'); });
-            item.addEventListener('drop', function(e) {
+            item.addEventListener('dragend', function () { item.classList.remove('dragging'); });
+            item.addEventListener('dragover', function (e) { e.preventDefault(); item.classList.add('drag-over'); });
+            item.addEventListener('dragleave', function () { item.classList.remove('drag-over'); });
+            item.addEventListener('drop', function (e) {
                 e.preventDefault();
                 var fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
                 var toIndex = parseInt(item.getAttribute('data-index'), 10);
@@ -860,8 +893,8 @@
     function bindKeyboardNavigation() {
         if (!queueList) return;
         var items = queueList.querySelectorAll('.queue-item');
-        items.forEach(function(item, index) {
-            item.addEventListener('keydown', function(e) {
+        items.forEach(function (item, index) {
+            item.addEventListener('keydown', function (e) {
                 if (e.key === 'ArrowDown' && index < items.length - 1) { e.preventDefault(); items[index + 1].focus(); }
                 else if (e.key === 'ArrowUp' && index > 0) { e.preventDefault(); items[index - 1].focus(); }
                 else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); var id = item.getAttribute('data-id'); if (id) removeFromQueue(id); }
@@ -889,7 +922,7 @@
             var query = value.substring(hashPos + 1, cursorPos);
             autocompleteStartPos = hashPos;
             if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-            searchDebounceTimer = setTimeout(function() {
+            searchDebounceTimer = setTimeout(function () {
                 vscode.postMessage({ type: 'searchFiles', query: query });
             }, 150);
         } else if (autocompleteVisible) {
@@ -924,23 +957,23 @@
 
     function renderAutocompleteList() {
         if (!autocompleteList) return;
-        autocompleteList.innerHTML = autocompleteResults.map(function(file, index) {
+        autocompleteList.innerHTML = autocompleteResults.map(function (file, index) {
             return '<div class="autocomplete-item' + (index === selectedAutocompleteIndex ? ' selected' : '') + '" data-index="' + index + '">' +
                 '<span class="autocomplete-item-icon"><span class="codicon codicon-' + file.icon + '"></span></span>' +
                 '<div class="autocomplete-item-content"><span class="autocomplete-item-name">' + escapeHtml(file.name) + '</span>' +
                 '<span class="autocomplete-item-path">' + escapeHtml(file.path) + '</span></div></div>';
         }).join('');
 
-        autocompleteList.querySelectorAll('.autocomplete-item').forEach(function(item) {
-            item.addEventListener('click', function() { selectAutocompleteItem(parseInt(item.getAttribute('data-index'), 10)); });
-            item.addEventListener('mouseenter', function() { selectedAutocompleteIndex = parseInt(item.getAttribute('data-index'), 10); updateAutocompleteSelection(); });
+        autocompleteList.querySelectorAll('.autocomplete-item').forEach(function (item) {
+            item.addEventListener('click', function () { selectAutocompleteItem(parseInt(item.getAttribute('data-index'), 10)); });
+            item.addEventListener('mouseenter', function () { selectedAutocompleteIndex = parseInt(item.getAttribute('data-index'), 10); updateAutocompleteSelection(); });
         });
         scrollToSelectedItem();
     }
 
     function updateAutocompleteSelection() {
         if (!autocompleteList) return;
-        autocompleteList.querySelectorAll('.autocomplete-item').forEach(function(item, index) {
+        autocompleteList.querySelectorAll('.autocomplete-item').forEach(function (item, index) {
             item.classList.toggle('selected', index === selectedAutocompleteIndex);
         });
         scrollToSelectedItem();
@@ -968,13 +1001,13 @@
     function syncAttachmentsWithText() {
         var text = chatInput ? chatInput.value : '';
         var toRemove = [];
-        currentAttachments.forEach(function(att) {
+        currentAttachments.forEach(function (att) {
             if (att.isTemporary || !att.isTextReference) return;
             if (text.indexOf('#' + att.name) === -1) toRemove.push(att.id);
         });
         if (toRemove.length > 0) {
-            toRemove.forEach(function(id) { vscode.postMessage({ type: 'removeAttachment', attachmentId: id }); });
-            currentAttachments = currentAttachments.filter(function(a) { return toRemove.indexOf(a.id) === -1; });
+            toRemove.forEach(function (id) { vscode.postMessage({ type: 'removeAttachment', attachmentId: id }); });
+            currentAttachments = currentAttachments.filter(function (a) { return toRemove.indexOf(a.id) === -1; });
             updateChipsDisplay();
         }
     }
@@ -1016,7 +1049,7 @@
 
     function processImageFile(file) {
         var reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             if (e.target && e.target.result) vscode.postMessage({ type: 'saveImage', data: e.target.result, mimeType: file.type });
         };
         reader.readAsDataURL(file);
@@ -1029,7 +1062,7 @@
             chipsContainer.innerHTML = '';
         } else {
             chipsContainer.classList.remove('hidden');
-            chipsContainer.innerHTML = currentAttachments.map(function(att) {
+            chipsContainer.innerHTML = currentAttachments.map(function (att) {
                 var isImage = att.isTemporary || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(att.name);
                 var iconClass = att.isFolder ? 'folder' : (isImage ? 'file-media' : 'file');
                 var displayName = att.isTemporary ? 'Pasted Image' : att.name;
@@ -1039,8 +1072,8 @@
                     '<button class="chip-remove" data-remove="' + att.id + '" title="Remove"><span class="codicon codicon-close"></span></button></div>';
             }).join('');
 
-            chipsContainer.querySelectorAll('.chip-remove').forEach(function(btn) {
-                btn.addEventListener('click', function(e) {
+            chipsContainer.querySelectorAll('.chip-remove').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var attId = btn.getAttribute('data-remove');
                     if (attId) removeAttachment(attId);
@@ -1051,7 +1084,7 @@
 
     function removeAttachment(attachmentId) {
         vscode.postMessage({ type: 'removeAttachment', attachmentId: attachmentId });
-        currentAttachments = currentAttachments.filter(function(a) { return a.id !== attachmentId; });
+        currentAttachments = currentAttachments.filter(function (a) { return a.id !== attachmentId; });
         updateChipsDisplay();
     }
 

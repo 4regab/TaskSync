@@ -1019,12 +1019,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         </div>
 
         <!-- Combined Input Wrapper (Queue + Input) -->
-        <div class="input-wrapper" id="input-wrapper">
-            <!-- File Autocomplete Dropdown - positioned above input -->
+        <div class="input-area-container" id="input-area-container">
+            <!-- File Autocomplete Dropdown - positioned outside input-wrapper to avoid clipping -->
             <div class="autocomplete-dropdown hidden" id="autocomplete-dropdown">
                 <div class="autocomplete-list" id="autocomplete-list"></div>
                 <div class="autocomplete-empty hidden" id="autocomplete-empty">No files found</div>
             </div>
+            <div class="input-wrapper" id="input-wrapper">
             <!-- Prompt Queue Section - Integrated above input -->
             <div class="queue-section" id="queue-section">
                 <div class="queue-header" id="queue-header">
@@ -1072,6 +1073,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             </div>
         </div>
         </div><!-- End input-wrapper -->
+        </div><!-- End input-area-container -->
 
         <!-- Drop Zone Overlay -->
         <div class="drop-zone hidden" id="drop-zone">

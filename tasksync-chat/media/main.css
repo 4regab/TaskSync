@@ -18,7 +18,8 @@
     --textarea-max-height: 120px;
 }
 
-html, body {
+html,
+body {
     height: 100%;
     margin: 0;
     padding: 0;
@@ -97,7 +98,7 @@ body {
     /* No collapsed state needed - current session always shows */
 }
 
-.main-container > .chat-container {
+.main-container>.chat-container {
     margin-bottom: 8px;
 }
 
@@ -279,7 +280,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px 4px 0 4px; /* Added top padding to separate from title bar */
+    padding: 12px 4px 0 4px;
+    /* Added top padding to separate from title bar */
     flex-shrink: 0;
 }
 
@@ -413,6 +415,89 @@ body {
     margin-bottom: 0;
 }
 
+/* Markdown headers in AI response */
+.tool-call-ai-response h1,
+.tool-call-ai-response h2,
+.tool-call-ai-response h3,
+.tool-call-ai-response h4,
+.tool-call-ai-response h5,
+.tool-call-ai-response h6,
+.pending-ai-question h1,
+.pending-ai-question h2,
+.pending-ai-question h3,
+.pending-ai-question h4,
+.pending-ai-question h5,
+.pending-ai-question h6 {
+    margin: 12px 0 8px 0;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    line-height: 1.3;
+}
+
+.tool-call-ai-response h1,
+.pending-ai-question h1 {
+    font-size: 1.5em;
+}
+
+.tool-call-ai-response h2,
+.pending-ai-question h2 {
+    font-size: 1.3em;
+}
+
+.tool-call-ai-response h3,
+.pending-ai-question h3 {
+    font-size: 1.15em;
+}
+
+.tool-call-ai-response h4,
+.pending-ai-question h4 {
+    font-size: 1.05em;
+}
+
+.tool-call-ai-response h5,
+.pending-ai-question h5 {
+    font-size: 1em;
+}
+
+.tool-call-ai-response h6,
+.pending-ai-question h6 {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Lists in AI response */
+.tool-call-ai-response ul,
+.tool-call-ai-response ol,
+.pending-ai-question ul,
+.pending-ai-question ol {
+    margin: 8px 0;
+    padding-left: 24px;
+}
+
+.tool-call-ai-response li,
+.pending-ai-question li {
+    margin: 4px 0;
+}
+
+/* Blockquotes in AI response */
+.tool-call-ai-response blockquote,
+.pending-ai-question blockquote {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-left: 3px solid var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
+    background-color: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+/* Horizontal rule in AI response */
+.tool-call-ai-response hr,
+.pending-ai-question hr {
+    border: none;
+    border-top: 1px solid var(--vscode-panel-border);
+    margin: 12px 0;
+}
+
 /* Code block styling - uses VS Code theme colors */
 .tool-call-ai-response .code-block {
     background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
@@ -524,13 +609,15 @@ body {
 
 /* Working State Indicator - Animated dots */
 .working-indicator {
-    padding: 12px 4px; /* Match tool-history-area padding */
+    padding: 12px 4px;
+    /* Match tool-history-area padding */
     font-size: 13px;
     color: var(--vscode-descriptionForeground);
     line-height: 1.4;
     display: flex;
     align-items: center;
-    justify-content: flex-start; /* Ensure left alignment */
+    justify-content: flex-start;
+    /* Ensure left alignment */
     gap: 8px;
 }
 
@@ -545,11 +632,14 @@ body {
 }
 
 @keyframes working-pulse {
-    0%, 100% { 
+
+    0%,
+    100% {
         opacity: 0.4;
         transform: scale(0.8);
     }
-    50% { 
+
+    50% {
         opacity: 1;
         transform: scale(1);
     }
@@ -587,7 +677,8 @@ body {
     border-radius: 0;
     overflow: hidden;
     flex-shrink: 0;
-    text-align: left; /* Ensure left alignment */
+    text-align: left;
+    /* Ensure left alignment */
 }
 
 .pending-message-header {
@@ -660,8 +751,15 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 /* --- Chips Container (inside input) --- */
@@ -721,8 +819,10 @@ body {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 10px;
     background-color: var(--vscode-editor-background);
-    overflow: visible;
-    position: relative; /* For autocomplete dropdown positioning */
+    overflow: hidden;
+    /* Clip child elements to respect border-radius */
+    position: relative;
+    /* For autocomplete dropdown positioning */
 }
 
 .input-wrapper:focus-within {
@@ -737,7 +837,7 @@ body {
     border-radius: 0;
     flex-shrink: 0;
     overflow: hidden;
-    margin-bottom: 0;
+    margin: 0;
 }
 
 .queue-section.hidden {
@@ -930,13 +1030,19 @@ body {
     font-style: italic;
 }
 
+/* --- Input Area Container (wrapper for dropdown + input-wrapper) --- */
+.input-area-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
 /* --- Autocomplete Dropdown --- */
 .autocomplete-dropdown {
     position: absolute;
-    bottom: 100%;
+    bottom: calc(100% + 4px);
+    /* Position above the input wrapper */
     left: 0;
     right: 0;
-    margin-bottom: 4px;
     max-height: 200px;
     background-color: var(--vscode-editorWidget-background);
     border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
@@ -1002,18 +1108,14 @@ body {
 .input-container {
     background-color: var(--vscode-editor-background);
     border: none;
-    border-radius: 10px;
+    border-radius: 0;
+    /* Parent wrapper handles border-radius */
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
     overflow: visible;
     position: relative;
     z-index: 10;
-}
-
-/* When queue is visible, flatten top corners of input-container */
-.queue-section:not(.hidden) + .input-container {
-    border-radius: 0 0 10px 10px;
 }
 
 /* Chips inside input container */
@@ -1201,7 +1303,7 @@ button#send-btn:disabled {
     .welcome-cards {
         grid-template-columns: 1fr;
     }
-    
+
     .welcome-title {
         font-size: 20px;
     }

@@ -1,13 +1,15 @@
 # TaskSync
 
-This extension helps you manage tasks seamlessly within VS Code that lets you prompt queue easily or queue all tasks and reduce premium requests.
+**Automate AI conversations. Queue your prompts. Work uninterrupted.**
+
+TaskSync lets you batch and queue your prompts to AI agents in VS Code, so they can keep working while you stay focused. Perfect for long-running tasks, repetitive workflows, or hands-free automation—saving you time and reducing premium requests.
 
 ## Features
 
 ### Smart Queue Mode
-Queue multiple responses to be automatically sent when the AI agent requests feedback. Perfect for:
+Queue multiple prompts to be automatically sent when the AI agent requests feedback. Perfect for:
 - Batching instructions for long-running tasks
-- Pre-loading responses for predictable workflows
+- Pre-loading prompts  for predictable workflows  
 - Reducing interruptions during focused work
 
 ### Normal Mode
@@ -26,13 +28,6 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - View current session tool calls in the main panel
 - Access full history via the history button in the title bar
 - Remove individual entries or clear all history
-
-### MCP Server Integration
-TaskSync runs an MCP (Model Context Protocol) server that integrates with:
-- **Kiro** (auto-configured)
-- **Cursor** (auto-configured)
-- **Claude Desktop**
-- **Any MCP-compatible client**
 
 ## Installation
 
@@ -78,6 +73,15 @@ TaskSync runs an MCP (Model Context Protocol) server that integrates with:
 2. Search for files or folders
 3. Select to attach - the reference appears as a tag
 4. Multiple attachments supported per message
+
+
+### MCP Server Integration
+TaskSync runs an MCP (Model Context Protocol) server that integrates with:
+- **Kiro** (auto-configured)
+- **Cursor** (auto-configured)
+- **Claude Desktop**
+- **Any MCP-compatible client**
+
 
 ## MCP Configuration for other IDE (Not needed with copilot)
 

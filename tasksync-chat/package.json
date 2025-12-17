@@ -2,9 +2,7 @@
   "name": "tasksync-chat",
   "publisher": "4regab",
   "displayName": "TaskSync",
-  "description": "VS Code extension to reduce premium AI requests, and manage tasks seamlessly within your IDE with MCP server support",
-  "version": "2.0.0",
-  "engines": {
+  "description": "Automate AI conversations. Queue your prompts or tasks. Work uninterrupted.","version": "2.0.0","engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
@@ -54,7 +52,9 @@
               "description": "The question or prompt to display to the user"
             }
           },
-          "required": ["question"]
+          "required": [
+            "question"
+          ]
         }
       }
     ],

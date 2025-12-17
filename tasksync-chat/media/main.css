@@ -1207,8 +1207,7 @@ textarea#chat-input::placeholder {
 
 .mode-dropdown {
     position: absolute;
-    bottom: calc(100% + 4px);
-    left: 0;
+    /* Bottom and left are set dynamically via JS */
     min-width: 120px;
     background-color: var(--vscode-editorWidget-background);
     border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
@@ -1231,18 +1230,6 @@ textarea#chat-input::placeholder {
 
 .mode-option:hover {
     background-color: var(--vscode-list-hoverBackground);
-}
-
-.mode-check {
-    width: 14px;
-    display: none;
-    /* Completely hide checkmarks */
-    align-items: center;
-    color: var(--vscode-testing-iconPassed, #73c991);
-}
-
-.mode-check.hidden {
-    display: none;
 }
 
 /* Send Button */

@@ -26,9 +26,9 @@
 
     // DOM Elements
     let chatInput, sendBtn, attachBtn, modeBtn, modeDropdown, modeLabel;
-    let checkNormal, checkQueue, queueSection, queueHeader, queueList, queueCount;
+    let queueSection, queueHeader, queueList, queueCount;
     let chatContainer, chipsContainer, autocompleteDropdown, autocompleteList, autocompleteEmpty;
-    let dropZone, inputContainer, welcomeSection, welcomeTips;
+    let dropZone, inputContainer, inputAreaContainer, welcomeSection, welcomeTips;
     let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
     let historyToggleBtn;
     let historyModal, historyModalOverlay, historyModalList, historyModalClose, historyModalClearAll;
@@ -57,8 +57,6 @@
         modeBtn = document.getElementById('mode-btn');
         modeDropdown = document.getElementById('mode-dropdown');
         modeLabel = document.getElementById('mode-label');
-        checkNormal = document.getElementById('check-normal');
-        checkQueue = document.getElementById('check-queue');
         queueSection = document.getElementById('queue-section');
         queueHeader = document.getElementById('queue-header');
         queueList = document.getElementById('queue-list');
@@ -70,6 +68,7 @@
         autocompleteEmpty = document.getElementById('autocomplete-empty');
         dropZone = document.getElementById('drop-zone');
         inputContainer = document.getElementById('input-container');
+        inputAreaContainer = document.getElementById('input-area-container');
         welcomeSection = document.getElementById('welcome-section');
         welcomeTips = document.getElementById('welcome-tips');
         cardVibe = document.getElementById('card-vibe');
@@ -151,7 +150,7 @@
         });
 
         document.addEventListener('click', function (e) {
-            if (dropdownOpen && !e.target.closest('.mode-selector')) closeModeDropdown();
+            if (dropdownOpen && !e.target.closest('.mode-selector') && !e.target.closest('.mode-dropdown')) closeModeDropdown();
             if (autocompleteVisible && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('#chat-input')) hideAutocomplete();
         });
 
@@ -294,7 +293,22 @@
     function toggleModeDropdown(e) {
         e.stopPropagation();
         dropdownOpen = !dropdownOpen;
-        if (modeDropdown) modeDropdown.classList.toggle('hidden', !dropdownOpen);
+        if (modeDropdown) {
+            modeDropdown.classList.toggle('hidden', !dropdownOpen);
+            // Position dropdown above the mode button
+            if (dropdownOpen && modeBtn) {
+                positionModeDropdown();
+            }
+        }
+    }
+
+    function positionModeDropdown() {
+        if (!modeDropdown || !modeBtn || !inputAreaContainer) return;
+        var btnRect = modeBtn.getBoundingClientRect();
+        var containerRect = inputAreaContainer.getBoundingClientRect();
+        // Position relative to inputAreaContainer
+        modeDropdown.style.left = (btnRect.left - containerRect.left) + 'px';
+        modeDropdown.style.bottom = (containerRect.bottom - btnRect.top + 4) + 'px';
     }
 
     function closeModeDropdown() {
@@ -314,8 +328,7 @@
 
     function updateModeUI() {
         if (modeLabel) modeLabel.textContent = queueEnabled ? 'Queue' : 'Normal';
-        if (checkNormal) checkNormal.classList.toggle('hidden', queueEnabled);
-        if (checkQueue) checkQueue.classList.toggle('hidden', !queueEnabled);
+        // Checkmarks removed from UI - no longer needed
     }
 
     function updateQueueVisibility() {

@@ -1025,6 +1025,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                 <div class="autocomplete-list" id="autocomplete-list"></div>
                 <div class="autocomplete-empty hidden" id="autocomplete-empty">No files found</div>
             </div>
+            <!-- Mode Dropdown - positioned outside input-wrapper to avoid clipping, dynamically positioned via JS -->
+            <div class="mode-dropdown hidden" id="mode-dropdown">
+                <div class="mode-option" data-mode="normal">
+                    <span>Normal</span>
+                </div>
+                <div class="mode-option" data-mode="queue">
+                    <span>Queue</span>
+                </div>
+            </div>
             <div class="input-wrapper" id="input-wrapper">
             <!-- Prompt Queue Section - Integrated above input -->
             <div class="queue-section" id="queue-section">
@@ -1055,16 +1064,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                             <span class="codicon codicon-chevron-down"></span>
                             <span id="mode-label">Queue</span>
                         </button>
-                        <div class="mode-dropdown hidden" id="mode-dropdown">
-                            <div class="mode-option" data-mode="normal">
-                                <span class="mode-check hidden" id="check-normal"><span class="codicon codicon-check"></span></span>
-                                <span>Normal</span>
-                            </div>
-                            <div class="mode-option" data-mode="queue">
-                                <span class="mode-check" id="check-queue"><span class="codicon codicon-check"></span></span>
-                                <span>Queue</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 <button id="send-btn" title="Send message">

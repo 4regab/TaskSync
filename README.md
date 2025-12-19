@@ -1,4 +1,16 @@
-
+> [!WARNING]
+> **GitHub Security Notice:**  
+> Excessive automated or scripted use of AI assistants (including rapid or bulk requests through TaskSync's queue system) may trigger GitHub's abuse-detection systems if you're using services like GitHub Copilot. 
+> You may receive a warning from GitHub Security, and further anomalous activity could result in temporary suspension of your AI assistant access.
+>
+> GitHub prohibits use of their servers for excessive automated bulk activity or any activity that places undue burden on their infrastructure.
+>
+> Please review:
+>
+> - [GitHub Acceptable Use Policies](https://docs.github.com/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github)
+> - [GitHub Copilot Terms](https://docs.github.com/site-policy/github-terms/github-terms-for-additional-products-and-features#github-copilot)
+>   
+> **Use TaskSync responsibly and at your own risk. You are responsible for ensuring your usage complies with GitHub's terms of service.**
 <h1>TaskSync</h1>
 
 Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop workflows. TaskSync provides three options to integrate feedback loops into your AI-assisted development.

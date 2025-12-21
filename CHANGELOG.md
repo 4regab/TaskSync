@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.5 (12-21-25)
+- fix: update auto-release workflow to trigger on changes to the workflow file
+
+
 ## TaskSync Chat Extension v2.0.0 (12-17-25)
 - New VS Code sidebar extension with dedicated UI (`tasksync-chat/` folder)
 - Smart Queue Mode: batch responses for AI agents automatically

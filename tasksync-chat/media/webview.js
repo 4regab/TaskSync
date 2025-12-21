@@ -17,8 +17,9 @@
     let currentSessionCalls = []; // Current session tool calls (shown in chat)
     let persistedHistory = []; // Past sessions history (shown in modal)
     let pendingToolCall = null;
-    let historyModalOpen = false;
     let isProcessingResponse = false; // True when AI is processing user's response
+    let isApprovalQuestion = false; // True when current pending question is an approval-type question
+    let currentChoices = []; // Parsed choices from multi-choice questions
 
     // Persisted input value (restored from state)
     let persistedInputValue = previousState.inputValue || '';
@@ -41,16 +42,18 @@
     let chatContainer, chipsContainer, autocompleteDropdown, autocompleteList, autocompleteEmpty;
     let inputContainer, inputAreaContainer, welcomeSection, welcomeTips;
     let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
-    let historyToggleBtn;
     let historyModal, historyModalOverlay, historyModalList, historyModalClose, historyModalClearAll;
     // Edit mode elements
     let actionsLeft, actionsBar, editActionsContainer, editCancelBtn, editConfirmBtn;
+    // Approval modal elements
+    let approvalModal, approvalContinueBtn, approvalNoBtn;
 
     function init() {
         try {
             cacheDOMElements();
             createHistoryModal();
             createEditModeUI();
+            createApprovalModal();
             bindEventListeners();
             renderQueue();
             updateModeUI();
@@ -110,7 +113,6 @@
         cardSpec = document.getElementById('card-spec');
         toolHistoryArea = document.getElementById('tool-history-area');
         pendingMessage = document.getElementById('pending-message');
-        historyToggleBtn = document.getElementById('history-toggle-btn');
         // Get actions bar elements for edit mode
         actionsBar = document.querySelector('.actions-bar');
         actionsLeft = document.querySelector('.actions-left');
@@ -209,6 +211,50 @@
         }
     }
 
+    function createApprovalModal() {
+        // Create approval bar that appears at the top of input-wrapper (inside the border)
+        approvalModal = document.createElement('div');
+        approvalModal.className = 'approval-bar hidden';
+        approvalModal.id = 'approval-bar';
+        approvalModal.setAttribute('role', 'toolbar');
+        approvalModal.setAttribute('aria-label', 'Quick approval options');
+
+        // Left side label
+        var labelSpan = document.createElement('span');
+        labelSpan.className = 'approval-label';
+        labelSpan.textContent = 'Waiting on your input..';
+
+        // Right side buttons container
+        var buttonsContainer = document.createElement('div');
+        buttonsContainer.className = 'approval-buttons';
+
+        // No/Reject button (secondary action - text only)
+        approvalNoBtn = document.createElement('button');
+        approvalNoBtn.className = 'approval-btn approval-reject-btn';
+        approvalNoBtn.setAttribute('aria-label', 'Reject and provide custom response');
+        approvalNoBtn.textContent = 'No';
+
+        // Continue/Accept button (primary action)
+        approvalContinueBtn = document.createElement('button');
+        approvalContinueBtn.className = 'approval-btn approval-accept-btn';
+        approvalContinueBtn.setAttribute('aria-label', 'Yes and continue');
+        approvalContinueBtn.textContent = 'Yes';
+
+        // Assemble buttons
+        buttonsContainer.appendChild(approvalNoBtn);
+        buttonsContainer.appendChild(approvalContinueBtn);
+
+        // Assemble bar
+        approvalModal.appendChild(labelSpan);
+        approvalModal.appendChild(buttonsContainer);
+
+        // Insert at top of input-wrapper (inside the border)
+        var inputWrapper = document.getElementById('input-wrapper');
+        if (inputWrapper) {
+            inputWrapper.insertBefore(approvalModal, inputWrapper.firstChild);
+        }
+    }
+
     function bindEventListeners() {
         if (chatInput) {
             chatInput.addEventListener('input', handleTextareaInput);
@@ -232,7 +278,6 @@
         });
 
         if (queueHeader) queueHeader.addEventListener('click', handleQueueHeaderClick);
-        if (historyToggleBtn) historyToggleBtn.addEventListener('click', openHistoryModal);
         if (historyModalClose) historyModalClose.addEventListener('click', closeHistoryModal);
         if (historyModalClearAll) historyModalClearAll.addEventListener('click', clearAllPersistedHistory);
         if (historyModalOverlay) {
@@ -244,23 +289,23 @@
         if (editCancelBtn) editCancelBtn.addEventListener('click', cancelEditMode);
         if (editConfirmBtn) editConfirmBtn.addEventListener('click', confirmEditMode);
 
+        // Approval modal button events
+        if (approvalContinueBtn) approvalContinueBtn.addEventListener('click', handleApprovalContinue);
+        if (approvalNoBtn) approvalNoBtn.addEventListener('click', handleApprovalNo);
+
         window.addEventListener('message', handleExtensionMessage);
     }
 
     function openHistoryModal() {
         if (!historyModalOverlay) return;
-        historyModalOpen = true;
         // Request persisted history from extension
         vscode.postMessage({ type: 'openHistoryModal' });
         historyModalOverlay.classList.remove('hidden');
-        if (historyToggleBtn) historyToggleBtn.classList.add('active');
     }
 
     function closeHistoryModal() {
         if (!historyModalOverlay) return;
-        historyModalOpen = false;
         historyModalOverlay.classList.add('hidden');
-        if (historyToggleBtn) historyToggleBtn.classList.remove('active');
     }
 
     function clearAllPersistedHistory() {
@@ -345,6 +390,26 @@
     }
 
     function handleTextareaKeydown(e) {
+        // Handle approval modal keyboard shortcuts when visible
+        if (isApprovalQuestion && approvalModal && !approvalModal.classList.contains('hidden')) {
+            // Enter sends "Continue" when approval modal is visible and input is empty
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                var inputText = chatInput ? chatInput.value.trim() : '';
+                if (!inputText) {
+                    e.preventDefault();
+                    handleApprovalContinue();
+                    return;
+                }
+                // If there's text, fall through to normal send behavior
+            }
+            // Escape dismisses approval modal
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                handleApprovalNo();
+                return;
+            }
+        }
+
         // Handle edit mode keyboard shortcuts
         if (editingPromptId) {
             if (e.key === 'Escape') {
@@ -373,6 +438,9 @@
     function handleSend() {
         var text = chatInput ? chatInput.value.trim() : '';
         if (!text && currentAttachments.length === 0) return;
+
+        // Hide approval modal when sending any response
+        hideApprovalModal();
 
         // If processing response (AI working), auto-queue the message
         if (isProcessingResponse && text) {
@@ -483,7 +551,7 @@
                 updateWelcomeSectionVisibility();
                 break;
             case 'toolCallPending':
-                showPendingToolCall(message.id, message.prompt);
+                showPendingToolCall(message.id, message.prompt, message.isApprovalQuestion, message.choices);
                 break;
             case 'toolCallCompleted':
                 addToolCallToCurrentSession(message.entry);
@@ -525,9 +593,11 @@
         }
     }
 
-    function showPendingToolCall(id, prompt) {
+    function showPendingToolCall(id, prompt, isApproval, choices) {
         pendingToolCall = { id: id, prompt: prompt };
         isProcessingResponse = false; // AI is now asking, not processing
+        isApprovalQuestion = isApproval === true;
+        currentChoices = choices || [];
 
         if (welcomeSection) {
             welcomeSection.classList.add('hidden');
@@ -545,10 +615,24 @@
         renderMermaidDiagrams();
         // Auto-scroll to show the new pending message
         scrollToBottom();
+
+        // Show choice buttons if we have choices, otherwise show approval modal for yes/no questions
+        if (currentChoices.length > 0) {
+            showChoicesBar();
+        } else if (isApprovalQuestion) {
+            showApprovalModal();
+        } else {
+            hideApprovalModal();
+            hideChoicesBar();
+        }
     }
 
     function addToolCallToCurrentSession(entry) {
         pendingToolCall = null;
+
+        // Hide approval modal and choices bar when tool call completes
+        hideApprovalModal();
+        hideChoicesBar();
 
         // Update or add entry to current session
         var idx = currentSessionCalls.findIndex(function (tc) { return tc.id === entry.id; });
@@ -911,7 +995,7 @@
     function addToQueue(prompt) {
         if (!prompt || !prompt.trim()) return;
         var id = 'q_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
-        promptQueue.push({ id: id, prompt: prompt.trim(), createdAt: Date.now() });
+        promptQueue.push({ id: id, prompt: prompt.trim() });
         renderQueue();
         // Expand queue section when adding items so user can see what was added
         if (queueSection) queueSection.classList.remove('collapsed');
@@ -1073,6 +1157,155 @@
     function cancelEditMode() {
         exitEditMode();
         renderQueue();
+    }
+
+    /**
+     * Handle "accept" button click in approval modal
+     * Sends "yes" as the response
+     */
+    function handleApprovalContinue() {
+        if (!pendingToolCall) return;
+
+        // Hide approval modal
+        hideApprovalModal();
+
+        // Send affirmative response
+        vscode.postMessage({ type: 'submit', value: 'yes', attachments: [] });
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+        currentAttachments = [];
+        updateChipsDisplay();
+        updateSendButtonState();
+        saveWebviewState();
+    }
+
+    /**
+     * Handle "No" button click in approval modal
+     * Dismisses modal and focuses input for custom response
+     */
+    function handleApprovalNo() {
+        // Hide approval modal but keep pending state
+        hideApprovalModal();
+
+        // Focus input for custom response
+        if (chatInput) {
+            chatInput.focus();
+            // Optionally pre-fill with "No, " to help user
+            if (!chatInput.value.trim()) {
+                chatInput.value = 'No, ';
+                chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+            }
+            autoResizeTextarea();
+            updateSendButtonState();
+        }
+    }
+
+    /**
+     * Show approval modal
+     */
+    function showApprovalModal() {
+        if (!approvalModal) return;
+        approvalModal.classList.remove('hidden');
+        // Focus chat input instead of Yes button to prevent accidental Enter approvals
+        // User can still click Yes/No or use keyboard navigation
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }
+
+    /**
+     * Hide approval modal
+     */
+    function hideApprovalModal() {
+        if (!approvalModal) return;
+        approvalModal.classList.add('hidden');
+        isApprovalQuestion = false;
+    }
+
+    /**
+     * Show choices bar with dynamic buttons based on parsed choices
+     */
+    function showChoicesBar() {
+        // Hide approval modal first
+        hideApprovalModal();
+
+        // Create or get choices bar
+        var choicesBar = document.getElementById('choices-bar');
+        if (!choicesBar) {
+            choicesBar = document.createElement('div');
+            choicesBar.className = 'choices-bar';
+            choicesBar.id = 'choices-bar';
+            choicesBar.setAttribute('role', 'toolbar');
+            choicesBar.setAttribute('aria-label', 'Quick choice options');
+
+            // Insert at top of input-wrapper
+            var inputWrapper = document.getElementById('input-wrapper');
+            if (inputWrapper) {
+                inputWrapper.insertBefore(choicesBar, inputWrapper.firstChild);
+            }
+        }
+
+        // Build choice buttons
+        var buttonsHtml = currentChoices.map(function (choice, index) {
+            var shortLabel = choice.shortLabel || choice.value;
+            var title = choice.label || choice.value;
+            return '<button class="choice-btn" data-value="' + escapeHtml(choice.value) + '" ' +
+                'data-index="' + index + '" title="' + escapeHtml(title) + '">' +
+                escapeHtml(shortLabel) + '</button>';
+        }).join('');
+
+        choicesBar.innerHTML = '<span class="choices-label">Choose:</span>' +
+            '<div class="choices-buttons">' + buttonsHtml + '</div>';
+
+        // Bind click events to choice buttons
+        choicesBar.querySelectorAll('.choice-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var value = btn.getAttribute('data-value');
+                handleChoiceClick(value);
+            });
+        });
+
+        choicesBar.classList.remove('hidden');
+
+        // Don't auto-focus buttons - let user click or use keyboard
+        // Focus the chat input instead for immediate typing
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }
+
+    /**
+     * Hide choices bar
+     */
+    function hideChoicesBar() {
+        var choicesBar = document.getElementById('choices-bar');
+        if (choicesBar) {
+            choicesBar.classList.add('hidden');
+        }
+        currentChoices = [];
+    }
+
+    /**
+     * Handle choice button click
+     */
+    function handleChoiceClick(value) {
+        if (!pendingToolCall) return;
+
+        // Hide choices bar
+        hideChoicesBar();
+
+        // Send the choice value as response
+        vscode.postMessage({ type: 'submit', value: value, attachments: [] });
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+        currentAttachments = [];
+        updateChipsDisplay();
+        updateSendButtonState();
+        saveWebviewState();
     }
 
     function bindDragAndDrop() {

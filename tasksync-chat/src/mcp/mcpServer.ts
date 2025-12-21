@@ -18,7 +18,6 @@ export class McpServerManager {
     private _isRunning: boolean = false;
 
     constructor(
-        private _context: vscode.ExtensionContext,
         private provider: TaskSyncWebviewProvider
     ) { }
 

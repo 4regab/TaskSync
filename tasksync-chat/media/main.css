@@ -50,54 +50,6 @@ body {
     position: relative;
 }
 
-/* Header Bar */
-.header-bar {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    padding: 4px 0;
-    flex-shrink: 0;
-}
-
-.header-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.header-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--vscode-descriptionForeground);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.header-btn:hover {
-    background-color: var(--vscode-toolbar-hoverBackground);
-    color: var(--vscode-foreground);
-}
-
-.header-btn.active {
-    color: var(--vscode-focusBorder);
-    background-color: var(--vscode-toolbar-hoverBackground);
-}
-
-.header-btn-danger:hover {
-    color: var(--vscode-errorForeground);
-}
-
-/* Tool history area - always visible when has content */
-.tool-history-area {
-    /* No collapsed state needed - current session always shows */
-}
-
 .main-container>.chat-container {
     margin-bottom: 8px;
 }
@@ -746,87 +698,6 @@ body {
     /* Ensure left alignment */
 }
 
-.pending-message-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    background-color: var(--vscode-input-background);
-    border-bottom: 1px solid var(--vscode-panel-border);
-    min-height: 28px;
-}
-
-.pending-message-chevron {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    color: var(--vscode-foreground);
-}
-
-.pending-message-chevron .codicon {
-    font-size: 12px;
-}
-
-.pending-message-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    color: var(--vscode-foreground);
-}
-
-.pending-message-icon .codicon {
-    font-size: 12px;
-}
-
-.pending-message-title {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 400;
-    color: var(--vscode-foreground);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.pending-message-body {
-    padding: 16px 18px;
-}
-
-.pending-message-text {
-    font-size: 14px;
-    line-height: 1.4;
-    color: var(--vscode-foreground);
-    margin-bottom: 12px;
-}
-
-.pending-message-waiting {
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.pending-message-waiting .codicon {
-    animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
 /* --- Chips Container (inside input) --- */
 .chips-container {
     display: flex;
@@ -1180,14 +1051,6 @@ body {
     z-index: 10;
 }
 
-/* Chips inside input container */
-.input-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 12px 0 12px;
-}
-
 /* Input row with textarea and send button */
 .input-row {
     display: flex;
@@ -1274,12 +1137,6 @@ button#send-btn .codicon {
     display: flex;
     align-items: center;
     gap: 4px;
-}
-
-.actions-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
 .icon-btn {
@@ -1514,82 +1371,6 @@ button#send-btn:disabled {
     color: var(--vscode-descriptionForeground);
 }
 
-.history-modal-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 14px;
-    border-radius: 6px;
-    margin-bottom: 8px;
-    background-color: var(--vscode-input-background);
-    transition: background-color 0.15s ease;
-}
-
-.history-modal-item:hover {
-    background-color: var(--vscode-list-hoverBackground);
-}
-
-.history-modal-item:last-child {
-    margin-bottom: 0;
-}
-
-.history-item-content {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-}
-
-.history-item-title {
-    font-size: 12px;
-    color: var(--vscode-foreground);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.history-item-badge {
-    font-size: 9px;
-    padding: 1px 4px;
-    border-radius: 3px;
-    background-color: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
-    flex-shrink: 0;
-}
-
-.history-item-meta {
-    font-size: 10px;
-    color: var(--vscode-descriptionForeground);
-    margin-top: 2px;
-}
-
-.history-item-remove {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--vscode-descriptionForeground);
-    cursor: pointer;
-    opacity: 0;
-    transition: all 0.15s ease;
-    flex-shrink: 0;
-}
-
-.history-modal-item:hover .history-item-remove {
-    opacity: 1;
-}
-
-.history-item-remove:hover {
-    background-color: var(--vscode-toolbar-hoverBackground);
-    color: var(--vscode-errorForeground);
-}
-
 /* ===== EDIT MODE STYLES ===== */
 
 /* Edit mode container for buttons in actions bar */
@@ -1669,4 +1450,163 @@ button#send-btn:disabled {
 
 .queue-item.editing .queue-item-actions {
     display: none;
+}
+
+/* ===== APPROVAL BAR STYLES ===== */
+
+/* Approval bar - integrated at top of input-wrapper */
+.approval-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: var(--vscode-inputValidation-infoBackground, rgba(100, 100, 200, 0.15));
+    border-bottom: 1px solid var(--vscode-panel-border);
+    animation: approval-fade-in 0.15s ease-out;
+}
+
+.approval-bar.hidden {
+    display: none;
+}
+
+@keyframes approval-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Label on left side */
+.approval-label {
+    font-size: 12px;
+    color: var(--vscode-foreground);
+    font-weight: 400;
+}
+
+/* Buttons container on right */
+.approval-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Approval buttons - text style */
+.approval-btn {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: var(--vscode-font-family);
+    border: none;
+}
+
+.approval-btn:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+/* Reject button - text only, no background */
+.approval-reject-btn {
+    background: transparent;
+    color: var(--vscode-foreground);
+}
+
+.approval-reject-btn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+    color: var(--vscode-errorForeground);
+}
+
+/* Accept button - primary style */
+.approval-accept-btn {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.approval-accept-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.approval-accept-btn:active,
+.approval-reject-btn:active {
+    transform: scale(0.98);
+}
+
+/* ===== CHOICES BAR STYLES ===== */
+
+/* Choices bar - appears for multi-choice questions */
+.choices-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: var(--vscode-inputValidation-infoBackground, rgba(100, 100, 200, 0.15));
+    border-bottom: 1px solid var(--vscode-panel-border);
+    animation: choices-fade-in 0.15s ease-out;
+    gap: 12px;
+}
+
+.choices-bar.hidden {
+    display: none;
+}
+
+@keyframes choices-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Label on left side */
+.choices-label {
+    font-size: 12px;
+    color: var(--vscode-foreground);
+    font-weight: 400;
+    flex-shrink: 0;
+}
+
+/* Buttons container - flex wrap for multiple choices */
+.choices-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+/* Choice button - compact numbered style */
+.choice-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: var(--vscode-font-family);
+    border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+    background-color: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    min-width: 28px;
+    text-align: center;
+}
+
+.choice-btn:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+    border-color: var(--vscode-focusBorder);
+}
+
+.choice-btn:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+.choice-btn:active {
+    transform: scale(0.98);
 }

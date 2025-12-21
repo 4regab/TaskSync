@@ -54,15 +54,17 @@ export function activate(context: vscode.ExtensionContext) {
     const provider = new TaskSyncWebviewProvider(context.extensionUri, context);
     webviewProvider = provider;
 
+    // Register the provider and add it to disposables for proper cleanup
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(TaskSyncWebviewProvider.viewType, provider)
+        vscode.window.registerWebviewViewProvider(TaskSyncWebviewProvider.viewType, provider),
+        provider // Provider implements Disposable for cleanup
     );
 
     // Register VS Code LM Tools (always available for Copilot)
     registerTools(context, provider);
 
     // Initialize MCP server manager (but don't start yet)
-    mcpServer = new McpServerManager(context, provider);
+    mcpServer = new McpServerManager(provider);
 
     // Check if MCP should auto-start based on settings and external client configs
     const config = vscode.workspace.getConfiguration('tasksync');

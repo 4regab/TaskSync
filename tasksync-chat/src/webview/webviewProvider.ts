@@ -6,7 +6,6 @@ import * as path from 'path';
 export interface QueuedPrompt {
     id: string;
     prompt: string;
-    createdAt: number;
 }
 
 // Attachment info
@@ -46,18 +45,23 @@ export interface ToolCallEntry {
     sessionId?: string; // Track which session this belongs to
 }
 
+// Parsed choice from question
+export interface ParsedChoice {
+    label: string;      // Display text (e.g., "1" or "Test functionality")
+    value: string;      // Response value to send (e.g., "1" or full text)
+    shortLabel?: string; // Short version for button (e.g., "1" for numbered)
+}
+
 // Message types
 type ToWebviewMessage =
     | { type: 'updateQueue'; queue: QueuedPrompt[]; enabled: boolean }
-    | { type: 'systemMessage'; text: string }
-    | { type: 'toolCallPending'; id: string; prompt: string }
+    | { type: 'toolCallPending'; id: string; prompt: string; isApprovalQuestion: boolean; choices?: ParsedChoice[] }
     | { type: 'toolCallCompleted'; entry: ToolCallEntry }
     | { type: 'updateCurrentSession'; history: ToolCallEntry[] }
     | { type: 'updatePersistedHistory'; history: ToolCallEntry[] }
     | { type: 'fileSearchResults'; files: FileSearchResult[] }
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
-    | { type: 'imageSaved'; attachment: AttachmentInfo }
-    | { type: 'clear' };
+    | { type: 'imageSaved'; attachment: AttachmentInfo };
 
 type FromWebviewMessage =
     | { type: 'submit'; value: string; attachments: AttachmentInfo[] }
@@ -77,7 +81,7 @@ type FromWebviewMessage =
     | { type: 'addFileReference'; file: FileSearchResult }
     | { type: 'webviewReady' };
 
-export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
+export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
     public static readonly viewType = 'taskSyncView';
 
     private _view?: vscode.WebviewView;
@@ -92,8 +96,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
 
     // Current session tool calls (memory only - not persisted during session)
     private _currentSessionCalls: ToolCallEntry[] = [];
-    // Map for O(1) lookup by ID
-    private _currentSessionCallsMap: Map<string, ToolCallEntry> = new Map();
     // Persisted history from past sessions (loaded from disk)
     private _persistedHistory: ToolCallEntry[] = [];
     private _currentToolCallId: string | null = null;
@@ -115,6 +117,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
     // File search cache with TTL
     private _fileSearchCache: Map<string, { results: FileSearchResult[], timestamp: number }> = new Map();
     private readonly _FILE_CACHE_TTL_MS = 5000;
+
+    // Map for O(1) lookup of tool calls by ID (synced with _currentSessionCalls array)
+    private _currentSessionCallsMap: Map<string, ToolCallEntry> = new Map();
+
+    // Disposables to clean up
+    private _disposables: vscode.Disposable[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -150,6 +158,36 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         this._updatePersistedHistoryUI();
     }
 
+    /**
+     * Clean up resources when the provider is disposed
+     */
+    public dispose(): void {
+        // Clear debounce timer
+        if (this._queueSaveTimer) {
+            clearTimeout(this._queueSaveTimer);
+            this._queueSaveTimer = null;
+        }
+
+        // Clear file search cache
+        this._fileSearchCache.clear();
+
+        // Clear session calls map (O(1) lookup cache)
+        this._currentSessionCallsMap.clear();
+
+        // Clear pending requests (reject any waiting promises)
+        this._pendingRequests.clear();
+
+        // Clear session data
+        this._currentSessionCalls = [];
+        this._attachments = [];
+
+        // Dispose all registered disposables
+        this._disposables.forEach(d => d.dispose());
+        this._disposables = [];
+
+        this._view = undefined;
+    }
+
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
@@ -165,11 +203,20 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlContent(webviewView.webview);
 
+        // Register message handler (disposable is tracked via this._disposables)
         webviewView.webview.onDidReceiveMessage(
             (message: FromWebviewMessage) => this._handleWebviewMessage(message),
             undefined,
-            []
+            this._disposables
         );
+
+        // Clean up when webview is disposed
+        webviewView.onDidDispose(() => {
+            this._webviewReady = false;
+            this._view = undefined;
+            // Clear file search cache when view is hidden
+            this._fileSearchCache.clear();
+        }, null, this._disposables);
 
         // Don't send initial state here - wait for webviewReady message
         // This prevents race condition where messages are sent before JS is initialized
@@ -231,12 +278,18 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         this._currentSessionCalls.unshift(pendingEntry);
         this._currentSessionCallsMap.set(toolCallId, pendingEntry); // O(1) lookup
 
+        // Parse choices from question and determine if it's an approval question
+        const choices = this._parseChoices(question);
+        const isApproval = choices.length === 0 && this._isApprovalQuestion(question);
+
         // Send pending tool call to webview (or queue if not ready)
         if (this._webviewReady) {
             this._view.webview.postMessage({
                 type: 'toolCallPending',
                 id: toolCallId,
-                prompt: question
+                prompt: question,
+                isApprovalQuestion: isApproval,
+                choices: choices.length > 0 ? choices : undefined
             });
         } else {
             // Webview JS not initialized yet - queue the message
@@ -250,30 +303,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Get the prompt queue
-     */
-    public getPromptQueue(): QueuedPrompt[] {
-        return [...this._promptQueue];
-    }
-
-    /**
      * Check if queue is enabled
      */
     public isQueueEnabled(): boolean {
         return this._queueEnabled;
-    }
-
-    /**
-     * Consume next prompt from queue
-     */
-    public consumeNextPrompt(): QueuedPrompt | undefined {
-        if (!this._queueEnabled || this._promptQueue.length === 0) {
-            return undefined;
-        }
-        const prompt = this._promptQueue.shift();
-        this._saveQueueToDisk();
-        this._updateQueueUI();
-        return prompt;
     }
 
     /**
@@ -344,10 +377,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
 
         // If there's a pending tool call message that was never sent, send it now
         if (this._pendingToolCallMessage) {
+            const prompt = this._pendingToolCallMessage.prompt;
+            const choices = this._parseChoices(prompt);
+            const isApproval = choices.length === 0 && this._isApprovalQuestion(prompt);
             this._view?.webview.postMessage({
                 type: 'toolCallPending',
                 id: this._pendingToolCallMessage.id,
-                prompt: this._pendingToolCallMessage.prompt
+                prompt: prompt,
+                isApprovalQuestion: isApproval,
+                choices: choices.length > 0 ? choices : undefined
             });
             this._pendingToolCallMessage = null;
         }
@@ -357,10 +395,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             // Find the pending entry to get the prompt
             const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
             if (pendingEntry && pendingEntry.status === 'pending') {
+                const prompt = pendingEntry.prompt;
+                const choices = this._parseChoices(prompt);
+                const isApproval = choices.length === 0 && this._isApprovalQuestion(prompt);
                 this._view?.webview.postMessage({
                     type: 'toolCallPending',
                     id: this._currentToolCallId,
-                    prompt: pendingEntry.prompt
+                    prompt: prompt,
+                    isApprovalQuestion: isApproval,
+                    choices: choices.length > 0 ? choices : undefined
                 });
             }
         }
@@ -414,8 +457,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             if (value && value.trim()) {
                 const queuedPrompt: QueuedPrompt = {
                     id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-                    prompt: value.trim(),
-                    createdAt: Date.now()
+                    prompt: value.trim()
                 };
                 this._promptQueue.push(queuedPrompt);
                 // Auto-switch to queue mode so user sees their message went to queue
@@ -715,8 +757,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
 
         const queuedPrompt: QueuedPrompt = {
             id: id || `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            prompt: trimmed,
-            createdAt: Date.now()
+            prompt: trimmed
         };
         this._promptQueue.push(queuedPrompt);
         this._saveQueueToDisk();
@@ -1150,5 +1191,331 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             text += possible.charAt(Math.floor(Math.random() * possible.length));
         }
         return text;
+    }
+
+    /**
+     * Parse choices from a question text.
+     * Detects numbered lists (1. 2. 3.), lettered options (A. B. C.), and Option X: patterns.
+     * Only detects choices near the LAST question mark "?" to avoid false positives from
+     * earlier numbered/lettered content in the text.
+     * 
+     * @param text - The question text to parse
+     * @returns Array of parsed choices, empty if no choices detected
+     */
+    private _parseChoices(text: string): ParsedChoice[] {
+        const choices: ParsedChoice[] = [];
+        let match;
+
+        // DEBUG: Log input
+        console.log('[TaskSync] _parseChoices called with text length:', text.length);
+
+        // FIX: Search the ENTIRE text for numbered/lettered lists, not just after the last "?"
+        // The previous approach failed when examples within the text contained "?" characters
+        // (e.g., "Example: What's your favorite language?")
+
+        // Strategy: Find the FIRST major numbered/lettered list that starts early in the text
+        // These are the actual choices, not examples or descriptions within the text
+
+        // DEBUG: Enhanced logging
+        console.log('[TaskSync] _parseChoices - Full text:', text.substring(0, 200));
+
+        // Split entire text into lines for multi-line patterns
+        const lines = text.split('\n');
+        console.log('[TaskSync] Total lines:', lines.length);
+        const numberedLines: { index: number; num: string; numValue: number; text: string }[] = [];
+        for (let i = 0; i < lines.length; i++) {
+            const m = lines[i].match(numberedLinePattern);
+            if (m && m[2].trim().length >= 3) {
+                // Clean up markdown bold markers from text
+                const cleanText = m[2].replace(/\*\*/g, '').trim();
+                numberedLines.push({
+                    index: i,
+                    num: m[1],
+                    numValue: parseInt(m[1], 10),
+                    text: cleanText
+                });
+            }
+        }
+
+        // Find the last contiguous sequence by detecting number restarts
+        // FIX: Changed to find the FIRST contiguous list (which contains the main choices)
+        // Previously used LAST list which missed choices when examples appeared later in text
+        if (numberedLines.length >= 2) {
+            // Find all list boundaries by detecting restarts
+            const listBoundaries: number[] = [0]; // First list starts at index 0
+
+            for (let i = 1; i < numberedLines.length; i++) {
+                const prevNum = numberedLines[i - 1].numValue;
+                const currNum = numberedLines[i].numValue;
+                const lineGap = numberedLines[i].index - numberedLines[i - 1].index;
+
+                // Detect a new list if:
+                // 1. Number resets (e.g., 2 -> 1, or any case where current < previous)
+                // 2. Large gap between lines (> 5 lines typically means different section)
+                if (currNum <= prevNum || lineGap > 5) {
+                    listBoundaries.push(i);
+                }
+            }
+
+            // FIX: Get the FIRST list (the main choices list), not the last
+            // The first numbered list is typically the actual choices
+            // Later lists are often examples or descriptions within each choice
+            const firstListEnd = listBoundaries.length > 1 ? listBoundaries[1] : numberedLines.length;
+            const firstGroup = numberedLines.slice(0, firstListEnd);
+
+            console.log('[TaskSync] numberedLines:', numberedLines.length, 'listBoundaries:', listBoundaries, 'firstGroup:', firstGroup.length);
+
+            // DEBUG: Show what we found
+            if (firstGroup.length > 0) {
+                console.log('[TaskSync] First choice:', firstGroup[0]);
+            }
+
+            if (firstGroup.length >= 2) {
+                for (const m of firstGroup) {
+                    let cleanText = m.text.replace(/[?!]+$/, '').trim();
+                    const displayText = cleanText.length > 40 ? cleanText.substring(0, 37) + '...' : cleanText;
+                    choices.push({
+                        label: displayText,
+                        value: m.num,
+                        shortLabel: m.num
+                    });
+                }
+                console.log('[TaskSync] Returning', choices.length, 'choices from Pattern 1');
+                return choices;
+            }
+        }
+
+        // Pattern 1b: Inline numbered lists "1. option 2. option 3. option" or "1 - option 2 - option"
+        const inlineNumberedPattern = /(\d+)(?:[.):]|\s+-)\s+([^0-9]+?)(?=\s+\d+(?:[.):]|\s+-)|$)/g;
+        const inlineNumberedMatches: { num: string; text: string }[] = [];
+
+        // Only try inline if no multi-line matches found
+        // Use full text converted to single line
+        const singleLine = text.replace(/\n/g, ' ');
+        while ((match = inlineNumberedPattern.exec(singleLine)) !== null) {
+            const optionText = match[2].trim();
+            if (optionText.length >= 3) {
+                inlineNumberedMatches.push({ num: match[1], text: optionText });
+            }
+        }
+
+        if (inlineNumberedMatches.length >= 2) {
+            for (const m of inlineNumberedMatches) {
+                let cleanText = m.text.replace(/[?!]+$/, '').trim();
+                const displayText = cleanText.length > 40 ? cleanText.substring(0, 37) + '...' : cleanText;
+                choices.push({
+                    label: displayText,
+                    value: m.num,
+                    shortLabel: m.num
+                });
+            }
+            return choices;
+        }
+
+        // Pattern 2: Lettered options - lines starting with "A." or "A)" or "**A)" through Z
+        // Also match bold lettered options like "**A) Option**"
+        // FIX: Search entire text, not just after question mark
+        const letteredLinePattern = /^\s*\*{0,2}([A-Za-z])[.)]\s*\*{0,2}\s*(.+)$/;
+        const letteredLines: { index: number; letter: string; text: string }[] = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const m = lines[i].match(letteredLinePattern);
+            if (m && m[2].trim().length >= 3) {
+                // Clean up markdown bold markers from text
+                const cleanText = m[2].replace(/\*\*/g, '').trim();
+                letteredLines.push({ index: i, letter: m[1].toUpperCase(), text: cleanText });
+            }
+        }
+
+        if (letteredLines.length >= 2) {
+            // FIX: Find FIRST contiguous group instead of last
+            // Find all list boundaries by detecting letter restarts or gaps
+            const listBoundaries: number[] = [0];
+
+            for (let i = 1; i < letteredLines.length; i++) {
+                const gap = letteredLines[i].index - letteredLines[i - 1].index;
+                // Detect new list if gap > 3 lines
+                if (gap > 3) {
+                    listBoundaries.push(i);
+                }
+            }
+
+            // Get the FIRST list (the main choices list)
+            const firstListEnd = listBoundaries.length > 1 ? listBoundaries[1] : letteredLines.length;
+            const firstGroup = letteredLines.slice(0, firstListEnd);
+
+            if (firstGroup.length >= 2) {
+                for (const m of firstGroup) {
+                    let cleanText = m.text.replace(/[?!]+$/, '').trim();
+                    const displayText = cleanText.length > 40 ? cleanText.substring(0, 37) + '...' : cleanText;
+                    choices.push({
+                        label: displayText,
+                        value: m.letter,
+                        shortLabel: m.letter
+                    });
+                }
+                return choices;
+            }
+        }
+
+        // Pattern 2b: Inline lettered "A. option B. option C. option"
+        // Only match single uppercase letters to avoid false positives
+        const inlineLetteredPattern = /\b([A-Z])[.)]\s+([^A-Z]+?)(?=\s+[A-Z][.)]|$)/g;
+        const inlineLetteredMatches: { letter: string; text: string }[] = [];
+
+        while ((match = inlineLetteredPattern.exec(singleLine)) !== null) {
+            const optionText = match[2].trim();
+            if (optionText.length >= 3) {
+                inlineLetteredMatches.push({ letter: match[1], text: optionText });
+            }
+        }
+
+        if (inlineLetteredMatches.length >= 2) {
+            for (const m of inlineLetteredMatches) {
+                let cleanText = m.text.replace(/[?!]+$/, '').trim();
+                const displayText = cleanText.length > 40 ? cleanText.substring(0, 37) + '...' : cleanText;
+                choices.push({
+                    label: displayText,
+                    value: m.letter,
+                    shortLabel: m.letter
+                });
+            }
+            return choices;
+        }
+
+        // Pattern 3: "Option A:" or "Option 1:" style
+        // Search entire text for this pattern
+        const optionPattern = /option\s+([A-Za-z1-9])\s*:\s*([^O\n]+?)(?=\s*Option\s+[A-Za-z1-9]|\s*$|\n)/gi;
+        const optionMatches: { id: string; text: string }[] = [];
+
+        while ((match = optionPattern.exec(text)) !== null) {
+            const optionText = match[2].trim();
+            if (optionText.length >= 3) {
+                optionMatches.push({ id: match[1].toUpperCase(), text: optionText });
+            }
+        }
+
+        if (optionMatches.length >= 2) {
+            for (const m of optionMatches) {
+                let cleanText = m.text.replace(/[?!]+$/, '').trim();
+                const displayText = cleanText.length > 40 ? cleanText.substring(0, 37) + '...' : cleanText;
+                choices.push({
+                    label: displayText,
+                    value: `Option ${m.id}`,
+                    shortLabel: m.id
+                });
+            }
+            return choices;
+        }
+
+        return choices;
+    }
+
+    /**
+     * Detect if a question is an approval/confirmation type that warrants quick action buttons.
+     * Uses NLP patterns to identify yes/no questions, permission requests, and confirmations.
+     * 
+     * @param text - The question text to analyze
+     * @returns true if the question is an approval-type question
+     */
+    private _isApprovalQuestion(text: string): boolean {
+        const lowerText = text.toLowerCase();
+
+        // NEGATIVE patterns - questions that require specific input (NOT approval questions)
+        const requiresSpecificInput = [
+            // Generic "select/choose an option" prompts - these need specific choice, not yes/no
+            /please (?:select|choose|pick) (?:an? )?option/i,
+            /select (?:an? )?option/i,
+            // Open-ended requests for feedback/information
+            /let me know/i,
+            /tell me (?:what|how|when|if|about)/i,
+            /waiting (?:for|on) (?:your|the)/i,
+            /ready to (?:hear|see|get|receive)/i,
+            // Questions asking for specific information
+            /what (?:is|are|should|would)/i,
+            /which (?:one|file|option|method|approach)/i,
+            /where (?:should|would|is|are)/i,
+            /how (?:should|would|do|can)/i,
+            /when (?:should|would)/i,
+            /who (?:should|would)/i,
+            // Questions asking for names, values, content
+            /(?:enter|provide|specify|give|type|input|write)\s+(?:a|the|your)/i,
+            /what.*(?:name|value|path|url|content|text|message)/i,
+            /please (?:enter|provide|specify|give|type)/i,
+            // Open-ended questions
+            /describe|explain|elaborate|clarify/i,
+            /tell me (?:about|more|how)/i,
+            /what do you (?:think|want|need|prefer)/i,
+            /any (?:suggestions|recommendations|preferences|thoughts)/i,
+            // Questions with multiple choice indicators (not binary)
+            /choose (?:from|between|one of)/i,
+            /select (?:from|one of|which)/i,
+            /pick (?:one|from|between)/i,
+            // Numbered options (1. 2. 3. or 1) 2) 3))
+            /\n\s*[1-9][.)]\s+\S/i,
+            // Lettered options (A. B. C. or a) b) c) or Option A/B/C)
+            /\n\s*[a-d][.)]\s+\S/i,
+            /option\s+[a-d]\s*:/i,
+            // "Would you like me to:" followed by list
+            /would you like (?:me to|to):\s*\n/i,
+            // ASCII art boxes/mockups (common patterns)
+            /[┌├└│┐┤┘─╔╠╚║╗╣╝═]/,
+            /\[.+\]\s+\[.+\]/i,  // Multiple bracketed options like [Approve] [Reject]
+            // "Something else?" at the end of a list typically means multi-choice
+            /\d+[.)]\s+something else\??/i
+        ];
+
+        // Check if question requires specific input - if so, NOT an approval question
+        for (const pattern of requiresSpecificInput) {
+            if (pattern.test(lowerText)) {
+                return false;
+            }
+        }
+
+        // Also check for numbered lists anywhere in text (strong indicator of multi-choice)
+        const numberedListCount = (text.match(/\n\s*\d+[.)]\s+/g) || []).length;
+        if (numberedListCount >= 2) {
+            return false; // Multiple numbered items = multi-choice question
+        }
+
+        // POSITIVE patterns - approval/confirmation questions
+        const approvalPatterns = [
+            // Direct yes/no question patterns
+            /^(?:shall|should|can|could|may|would|will|do|does|did|is|are|was|were|have|has|had)\s+(?:i|we|you|it|this|that)\b/i,
+            // Permission/confirmation phrases
+            /(?:proceed|continue|go ahead|start|begin|execute|run|apply|commit|save|delete|remove|create|add|update|modify|change|overwrite|replace)/i,
+            /(?:ok|okay|alright|ready|confirm|approve|accept|allow|enable|disable|skip|ignore|dismiss|close|cancel|abort|stop|exit|quit)/i,
+            // Question endings that suggest yes/no
+            /\?$/,
+            /(?:right|correct|yes|no)\s*\?$/i,
+            /(?:is that|does that|would that|should that)\s+(?:ok|okay|work|help|be\s+(?:ok|fine|good|acceptable))/i,
+            // Explicit approval requests
+            /(?:do you want|would you like|shall i|should i|can i|may i|could i)/i,
+            /(?:want me to|like me to|need me to)/i,
+            /(?:approve|confirm|authorize|permit|allow)\s+(?:this|the|these)/i,
+            // Binary choice indicators
+            /(?:yes or no|y\/n|yes\/no|\[y\/n\]|\(y\/n\))/i,
+            // Action confirmation patterns
+            /(?:are you sure|do you confirm|please confirm|confirm that)/i,
+            /(?:this will|this would|this is going to)/i
+        ];
+
+        // Check if any approval pattern matches
+        for (const pattern of approvalPatterns) {
+            if (pattern.test(lowerText)) {
+                return true;
+            }
+        }
+
+        // Additional heuristic: short questions (< 100 chars) ending with ? are likely yes/no
+        if (lowerText.length < 100 && lowerText.trim().endsWith('?')) {
+            // But exclude questions with interrogative words that typically need specific answers
+            const interrogatives = /^(?:what|which|where|when|why|how|who|whom|whose)\b/i;
+            if (!interrogatives.test(lowerText.trim())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

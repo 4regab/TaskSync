@@ -342,7 +342,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         this._updateQueueUI();
         this._updateCurrentSessionUI();
 
-        // If there's a pending tool call message, send it now
+        // If there's a pending tool call message that was never sent, send it now
         if (this._pendingToolCallMessage) {
             this._view?.webview.postMessage({
                 type: 'toolCallPending',
@@ -350,6 +350,19 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                 prompt: this._pendingToolCallMessage.prompt
             });
             this._pendingToolCallMessage = null;
+        }
+        // BUG FIX #2: If there's an active pending request (webview was hidden/recreated while waiting),
+        // re-send the pending tool call message so the user sees the question again
+        else if (this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
+            // Find the pending entry to get the prompt
+            const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
+            if (pendingEntry && pendingEntry.status === 'pending') {
+                this._view?.webview.postMessage({
+                    type: 'toolCallPending',
+                    id: this._currentToolCallId,
+                    prompt: pendingEntry.prompt
+                });
+            }
         }
     }
 
@@ -708,6 +721,54 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         this._promptQueue.push(queuedPrompt);
         this._saveQueueToDisk();
         this._updateQueueUI();
+
+        // auto-respond with the newly added prompt
+        if (this._queueEnabled && this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
+            // Consume the prompt we just added and respond
+            const consumedPrompt = this._promptQueue.pop(); // Remove the one we just added
+            if (consumedPrompt) {
+                const resolve = this._pendingRequests.get(this._currentToolCallId);
+                if (resolve) {
+                    // Update the pending entry to completed
+                    const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
+
+                    let completedEntry: ToolCallEntry;
+                    if (pendingEntry && pendingEntry.status === 'pending') {
+                        pendingEntry.response = consumedPrompt.prompt;
+                        pendingEntry.status = 'completed';
+                        pendingEntry.isFromQueue = true;
+                        pendingEntry.timestamp = Date.now();
+                        completedEntry = pendingEntry;
+                    } else {
+                        completedEntry = {
+                            id: this._currentToolCallId,
+                            prompt: 'Tool call',
+                            response: consumedPrompt.prompt,
+                            timestamp: Date.now(),
+                            isFromQueue: true,
+                            status: 'completed',
+                            sessionId: this._sessionId
+                        };
+                        this._currentSessionCalls.unshift(completedEntry);
+                        this._currentSessionCallsMap.set(completedEntry.id, completedEntry);
+                    }
+
+                    // Send toolCallCompleted to webview
+                    this._view?.webview.postMessage({
+                        type: 'toolCallCompleted',
+                        entry: completedEntry
+                    } as ToWebviewMessage);
+
+                    this._updateCurrentSessionUI();
+                    this._saveQueueToDisk();
+                    this._updateQueueUI();
+
+                    resolve({ value: consumedPrompt.prompt, queue: true, attachments: [] });
+                    this._pendingRequests.delete(this._currentToolCallId);
+                    this._currentToolCallId = null;
+                }
+            }
+        }
     }
 
     /**
@@ -956,6 +1017,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'webview.js'));
         const codiconsUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'));
+        const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'TS-logo.svg'));
         const nonce = this._getNonce();
 
         return `<!DOCTYPE html>
@@ -963,7 +1025,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource}; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net;">
     <link href="${codiconsUri}" rel="stylesheet">
     <link href="${styleUri}" rel="stylesheet">
     <title>TaskSync Chat</title>
@@ -975,11 +1037,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             <!-- Welcome Section - Let's build -->
             <div class="welcome-section" id="welcome-section">
                 <div class="welcome-icon">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        <circle cx="19" cy="5" r="2" fill="currentColor"/>
-                        <circle cx="5" cy="5" r="1.5" fill="currentColor"/>
-                    </svg>
+                    <img src="${logoUri}" alt="TaskSync Logo" width="48" height="48" class="welcome-logo">
                 </div>
                 <h1 class="welcome-title">Let's build</h1>
                 <p class="welcome-subtitle">Sync your tasks, automate your workflow</p>
@@ -1025,15 +1083,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                 <div class="autocomplete-list" id="autocomplete-list"></div>
                 <div class="autocomplete-empty hidden" id="autocomplete-empty">No files found</div>
             </div>
-            <!-- Mode Dropdown - positioned outside input-wrapper to avoid clipping, dynamically positioned via JS -->
-            <div class="mode-dropdown hidden" id="mode-dropdown">
-                <div class="mode-option" data-mode="normal">
-                    <span>Normal</span>
-                </div>
-                <div class="mode-option" data-mode="queue">
-                    <span>Queue</span>
-                </div>
-            </div>
             <div class="input-wrapper" id="input-wrapper">
             <!-- Prompt Queue Section - Integrated above input -->
             <div class="queue-section" id="queue-section">
@@ -1053,7 +1102,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
             <div class="input-container" id="input-container">
             <!-- Attachment Chips INSIDE input container -->
             <div class="chips-container hidden" id="chips-container"></div>
-            <textarea id="chat-input" placeholder="Message TaskSync... (paste image or use #)" rows="1"></textarea>
+            <div class="input-row">
+                <textarea id="chat-input" placeholder="Message TaskSync... (paste image or use #)" rows="1"></textarea>
+                <button id="send-btn" title="Send message">
+                    <span class="codicon codicon-arrow-up"></span>
+                </button>
+            </div>
             <div class="actions-bar">
                 <div class="actions-left">
                     <button id="attach-btn" class="icon-btn" title="Add attachment (+)">
@@ -1061,14 +1115,20 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
                     </button>
                     <div class="mode-selector" id="mode-selector">
                         <button id="mode-btn" class="mode-btn" title="Select mode">
-                            <span class="codicon codicon-chevron-down"></span>
                             <span id="mode-label">Queue</span>
+                            <span class="codicon codicon-chevron-down"></span>
                         </button>
                     </div>
                 </div>
-                <button id="send-btn" title="Send message">
-                    <span class="codicon codicon-send"></span>
-                </button>
+            </div>
+        </div>
+        <!-- Mode Dropdown - positioned outside input-container to avoid clipping -->
+        <div class="mode-dropdown hidden" id="mode-dropdown">
+            <div class="mode-option" data-mode="normal">
+                <span>Normal</span>
+            </div>
+            <div class="mode-option" data-mode="queue">
+                <span>Queue</span>
             </div>
         </div>
         </div><!-- End input-wrapper -->

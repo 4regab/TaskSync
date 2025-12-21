@@ -112,8 +112,9 @@ body {
     position: relative;
 }
 
+/* Thin scrollbar like VS Code sidebar */
 .chat-container::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
 }
 
 .chat-container::-webkit-scrollbar-track {
@@ -121,12 +122,27 @@ body {
 }
 
 .chat-container::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 2px;
+    transition: background-color 0.2s ease;
+}
+
+.chat-container:hover::-webkit-scrollbar-thumb {
     background-color: var(--vscode-scrollbarSlider-background);
-    border-radius: 4px;
 }
 
 .chat-container::-webkit-scrollbar-thumb:hover {
     background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Firefox thin scrollbar */
+.chat-container {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+.chat-container:hover {
+    scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
 }
 
 /* --- Welcome Section - Let's Build --- */
@@ -135,50 +151,57 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px 16px;
+    padding: 16px 12px;
     text-align: center;
-    flex: 1;
-    min-height: 100%;
+    flex: 1 1 auto;
 }
 
 .welcome-icon {
     color: var(--vscode-foreground);
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     opacity: 0.9;
 }
 
 .welcome-icon svg {
+    width: 36px;
+    height: 36px;
+}
+
+.welcome-logo {
     width: 40px;
     height: 40px;
+    object-fit: contain;
+    /* Invert logo to white for dark themes */
+    filter: brightness(0) invert(1);
 }
 
 .welcome-title {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 600;
     color: var(--vscode-foreground);
-    margin: 0 0 6px 0;
+    margin: 0 0 4px 0;
     letter-spacing: -0.5px;
 }
 
 .welcome-subtitle {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--vscode-descriptionForeground);
-    margin: 0 0 20px 0;
+    margin: 0 0 14px 0;
 }
 
 /* Welcome Cards - Vibe & Spec */
 .welcome-cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
     max-width: 500px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .welcome-card {
-    padding: 16px;
-    border-radius: 10px;
+    padding: 12px;
+    border-radius: 8px;
     text-align: left;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -221,54 +244,55 @@ body {
 .welcome-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 6px;
+    margin-bottom: 6px;
 }
 
 .welcome-card-header .codicon {
-    font-size: 16px;
+    font-size: 14px;
     opacity: 0.9;
 }
 
 .welcome-card-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--vscode-foreground);
 }
 
 .welcome-card-desc {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--vscode-descriptionForeground);
     margin: 0;
-    line-height: 1.5;
+    line-height: 1.4;
 }
 
 /* Tips Section */
 .welcome-tips {
     width: 100%;
     max-width: 500px;
-    text-align: left;
-    padding-left: 16px;
-    border-left: 2px solid var(--vscode-panel-border);
-    margin-left: 8px;
+    text-align: center;
+    padding: 0;
+    border: none;
+    margin: 0 auto;
 }
 
 .tips-label {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--vscode-foreground);
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .tips-list {
     margin: 0;
-    padding-left: 20px;
-    font-size: 12px;
+    padding-left: 0;
+    list-style: none;
+    font-size: 11px;
     color: var(--vscode-descriptionForeground);
 }
 
 .tips-list li {
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .tips-list li:last-child {
@@ -292,6 +316,11 @@ body {
     border-radius: 10px;
     overflow: hidden;
     transition: all 0.2s ease;
+    margin-bottom: 8px;
+}
+
+.tool-call-card:last-child {
+    margin-bottom: 0;
 }
 
 /* Card Header - Gray bar with chevron and title */
@@ -816,7 +845,7 @@ body {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    border: 1px solid var(--vscode-panel-border);
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
     border-radius: 10px;
     background-color: var(--vscode-editor-background);
     overflow: hidden;
@@ -999,11 +1028,7 @@ body {
     color: var(--vscode-errorForeground);
 }
 
-/* Edit input styling */
-.queue-item.editing {
-    background-color: var(--vscode-input-background);
-}
-
+/* Old inline edit input styling - kept for fallback */
 .queue-item .edit-input {
     flex: 1;
     background-color: var(--vscode-input-background);
@@ -1108,8 +1133,8 @@ body {
 /* --- Input Container --- */
 .input-container {
     background-color: var(--vscode-editor-background);
-    border: none;
-    border-radius: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
     /* Parent wrapper handles border-radius */
     display: flex;
     flex-direction: column;
@@ -1127,29 +1152,83 @@ body {
     padding: 8px 12px 0 12px;
 }
 
+/* Input row with textarea and send button */
+.input-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px 0 10px;
+}
+
 textarea#chat-input {
+    flex: 1;
     border: none;
     resize: none;
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
-    padding: 10px 12px;
+    padding: 4px 0;
     background: transparent;
     outline: none;
-    min-height: 36px;
+    min-height: 24px;
     max-height: var(--textarea-max-height);
     color: var(--vscode-input-foreground);
     line-height: 1.4;
+    overflow-y: auto;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
+}
+
+textarea#chat-input::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari */
 }
 
 textarea#chat-input::placeholder {
     color: var(--vscode-input-placeholderForeground);
 }
 
+/* Send Button - positioned at top right of input row */
+button#send-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: none;
+    background-color: var(--vscode-toolbar-hoverBackground);
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+button#send-btn:hover {
+    background-color: var(--vscode-list-hoverBackground);
+    color: var(--vscode-foreground);
+}
+
+/* Send button active state - when there's text in input */
+button#send-btn.has-text {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+button#send-btn.has-text:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+button#send-btn .codicon {
+    font-size: 12px;
+}
+
 .actions-bar {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
-    padding: 8px 10px;
+    padding: 6px 10px;
     background: transparent;
     position: relative;
     overflow: visible;
@@ -1159,6 +1238,12 @@ textarea#chat-input::placeholder {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.actions-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .icon-btn {
@@ -1183,38 +1268,54 @@ textarea#chat-input::placeholder {
 /* Mode Selector */
 .mode-selector {
     position: relative;
-    overflow: visible;
 }
 
 .mode-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--vscode-descriptionForeground);
-    cursor: pointer;
+    gap: 4px;
     padding: 4px 8px;
-    border-radius: 4px;
     border: none;
+    border-radius: 4px;
     background: transparent;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .mode-btn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
     color: var(--vscode-foreground);
 }
 
+.mode-btn .codicon {
+    font-size: 10px;
+}
+
+/* Mode Dropdown */
 .mode-dropdown {
-    position: absolute;
-    /* Bottom and left are set dynamically via JS */
+    position: fixed;
     min-width: 120px;
-    background-color: var(--vscode-editorWidget-background);
-    border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
+    background-color: var(--vscode-dropdown-background);
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
     border-radius: 6px;
-    box-shadow: 0 4px 12px var(--vscode-widget-shadow);
-    overflow: visible;
-    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+.mode-dropdown.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.mode-dropdown.hidden {
+    display: none;
 }
 
 .mode-option {
@@ -1222,35 +1323,28 @@ textarea#chat-input::placeholder {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    font-size: 12px;
-    color: var(--vscode-foreground);
     cursor: pointer;
     transition: background-color 0.1s ease;
+}
+
+.mode-option:first-child {
+    border-radius: 5px 5px 0 0;
+}
+
+.mode-option:last-child {
+    border-radius: 0 0 5px 5px;
 }
 
 .mode-option:hover {
     background-color: var(--vscode-list-hoverBackground);
 }
 
-/* Send Button */
-button#send-btn {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    color: var(--vscode-descriptionForeground);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.15s ease;
+.mode-option.selected {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
 }
 
-button#send-btn:hover {
-    color: var(--vscode-foreground);
-}
-
+/* Send button disabled state */
 button#send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -1342,22 +1436,30 @@ button#send-btn:disabled {
 }
 
 .history-modal-title {
-    flex: 1;
     font-size: 14px;
     font-weight: 600;
     color: var(--vscode-foreground);
 }
 
+.history-modal-info {
+    flex: 1;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    text-align: left;
+    padding-left: 8px;
+}
+
 .history-modal-clear-btn {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: var(--vscode-descriptionForeground);
-    font-size: 11px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
@@ -1407,9 +1509,9 @@ button#send-btn:disabled {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 6px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     background-color: var(--vscode-input-background);
     transition: background-color 0.15s ease;
 }
@@ -1477,4 +1579,85 @@ button#send-btn:disabled {
 .history-item-remove:hover {
     background-color: var(--vscode-toolbar-hoverBackground);
     color: var(--vscode-errorForeground);
+}
+
+/* ===== EDIT MODE STYLES ===== */
+
+/* Edit mode container for buttons in actions bar */
+.edit-actions-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+}
+
+.edit-actions-container.hidden {
+    display: none;
+}
+
+.edit-mode-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+.edit-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Edit mode buttons */
+.edit-cancel-btn,
+.edit-confirm-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.edit-cancel-btn {
+    color: var(--vscode-descriptionForeground);
+}
+
+.edit-cancel-btn:hover {
+    background-color: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+    color: var(--vscode-errorForeground);
+}
+
+.edit-confirm-btn {
+    color: var(--vscode-descriptionForeground);
+}
+
+.edit-confirm-btn:hover {
+    background-color: var(--vscode-inputValidation-infoBackground, rgba(0, 150, 0, 0.1));
+    color: var(--vscode-testing-iconPassed, #4caf50);
+}
+
+/* Input container edit mode styling */
+.input-container.edit-mode {
+    border-color: var(--vscode-focusBorder);
+    background-color: var(--vscode-input-background);
+}
+
+/* Queue item editing state */
+.queue-item.editing {
+    background-color: var(--vscode-editor-selectionBackground);
+    border-left: 2px solid var(--vscode-focusBorder);
+    opacity: 0.7;
+}
+
+.queue-item.editing .text {
+    font-style: italic;
+}
+
+.queue-item.editing .text::after {
+    content: ' (editing...)';
+    color: var(--vscode-descriptionForeground);
+    font-size: 10px;
+}
+
+.queue-item.editing .queue-item-actions {
+    display: none;
 }

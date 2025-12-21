@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Automate AI conversations. Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -66,7 +66,7 @@
         {
           "id": "taskSyncContainer",
           "title": "TaskSync",
-          "icon": "$(comment-discussion)"
+          "icon": "media/TS-logo.svg"
         }
       ]
     },
@@ -82,6 +82,16 @@
     "configuration": {
       "title": "TaskSync",
       "properties": {
+        "tasksync.mcpEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Always start MCP server on activation. Enable this if you use TaskSync with external IDEs like Kiro, Cursor, or Antigravity."
+        },
+        "tasksync.mcpAutoStartIfClients": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start MCP server if external client configurations are detected (Kiro, Cursor, Antigravity)."
+        },
         "tasksync.mcpPort": {
           "type": "number",
           "default": 3579,
@@ -96,8 +106,8 @@
     },
     "commands": [
       {
-        "command": "tasksync.getFeedback",
-        "title": "TaskSync: Get Feedback"
+        "command": "tasksync.startMcp",
+        "title": "TaskSync: Start MCP Server"
       },
       {
         "command": "tasksync.restartMcp",
@@ -138,7 +148,7 @@
   "devDependencies": {
     "@types/node": "20.x",
     "@types/vscode": "^1.90.0",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.27.2",
     "eslint": "^8.56.0",
     "typescript": "^5.3.3"
   }

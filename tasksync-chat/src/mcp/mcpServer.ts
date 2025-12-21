@@ -15,11 +15,19 @@ export class McpServerManager {
     private mcpServer: McpServer | undefined;
     private port: number | undefined;
     private transport: StreamableHTTPServerTransport | undefined;
+    private _isRunning: boolean = false;
 
     constructor(
         private _context: vscode.ExtensionContext,
         private provider: TaskSyncWebviewProvider
-    ) {}
+    ) { }
+
+    /**
+     * Check if MCP server is currently running
+     */
+    isRunning(): boolean {
+        return this._isRunning;
+    }
 
     async start(reusePort: boolean = false) {
         try {
@@ -27,7 +35,7 @@ export class McpServerManager {
                 // Get configured port (default 3579, or 0 for dynamic)
                 const config = vscode.workspace.getConfiguration('tasksync');
                 const configuredPort = config.get<number>('mcpPort', 3579);
-                
+
                 if (configuredPort > 0) {
                     // Try to use the configured fixed port
                     this.port = await this.tryPort(configuredPort);
@@ -45,7 +53,7 @@ export class McpServerManager {
 
             // Register ask_user tool
             const provider = this.provider;
-            
+
             (this.mcpServer as any).registerTool(
                 "ask_user",
                 {
@@ -127,7 +135,8 @@ export class McpServerManager {
             });
 
             console.log(`[TaskSync MCP] Server started on http://127.0.0.1:${this.port}/sse`);
-            
+            this._isRunning = true;
+
             // Auto-register with supported clients
             const config = vscode.workspace.getConfiguration('tasksync');
             if (config.get<boolean>('autoRegisterMcp', true)) {
@@ -253,6 +262,7 @@ export class McpServerManager {
     }
 
     async dispose() {
+        this._isRunning = false;
         try {
             if (this.server) {
                 this.server.close();

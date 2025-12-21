@@ -7,7 +7,7 @@
 
     // State
     let promptQueue = [];
-    let queueEnabled = false; // Default to false, will be set by extension message
+    let queueEnabled = true; // Default to true (Queue mode ON by default)
     let dropdownOpen = false;
     let currentAttachments = [];
     let selectedCard = 'queue';
@@ -16,6 +16,11 @@
     let pendingToolCall = null;
     let historyModalOpen = false;
     let isProcessingResponse = false; // True when AI is processing user's response
+
+    // Edit mode state
+    let editingPromptId = null;
+    let editingOriginalPrompt = null;
+    let savedInputValue = ''; // Save input value when entering edit mode
 
     // Autocomplete state
     let autocompleteVisible = false;
@@ -32,11 +37,14 @@
     let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
     let historyToggleBtn;
     let historyModal, historyModalOverlay, historyModalList, historyModalClose, historyModalClearAll;
+    // Edit mode elements
+    let actionsLeft, actionsBar, editActionsContainer, editCancelBtn, editConfirmBtn;
 
     function init() {
         try {
             cacheDOMElements();
             createHistoryModal();
+            createEditModeUI();
             bindEventListeners();
             renderQueue();
             updateModeUI();
@@ -76,6 +84,9 @@
         toolHistoryArea = document.getElementById('tool-history-area');
         pendingMessage = document.getElementById('pending-message');
         historyToggleBtn = document.getElementById('history-toggle-btn');
+        // Get actions bar elements for edit mode
+        actionsBar = document.querySelector('.actions-bar');
+        actionsLeft = document.querySelector('.actions-left');
     }
 
     function createHistoryModal() {
@@ -92,12 +103,22 @@
         // Modal header
         var modalHeader = document.createElement('div');
         modalHeader.className = 'history-modal-header';
-        modalHeader.innerHTML = '<span class="history-modal-title">History</span>';
 
-        // Clear all button
+        var titleSpan = document.createElement('span');
+        titleSpan.className = 'history-modal-title';
+        titleSpan.textContent = 'History';
+        modalHeader.appendChild(titleSpan);
+
+        // Info text - left aligned after title
+        var infoSpan = document.createElement('span');
+        infoSpan.className = 'history-modal-info';
+        infoSpan.textContent = 'Your tool call history is stored in VS Code globalStorage/tool-history.json';
+        modalHeader.appendChild(infoSpan);
+
+        // Clear all button (icon only)
         historyModalClearAll = document.createElement('button');
         historyModalClearAll.className = 'history-modal-clear-btn';
-        historyModalClearAll.innerHTML = '<span class="codicon codicon-trash"></span> Clear All';
+        historyModalClearAll.innerHTML = '<span class="codicon codicon-trash"></span>';
         historyModalClearAll.title = 'Clear all history';
         modalHeader.appendChild(historyModalClearAll);
 
@@ -120,6 +141,45 @@
 
         // Add to DOM
         document.body.appendChild(historyModalOverlay);
+    }
+
+    function createEditModeUI() {
+        // Create edit actions container (hidden by default)
+        editActionsContainer = document.createElement('div');
+        editActionsContainer.className = 'edit-actions-container hidden';
+        editActionsContainer.id = 'edit-actions-container';
+
+        // Edit mode label
+        var editLabel = document.createElement('span');
+        editLabel.className = 'edit-mode-label';
+        editLabel.textContent = 'Editing prompt';
+
+        // Cancel button (X)
+        editCancelBtn = document.createElement('button');
+        editCancelBtn.className = 'icon-btn edit-cancel-btn';
+        editCancelBtn.title = 'Cancel edit (Esc)';
+        editCancelBtn.setAttribute('aria-label', 'Cancel editing');
+        editCancelBtn.innerHTML = '<span class="codicon codicon-close"></span>';
+
+        // Confirm button (✓)
+        editConfirmBtn = document.createElement('button');
+        editConfirmBtn.className = 'icon-btn edit-confirm-btn';
+        editConfirmBtn.title = 'Confirm edit (Enter)';
+        editConfirmBtn.setAttribute('aria-label', 'Confirm edit');
+        editConfirmBtn.innerHTML = '<span class="codicon codicon-check"></span>';
+
+        // Assemble edit actions
+        editActionsContainer.appendChild(editLabel);
+        var btnGroup = document.createElement('div');
+        btnGroup.className = 'edit-btn-group';
+        btnGroup.appendChild(editCancelBtn);
+        btnGroup.appendChild(editConfirmBtn);
+        editActionsContainer.appendChild(btnGroup);
+
+        // Insert into actions bar (will be shown/hidden as needed)
+        if (actionsBar) {
+            actionsBar.appendChild(editActionsContainer);
+        }
     }
 
     function bindEventListeners() {
@@ -163,6 +223,10 @@
                 if (e.target === historyModalOverlay) closeHistoryModal();
             });
         }
+        // Edit mode button events
+        if (editCancelBtn) editCancelBtn.addEventListener('click', cancelEditMode);
+        if (editConfirmBtn) editConfirmBtn.addEventListener('click', confirmEditMode);
+
         window.addEventListener('message', handleExtensionMessage);
     }
 
@@ -252,9 +316,32 @@
         autoResizeTextarea();
         handleAutocomplete();
         syncAttachmentsWithText();
+        updateSendButtonState();
+    }
+
+    function updateSendButtonState() {
+        if (!sendBtn || !chatInput) return;
+        var hasText = chatInput.value.trim().length > 0;
+        sendBtn.classList.toggle('has-text', hasText);
     }
 
     function handleTextareaKeydown(e) {
+        // Handle edit mode keyboard shortcuts
+        if (editingPromptId) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEditMode();
+                return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                e.preventDefault();
+                confirmEditMode();
+                return;
+            }
+            // Allow other keys in edit mode
+            return;
+        }
+
         if (autocompleteVisible) {
             if (e.key === 'ArrowDown') { e.preventDefault(); if (selectedAutocompleteIndex < autocompleteResults.length - 1) { selectedAutocompleteIndex++; updateAutocompleteSelection(); } return; }
             if (e.key === 'ArrowUp') { e.preventDefault(); if (selectedAutocompleteIndex > 0) { selectedAutocompleteIndex--; updateAutocompleteSelection(); } return; }
@@ -271,9 +358,18 @@
         // If processing response (AI working), auto-queue the message
         if (isProcessingResponse && text) {
             addToQueue(text);
+            // This reduces friction - user's prompt is in queue, so show them queue mode
+            if (!queueEnabled) {
+                queueEnabled = true;
+                updateModeUI();
+                updateQueueVisibility();
+                updateCardSelection();
+                vscode.postMessage({ type: 'toggleQueue', enabled: true });
+            }
             if (chatInput) { chatInput.value = ''; chatInput.style.height = 'auto'; }
             currentAttachments = [];
             updateChipsDisplay();
+            updateSendButtonState();
             return;
         }
 
@@ -286,34 +382,35 @@
         if (chatInput) { chatInput.value = ''; chatInput.style.height = 'auto'; }
         currentAttachments = [];
         updateChipsDisplay();
+        updateSendButtonState();
     }
 
     function handleAttach() { vscode.postMessage({ type: 'addAttachment' }); }
 
     function toggleModeDropdown(e) {
         e.stopPropagation();
-        dropdownOpen = !dropdownOpen;
-        if (modeDropdown) {
-            modeDropdown.classList.toggle('hidden', !dropdownOpen);
-            // Position dropdown above the mode button
-            if (dropdownOpen && modeBtn) {
-                positionModeDropdown();
-            }
+        if (dropdownOpen) closeModeDropdown();
+        else {
+            dropdownOpen = true;
+            positionModeDropdown();
+            modeDropdown.classList.remove('hidden');
+            modeDropdown.classList.add('visible');
         }
     }
 
     function positionModeDropdown() {
-        if (!modeDropdown || !modeBtn || !inputAreaContainer) return;
-        var btnRect = modeBtn.getBoundingClientRect();
-        var containerRect = inputAreaContainer.getBoundingClientRect();
-        // Position relative to inputAreaContainer
-        modeDropdown.style.left = (btnRect.left - containerRect.left) + 'px';
-        modeDropdown.style.bottom = (containerRect.bottom - btnRect.top + 4) + 'px';
+        if (!modeDropdown || !modeBtn) return;
+        var rect = modeBtn.getBoundingClientRect();
+        modeDropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        modeDropdown.style.left = rect.left + 'px';
     }
 
     function closeModeDropdown() {
         dropdownOpen = false;
-        if (modeDropdown) modeDropdown.classList.add('hidden');
+        if (modeDropdown) {
+            modeDropdown.classList.remove('visible');
+            modeDropdown.classList.add('hidden');
+        }
     }
 
     function setMode(mode, notify) {
@@ -321,23 +418,25 @@
         updateModeUI();
         updateQueueVisibility();
         updateCardSelection();
-        if (notify !== false) {
-            vscode.postMessage({ type: 'toggleQueue', enabled: queueEnabled });
-        }
+        if (notify) vscode.postMessage({ type: 'toggleQueue', enabled: queueEnabled });
     }
 
     function updateModeUI() {
         if (modeLabel) modeLabel.textContent = queueEnabled ? 'Queue' : 'Normal';
-        // Checkmarks removed from UI - no longer needed
+        document.querySelectorAll('.mode-option').forEach(function (opt) {
+            opt.classList.toggle('selected', opt.getAttribute('data-mode') === (queueEnabled ? 'queue' : 'normal'));
+        });
     }
 
     function updateQueueVisibility() {
         if (!queueSection) return;
         // Hide queue section if: not in queue mode OR queue is empty
         var shouldHide = !queueEnabled || promptQueue.length === 0;
+        var wasHidden = queueSection.classList.contains('hidden');
         queueSection.classList.toggle('hidden', shouldHide);
-        // Collapse by default when showing
-        if (!shouldHide && promptQueue.length > 0) {
+        // Only collapse when showing for the FIRST time (was hidden, now visible)
+        // Don't collapse on subsequent updates to preserve user's expanded state
+        if (wasHidden && !shouldHide && promptQueue.length > 0) {
             queueSection.classList.add('collapsed');
         }
     }
@@ -768,9 +867,6 @@
         vscode.postMessage({ type: 'removeQueuePrompt', promptId: id });
     }
 
-    // Edit state
-    let editingPromptId = null;
-
     function renderQueue() {
         if (!queueList) return;
         if (queueCount) queueCount.textContent = promptQueue.length;
@@ -816,70 +912,101 @@
     }
 
     function startEditPrompt(id) {
+        // Cancel any existing edit first
+        if (editingPromptId && editingPromptId !== id) {
+            cancelEditMode();
+        }
+
         var item = promptQueue.find(function (p) { return p.id === id; });
         if (!item) return;
 
+        // Save current state
         editingPromptId = id;
+        editingOriginalPrompt = item.prompt;
+        savedInputValue = chatInput ? chatInput.value : '';
 
-        // Find the queue item element
+        // Mark queue item as being edited
         var queueItem = queueList.querySelector('.queue-item[data-id="' + id + '"]');
-        if (!queueItem) return;
+        if (queueItem) {
+            queueItem.classList.add('editing');
+        }
 
-        // Replace text with input
-        var textSpan = queueItem.querySelector('.text');
-        var originalText = item.prompt;
-        var index = parseInt(queueItem.getAttribute('data-index'), 10);
-
-        queueItem.classList.add('editing');
-
-        var inputHtml = '<input type="text" class="edit-input" value="' + escapeHtml(originalText) + '" data-id="' + id + '" />';
-        textSpan.innerHTML = inputHtml;
-
-        var input = textSpan.querySelector('.edit-input');
-        input.focus();
-        input.select();
-
-        // Handle save on Enter, cancel on Escape
-        input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                saveEditPrompt(id, input.value);
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelEditPrompt();
-            }
-        });
-
-        // Handle blur - save changes
-        input.addEventListener('blur', function () {
-            // Small delay to allow click events to fire first
-            setTimeout(function () {
-                if (editingPromptId === id) {
-                    saveEditPrompt(id, input.value);
-                }
-            }, 100);
-        });
+        // Switch to edit mode UI
+        enterEditMode(item.prompt);
     }
 
-    function saveEditPrompt(id, newValue) {
-        var trimmed = newValue.trim();
-        if (!trimmed) {
+    function enterEditMode(promptText) {
+        // Hide normal actions, show edit actions
+        if (actionsLeft) actionsLeft.classList.add('hidden');
+        if (sendBtn) sendBtn.classList.add('hidden');
+        if (editActionsContainer) editActionsContainer.classList.remove('hidden');
+
+        // Mark input container as in edit mode
+        if (inputContainer) inputContainer.classList.add('edit-mode');
+
+        // Set input value to the prompt being edited
+        if (chatInput) {
+            chatInput.value = promptText;
+            chatInput.focus();
+            // Move cursor to end
+            chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+            autoResizeTextarea();
+        }
+    }
+
+    function exitEditMode() {
+        // Show normal actions, hide edit actions
+        if (actionsLeft) actionsLeft.classList.remove('hidden');
+        if (sendBtn) sendBtn.classList.remove('hidden');
+        if (editActionsContainer) editActionsContainer.classList.add('hidden');
+
+        // Remove edit mode class from input container
+        if (inputContainer) inputContainer.classList.remove('edit-mode');
+
+        // Remove editing class from queue item
+        if (queueList) {
+            var editingItem = queueList.querySelector('.queue-item.editing');
+            if (editingItem) editingItem.classList.remove('editing');
+        }
+
+        // Restore original input value
+        if (chatInput) {
+            chatInput.value = savedInputValue;
+            autoResizeTextarea();
+        }
+
+        // Reset edit state
+        editingPromptId = null;
+        editingOriginalPrompt = null;
+        savedInputValue = '';
+    }
+
+    function confirmEditMode() {
+        if (!editingPromptId) return;
+
+        var newValue = chatInput ? chatInput.value.trim() : '';
+
+        if (!newValue) {
             // If empty, remove the prompt
-            removeFromQueue(id);
-        } else {
+            removeFromQueue(editingPromptId);
+        } else if (newValue !== editingOriginalPrompt) {
             // Update the prompt
-            var item = promptQueue.find(function (p) { return p.id === id; });
-            if (item && item.prompt !== trimmed) {
-                item.prompt = trimmed;
-                vscode.postMessage({ type: 'editQueuePrompt', promptId: id, newPrompt: trimmed });
+            var item = promptQueue.find(function (p) { return p.id === editingPromptId; });
+            if (item) {
+                item.prompt = newValue;
+                vscode.postMessage({ type: 'editQueuePrompt', promptId: editingPromptId, newPrompt: newValue });
             }
         }
-        editingPromptId = null;
+
+        // Clear saved input - we don't want to restore old value after editing
+        savedInputValue = '';
+
+        exitEditMode();
         renderQueue();
     }
 
-    function cancelEditPrompt() {
-        editingPromptId = null;
+    function cancelEditMode() {
+        exitEditMode();
         renderQueue();
     }
 

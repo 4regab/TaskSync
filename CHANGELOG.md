@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.9 (12-21-25)
+- fix(workflow): properly handle multi-line commit messages in release notes
+- - Use heredoc syntax (EOF delimiter) for multi-line GitHub Actions output
+- - Removes URL encoding (%0A) that was appearing in release descriptions
+- - Properly formats each line of commit message in CHANGELOG
+
+
 ## TaskSync v2.0.8 (12-21-25)
 - fix(sidebar): resolve race condition preventing AI questions from displaying%0A%0APROBLEM:%0A- TaskSync sidebar was not receiving/displaying questions from AI tool calls%0A- ask_user tool was returning empty responses immediately%0A- Users saw no question in sidebar, tool call ended without user input%0A%0AROOT CAUSE:%0A1. waitForUserResponse() threw 'Webview not visible' error when sidebar was closed%0A2. Error was silently swallowed in catch block, returning empty response%0A3. No mechanism to auto-open sidebar when AI called ask_user tool%0A4. Race condition: messages sent before webview JS was initialized were lost%0A%0AFIXES:%0A- Auto-open sidebar via 'taskSyncView.focus' command when view is undefined%0A- Add polling loop to wait for view resolution (up to 5 seconds)%0A- Add polling loop to wait for webview JS ready state (up to 3 seconds)%0A- Improved error handling: log errors and show user-facing error message%0A- Added missing 'numberedLinePattern' regex for choice parsing%0A- Re-send pending questions when webview is recreated (tab switch recovery)%0A%0AAFFECTED FILES:%0A- src/webview/webviewProvider.ts: Auto-open sidebar, wait for ready state%0A- src/tools.ts: Better error logging, user-facing error messages%0A- media/webview.js: Debug logging for message flow (retained for diagnosis)%0A%0AFixes issue where sidebar didn't show AI questions during ask_user calls
 

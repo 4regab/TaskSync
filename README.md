@@ -1,4 +1,12 @@
-
+> [!WARNING]
+> **GitHub Security Notice:**  
+> GitHub prohibits use of their servers for excessive automated bulk activity or any activity that places undue burden on their infrastructure.
+> Please review:
+>
+> - [GitHub Acceptable Use Policies](https://docs.github.com/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github)
+> - [GitHub Copilot Terms](https://docs.github.com/site-policy/github-terms/github-terms-for-additional-products-and-features#github-copilot)
+>   
+> **Use TaskSync responsibly and at your own risk. You are responsible for ensuring your usage complies with GitHub's terms of service.**
 <h1>TaskSync</h1>
 
 Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop workflows. TaskSync provides three options to integrate feedback loops into your AI-assisted development.
@@ -64,7 +72,6 @@ Recommended settings for agent mode:
 "chat.agent.maxRequests": 999
 ```
 
-**Note:** The `maxRequests` setting on newer versions introduces a 30 cap of maxrequests. You may downgrade to [VS Code 1.106](https://code.visualstudio.com/updates/v1_106) or older to have the the 999 max request.
 **Enable "Auto Approve" in settings for uninterrupted agent operation. Keep sessions to 1-2 hours max to avoid hallucinations.**
 
 ## Discussions

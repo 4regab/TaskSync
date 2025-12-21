@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.7 (12-21-25)
+- fix: handle merge commits in release notes, fix vsix path for attestation
+
+
 ## TaskSync v2.0.6 (12-21-25)
 - Merge branch 'main' of https://github.com/4regab/TaskSync
 

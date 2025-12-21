@@ -51,6 +51,7 @@ jobs:
           # Get current version
           CURRENT=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT"
+          echo "prev_version=$CURRENT" >> $GITHUB_OUTPUT
           
           # Bump patch version
           IFS='.' read -r major minor patch <<< "$CURRENT"
@@ -62,12 +63,35 @@ jobs:
           
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Get meaningful commit message
+        id: commit_info
+        run: |
+          cd ..
+          # Get the commit message, handling merge commits by getting the merged commit's message
+          HEAD_MSG="${{ github.event.head_commit.message }}"
+          
+          # Check if this is a merge commit (starts with "Merge")
+          if [[ "$HEAD_MSG" == Merge* ]]; then
+            # Get the first parent's first non-merge commit message from the merged branch
+            # For a merge commit, the second parent is the merged branch
+            MEANINGFUL_MSG=$(git log --format=%s --no-merges -1 HEAD^2 2>/dev/null || echo "$HEAD_MSG")
+          else
+            MEANINGFUL_MSG="$HEAD_MSG"
+          fi
+          
+          # Escape for GitHub Actions output
+          MEANINGFUL_MSG="${MEANINGFUL_MSG//'%'/'%25'}"
+          MEANINGFUL_MSG="${MEANINGFUL_MSG//$'\n'/'%0A'}"
+          MEANINGFUL_MSG="${MEANINGFUL_MSG//$'\r'/'%0D'}"
+          
+          echo "message=$MEANINGFUL_MSG" >> $GITHUB_OUTPUT
+
       - name: Update CHANGELOG
         run: |
           cd ..
           DATE=$(date +%m-%d-%y)
           VERSION="${{ steps.bump.outputs.version }}"
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_MSG="${{ steps.commit_info.outputs.message }}"
           
           # Create new changelog entry
           TEMP_FILE=$(mktemp)
@@ -106,20 +130,22 @@ jobs:
         with:
           tag_name: v${{ steps.bump.outputs.version }}
           name: TaskSync v${{ steps.bump.outputs.version }}
-          files: '*.vsix'
-          generate_release_notes: true
+          files: tasksync-chat/*.vsix
+          generate_release_notes: false
           body: |
             ## TaskSync v${{ steps.bump.outputs.version }}
             
-            **Commit:** ${{ github.event.head_commit.message }}
+            ${{ steps.commit_info.outputs.message }}
             
             ### Install
             - **Marketplace**: [Install TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat)
             - **Manual**: Download `.vsix` below → `Extensions: Install from VSIX...`
+            
+            **Full Changelog**: https://github.com/4regab/TaskSync/compare/v${{ steps.bump.outputs.prev_version }}...v${{ steps.bump.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: '*.vsix'
+          subject-path: tasksync-chat/*.vsix

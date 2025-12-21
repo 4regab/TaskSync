@@ -79,19 +79,18 @@ jobs:
             MEANINGFUL_MSG="$HEAD_MSG"
           fi
           
-          # Escape for GitHub Actions output
-          MEANINGFUL_MSG="${MEANINGFUL_MSG//'%'/'%25'}"
-          MEANINGFUL_MSG="${MEANINGFUL_MSG//$'\n'/'%0A'}"
-          MEANINGFUL_MSG="${MEANINGFUL_MSG//$'\r'/'%0D'}"
-          
-          echo "message=$MEANINGFUL_MSG" >> $GITHUB_OUTPUT
+          # Use heredoc with delimiter for multi-line output (proper GitHub Actions syntax)
+          {
+            echo "message<<EOF"
+            echo "$MEANINGFUL_MSG"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Update CHANGELOG
         run: |
           cd ..
           DATE=$(date +%m-%d-%y)
           VERSION="${{ steps.bump.outputs.version }}"
-          COMMIT_MSG="${{ steps.commit_info.outputs.message }}"
           
           # Create new changelog entry
           TEMP_FILE=$(mktemp)
@@ -100,7 +99,12 @@ jobs:
           echo "All notable changes to this project will be documented in this file." >> $TEMP_FILE
           echo "" >> $TEMP_FILE
           echo "## TaskSync v$VERSION ($DATE)" >> $TEMP_FILE
-          echo "- $COMMIT_MSG" >> $TEMP_FILE
+          # Write multi-line commit message, indenting continuation lines
+          echo '${{ steps.commit_info.outputs.message }}' | while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              echo "- $line" >> $TEMP_FILE
+            fi
+          done
           echo "" >> $TEMP_FILE
           
           # Append existing changelog (skip header)

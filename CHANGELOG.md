@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.6 (12-21-25)
+- Merge branch 'main' of https://github.com/4regab/TaskSync
+
+
 ## TaskSync v2.0.5 (12-21-25)
 - fix: update auto-release workflow to trigger on changes to the workflow file
 

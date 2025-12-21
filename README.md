@@ -1,10 +1,6 @@
 > [!WARNING]
 > **GitHub Security Notice:**  
-> Excessive automated or scripted use of AI assistants (including rapid or bulk requests through TaskSync's queue system) may trigger GitHub's abuse-detection systems if you're using services like GitHub Copilot. 
-> You may receive a warning from GitHub Security, and further anomalous activity could result in temporary suspension of your AI assistant access.
->
 > GitHub prohibits use of their servers for excessive automated bulk activity or any activity that places undue burden on their infrastructure.
->
 > Please review:
 >
 > - [GitHub Acceptable Use Policies](https://docs.github.com/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github)
@@ -76,7 +72,6 @@ Recommended settings for agent mode:
 "chat.agent.maxRequests": 999
 ```
 
-**Note:** The `maxRequests` setting on newer versions introduces a 30 cap of maxrequests. You may downgrade to [VS Code 1.106](https://code.visualstudio.com/updates/v1_106) or older to have the the 999 max request.
 **Enable "Auto Approve" in settings for uninterrupted agent operation. Keep sessions to 1-2 hours max to avoid hallucinations.**
 
 ## Discussions

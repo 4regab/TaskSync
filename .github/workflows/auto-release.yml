@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'tasksync-chat/**'
+      - '.github/workflows/auto-release.yml'
       - '!tasksync-chat/package.json'  # Prevent infinite loop
 
 permissions:

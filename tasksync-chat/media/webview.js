@@ -50,11 +50,13 @@
 
     function init() {
         try {
+            console.log('[TaskSync Webview] init() starting...');
             cacheDOMElements();
             createHistoryModal();
             createEditModeUI();
             createApprovalModal();
             bindEventListeners();
+            console.log('[TaskSync Webview] Event listeners bound, pendingMessage element:', !!pendingMessage);
             renderQueue();
             updateModeUI();
             updateQueueVisibility();
@@ -73,6 +75,7 @@
             }
 
             // Signal to extension that webview is ready to receive messages
+            console.log('[TaskSync Webview] Sending webviewReady message');
             vscode.postMessage({ type: 'webviewReady' });
         } catch (err) {
             console.error('[TaskSync] Init error:', err);
@@ -538,6 +541,7 @@
 
     function handleExtensionMessage(event) {
         var message = event.data;
+        console.log('[TaskSync Webview] Received message:', message.type, message);
         switch (message.type) {
             case 'updateQueue':
                 promptQueue = message.queue || [];
@@ -551,6 +555,7 @@
                 updateWelcomeSectionVisibility();
                 break;
             case 'toolCallPending':
+                console.log('[TaskSync Webview] toolCallPending - showing question:', message.prompt?.substring(0, 50));
                 showPendingToolCall(message.id, message.prompt, message.isApprovalQuestion, message.choices);
                 break;
             case 'toolCallCompleted':
@@ -594,6 +599,7 @@
     }
 
     function showPendingToolCall(id, prompt, isApproval, choices) {
+        console.log('[TaskSync Webview] showPendingToolCall called with id:', id);
         pendingToolCall = { id: id, prompt: prompt };
         isProcessingResponse = false; // AI is now asking, not processing
         isApprovalQuestion = isApproval === true;
@@ -605,8 +611,12 @@
 
         // Show AI question as plain text (hide "Working...." since AI asked a question)
         if (pendingMessage) {
+            console.log('[TaskSync Webview] Setting pendingMessage innerHTML...');
             pendingMessage.classList.remove('hidden');
             pendingMessage.innerHTML = '<div class="pending-ai-question">' + formatMarkdown(prompt) + '</div>';
+            console.log('[TaskSync Webview] pendingMessage.innerHTML set, length:', pendingMessage.innerHTML.length);
+        } else {
+            console.error('[TaskSync Webview] pendingMessage element is null!');
         }
 
         // Re-render current session (without the pending item - it's shown separately)

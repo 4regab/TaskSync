@@ -226,8 +226,24 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Wait for user response
      */
     public async waitForUserResponse(question: string): Promise<UserResponseResult> {
+        // If view is not available, open the sidebar first
         if (!this._view) {
-            throw new Error('Webview not visible');
+            // Open the TaskSync sidebar view
+            await vscode.commands.executeCommand('taskSyncView.focus');
+
+            // Wait for view to be resolved (up to 5 seconds)
+            const maxWaitMs = 5000;
+            const pollIntervalMs = 100;
+            let waited = 0;
+            while (!this._view && waited < maxWaitMs) {
+                await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+                waited += pollIntervalMs;
+            }
+
+            if (!this._view) {
+                console.error('[TaskSync] Failed to open sidebar view after waiting');
+                throw new Error('Failed to open TaskSync sidebar');
+            }
         }
 
         const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -282,8 +298,20 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         const choices = this._parseChoices(question);
         const isApproval = choices.length === 0 && this._isApprovalQuestion(question);
 
-        // Send pending tool call to webview (or queue if not ready)
-        if (this._webviewReady) {
+        // Wait for webview to be ready (JS initialized) before sending message
+        if (!this._webviewReady) {
+            // Wait for webview JS to initialize (up to 3 seconds)
+            const maxWaitMs = 3000;
+            const pollIntervalMs = 50;
+            let waited = 0;
+            while (!this._webviewReady && waited < maxWaitMs) {
+                await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+                waited += pollIntervalMs;
+            }
+        }
+
+        // Send pending tool call to webview
+        if (this._webviewReady && this._view) {
             this._view.webview.postMessage({
                 type: 'toolCallPending',
                 id: toolCallId,
@@ -292,7 +320,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 choices: choices.length > 0 ? choices : undefined
             });
         } else {
-            // Webview JS not initialized yet - queue the message
+            // Fallback: queue the message (should rarely happen now)
             this._pendingToolCallMessage = { id: toolCallId, prompt: question };
         }
         this._updateCurrentSessionUI();
@@ -1206,9 +1234,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         const choices: ParsedChoice[] = [];
         let match;
 
-        // DEBUG: Log input
-        console.log('[TaskSync] _parseChoices called with text length:', text.length);
-
         // FIX: Search the ENTIRE text for numbered/lettered lists, not just after the last "?"
         // The previous approach failed when examples within the text contained "?" characters
         // (e.g., "Example: What's your favorite language?")
@@ -1216,12 +1241,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         // Strategy: Find the FIRST major numbered/lettered list that starts early in the text
         // These are the actual choices, not examples or descriptions within the text
 
-        // DEBUG: Enhanced logging
-        console.log('[TaskSync] _parseChoices - Full text:', text.substring(0, 200));
-
         // Split entire text into lines for multi-line patterns
         const lines = text.split('\n');
-        console.log('[TaskSync] Total lines:', lines.length);
+
+        // Pattern 1: Numbered options - lines starting with "1." or "1)" through 9
+        // Also match bold numbered options like "**1. Option**"
+        const numberedLinePattern = /^\s*\*{0,2}(\d+)[.)]\s*\*{0,2}\s*(.+)$/;
         const numberedLines: { index: number; num: string; numValue: number; text: string }[] = [];
         for (let i = 0; i < lines.length; i++) {
             const m = lines[i].match(numberedLinePattern);
@@ -1263,13 +1288,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             const firstListEnd = listBoundaries.length > 1 ? listBoundaries[1] : numberedLines.length;
             const firstGroup = numberedLines.slice(0, firstListEnd);
 
-            console.log('[TaskSync] numberedLines:', numberedLines.length, 'listBoundaries:', listBoundaries, 'firstGroup:', firstGroup.length);
-
-            // DEBUG: Show what we found
-            if (firstGroup.length > 0) {
-                console.log('[TaskSync] First choice:', firstGroup[0]);
-            }
-
             if (firstGroup.length >= 2) {
                 for (const m of firstGroup) {
                     let cleanText = m.text.replace(/[?!]+$/, '').trim();
@@ -1280,7 +1298,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                         shortLabel: m.num
                     });
                 }
-                console.log('[TaskSync] Returning', choices.length, 'choices from Pattern 1');
                 return choices;
             }
         }

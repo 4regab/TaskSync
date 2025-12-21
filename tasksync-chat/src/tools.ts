@@ -50,12 +50,18 @@ export async function askUser(
     _token: vscode.CancellationToken
 ): Promise<AskUserToolResult> {
     try {
+        console.log('[TaskSync] askUser called with question:', params.question.substring(0, 100));
         const result = await provider.waitForUserResponse(params.question);
+        console.log('[TaskSync] askUser received response:', result.value.substring(0, 50));
         return {
             response: result.value,
             attachments: result.attachments.map(att => att.uri)
         };
-    } catch {
+    } catch (error) {
+        // Log the error instead of silently swallowing it
+        console.error('[TaskSync] askUser error:', error instanceof Error ? error.message : error);
+        // Show error to user so they know something went wrong
+        vscode.window.showErrorMessage(`TaskSync: ${error instanceof Error ? error.message : 'Failed to show question'}`);
         return {
             response: '',
             attachments: []

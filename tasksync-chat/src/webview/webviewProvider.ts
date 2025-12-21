@@ -722,52 +722,53 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         this._saveQueueToDisk();
         this._updateQueueUI();
 
-        // auto-respond with the newly added prompt
+        // Auto-respond with the newly added prompt if there's a pending request
         if (this._queueEnabled && this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
-            // Consume the prompt we just added and respond
-            const consumedPrompt = this._promptQueue.pop(); // Remove the one we just added
-            if (consumedPrompt) {
-                const resolve = this._pendingRequests.get(this._currentToolCallId);
-                if (resolve) {
-                    // Update the pending entry to completed
-                    const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
+            // Find and remove the prompt we just added by its specific ID (not pop() which could be wrong)
+            const promptIndex = this._promptQueue.findIndex(p => p.id === queuedPrompt.id);
+            if (promptIndex === -1) return; // Prompt was somehow removed already
 
-                    let completedEntry: ToolCallEntry;
-                    if (pendingEntry && pendingEntry.status === 'pending') {
-                        pendingEntry.response = consumedPrompt.prompt;
-                        pendingEntry.status = 'completed';
-                        pendingEntry.isFromQueue = true;
-                        pendingEntry.timestamp = Date.now();
-                        completedEntry = pendingEntry;
-                    } else {
-                        completedEntry = {
-                            id: this._currentToolCallId,
-                            prompt: 'Tool call',
-                            response: consumedPrompt.prompt,
-                            timestamp: Date.now(),
-                            isFromQueue: true,
-                            status: 'completed',
-                            sessionId: this._sessionId
-                        };
-                        this._currentSessionCalls.unshift(completedEntry);
-                        this._currentSessionCallsMap.set(completedEntry.id, completedEntry);
-                    }
+            const consumedPrompt = this._promptQueue.splice(promptIndex, 1)[0];
+            const resolve = this._pendingRequests.get(this._currentToolCallId);
+            if (!resolve) return;
 
-                    // Send toolCallCompleted to webview
-                    this._view?.webview.postMessage({
-                        type: 'toolCallCompleted',
-                        entry: completedEntry
-                    } as ToWebviewMessage);
+            // Update the pending entry to completed
+            const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
 
-                    this._updateCurrentSessionUI();
-                    this._saveQueueToDisk();
-                    this._updateQueueUI();
-
-                    resolve({ value: consumedPrompt.prompt, queue: true, attachments: [] });
-                    this._pendingRequests.delete(this._currentToolCallId);
-                    this._currentToolCallId = null;
-                }
+            let completedEntry: ToolCallEntry;
+            if (pendingEntry && pendingEntry.status === 'pending') {
+                pendingEntry.response = consumedPrompt.prompt;
+                pendingEntry.status = 'completed';
+                pendingEntry.isFromQueue = true;
+                pendingEntry.timestamp = Date.now();
+                completedEntry = pendingEntry;
+            } else {
+                completedEntry = {
+                    id: this._currentToolCallId,
+                    prompt: 'Tool call',
+                    response: consumedPrompt.prompt,
+                    timestamp: Date.now(),
+                    isFromQueue: true,
+                    status: 'completed',
+                    sessionId: this._sessionId
+                };
+                this._currentSessionCalls.unshift(completedEntry);
+                this._currentSessionCallsMap.set(completedEntry.id, completedEntry);
             }
+
+            // Send toolCallCompleted to webview
+            this._view?.webview.postMessage({
+                type: 'toolCallCompleted',
+                entry: completedEntry
+            } as ToWebviewMessage);
+
+            this._updateCurrentSessionUI();
+            this._saveQueueToDisk();
+            this._updateQueueUI();
+
+            resolve({ value: consumedPrompt.prompt, queue: true, attachments: [] });
+            this._pendingRequests.delete(this._currentToolCallId);
+            this._currentToolCallId = null;
         }
     }
 
@@ -1133,14 +1134,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider {
         </div>
         </div><!-- End input-wrapper -->
         </div><!-- End input-area-container -->
-
-        <!-- Drop Zone Overlay -->
-        <div class="drop-zone hidden" id="drop-zone">
-            <div class="drop-zone-content">
-                <span class="codicon codicon-file-media"></span>
-                <span>Drop image here</span>
-            </div>
-        </div>
     </div>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

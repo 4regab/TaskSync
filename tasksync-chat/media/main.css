@@ -527,6 +527,42 @@ body {
     margin: 12px 0;
 }
 
+/* Markdown tables */
+.tool-call-ai-response .markdown-table,
+.pending-ai-question .markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 12px;
+}
+
+.tool-call-ai-response .markdown-table th,
+.pending-ai-question .markdown-table th {
+    background-color: var(--vscode-editor-selectionBackground, rgba(127, 127, 127, 0.15));
+    border: 1px solid var(--vscode-panel-border);
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.tool-call-ai-response .markdown-table td,
+.pending-ai-question .markdown-table td {
+    border: 1px solid var(--vscode-panel-border);
+    padding: 8px 12px;
+    color: var(--vscode-foreground);
+}
+
+.tool-call-ai-response .markdown-table tr:nth-child(even),
+.pending-ai-question .markdown-table tr:nth-child(even) {
+    background-color: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.05));
+}
+
+.tool-call-ai-response .markdown-table tr:hover,
+.pending-ai-question .markdown-table tr:hover {
+    background-color: var(--vscode-list-activeSelectionBackground, rgba(127, 127, 127, 0.1));
+}
+
 /* Code block styling - uses VS Code theme colors */
 .tool-call-ai-response .code-block {
     background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
@@ -975,7 +1011,7 @@ body {
 }
 
 .queue-item .bullet.active {
-    background-color: var(--vscode-testing-iconPassed, #73c991);
+    background-color: var(--vscode-focusBorder);
 }
 
 .queue-item .bullet.pending {
@@ -1348,33 +1384,6 @@ button#send-btn .codicon {
 button#send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-}
-
-/* --- Drop Zone --- */
-.drop-zone {
-    position: absolute;
-    inset: 0;
-    background-color: var(--vscode-editor-background);
-    border: 2px dashed var(--vscode-focusBorder);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    opacity: 0.95;
-}
-
-.drop-zone-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    color: var(--vscode-foreground);
-}
-
-.drop-zone-content .codicon {
-    font-size: 32px;
-    color: var(--vscode-focusBorder);
 }
 
 .hidden {

@@ -5,17 +5,23 @@
 (function () {
     const vscode = acquireVsCodeApi();
 
+    // Restore persisted state (survives sidebar switch)
+    const previousState = vscode.getState() || {};
+
     // State
     let promptQueue = [];
     let queueEnabled = true; // Default to true (Queue mode ON by default)
     let dropdownOpen = false;
-    let currentAttachments = [];
+    let currentAttachments = previousState.attachments || []; // Restore attachments
     let selectedCard = 'queue';
     let currentSessionCalls = []; // Current session tool calls (shown in chat)
     let persistedHistory = []; // Past sessions history (shown in modal)
     let pendingToolCall = null;
     let historyModalOpen = false;
     let isProcessingResponse = false; // True when AI is processing user's response
+
+    // Persisted input value (restored from state)
+    let persistedInputValue = previousState.inputValue || '';
 
     // Edit mode state
     let editingPromptId = null;
@@ -33,7 +39,7 @@
     let chatInput, sendBtn, attachBtn, modeBtn, modeDropdown, modeLabel;
     let queueSection, queueHeader, queueList, queueCount;
     let chatContainer, chipsContainer, autocompleteDropdown, autocompleteList, autocompleteEmpty;
-    let dropZone, inputContainer, inputAreaContainer, welcomeSection, welcomeTips;
+    let inputContainer, inputAreaContainer, welcomeSection, welcomeTips;
     let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
     let historyToggleBtn;
     let historyModal, historyModalOverlay, historyModalList, historyModalClose, historyModalClearAll;
@@ -51,11 +57,33 @@
             updateQueueVisibility();
             initCardSelection();
 
+            // Restore persisted input value (when user switches sidebar tabs and comes back)
+            if (chatInput && persistedInputValue) {
+                chatInput.value = persistedInputValue;
+                autoResizeTextarea();
+                updateSendButtonState();
+            }
+
+            // Restore attachments display
+            if (currentAttachments.length > 0) {
+                updateChipsDisplay();
+            }
+
             // Signal to extension that webview is ready to receive messages
             vscode.postMessage({ type: 'webviewReady' });
         } catch (err) {
             console.error('[TaskSync] Init error:', err);
         }
+    }
+
+    /**
+     * Save webview state to persist across sidebar visibility changes
+     */
+    function saveWebviewState() {
+        vscode.setState({
+            inputValue: chatInput ? chatInput.value : '',
+            attachments: currentAttachments.filter(function (a) { return !a.isTemporary; }) // Don't persist temp images
+        });
     }
 
     function cacheDOMElements() {
@@ -74,7 +102,6 @@
         autocompleteDropdown = document.getElementById('autocomplete-dropdown');
         autocompleteList = document.getElementById('autocomplete-list');
         autocompleteEmpty = document.getElementById('autocomplete-empty');
-        dropZone = document.getElementById('drop-zone');
         inputContainer = document.getElementById('input-container');
         inputAreaContainer = document.getElementById('input-area-container');
         welcomeSection = document.getElementById('welcome-section');
@@ -187,16 +214,6 @@
             chatInput.addEventListener('input', handleTextareaInput);
             chatInput.addEventListener('keydown', handleTextareaKeydown);
             chatInput.addEventListener('paste', handlePaste);
-            chatInput.addEventListener('dragenter', handleDragEnter);
-            chatInput.addEventListener('dragover', handleDragOver);
-            chatInput.addEventListener('dragleave', handleDragLeave);
-            chatInput.addEventListener('drop', handleDrop);
-        }
-        if (inputContainer) {
-            inputContainer.addEventListener('dragenter', handleDragEnter);
-            inputContainer.addEventListener('dragover', handleDragOver);
-            inputContainer.addEventListener('dragleave', handleDragLeave);
-            inputContainer.addEventListener('drop', handleDrop);
         }
         if (sendBtn) sendBtn.addEventListener('click', handleSend);
         if (attachBtn) attachBtn.addEventListener('click', handleAttach);
@@ -317,6 +334,8 @@
         handleAutocomplete();
         syncAttachmentsWithText();
         updateSendButtonState();
+        // Persist input value so it survives sidebar tab switches
+        saveWebviewState();
     }
 
     function updateSendButtonState() {
@@ -370,6 +389,8 @@
             currentAttachments = [];
             updateChipsDisplay();
             updateSendButtonState();
+            // Clear persisted state after sending
+            saveWebviewState();
             return;
         }
 
@@ -383,6 +404,8 @@
         currentAttachments = [];
         updateChipsDisplay();
         updateSendButtonState();
+        // Clear persisted state after sending
+        saveWebviewState();
     }
 
     function handleAttach() { vscode.postMessage({ type: 'addAttachment' }); }
@@ -571,7 +594,7 @@
             var cardHtml = '<div class="tool-call-card expanded" data-id="' + escapeHtml(tc.id) + '">' +
                 '<div class="tool-call-header">' +
                 '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
-                '<div class="tool-call-icon"><span class="codicon codicon-comment"></span></div>' +
+                '<div class="tool-call-icon"><span class="codicon codicon-copilot"></span></div>' +
                 '<div class="tool-call-header-wrapper">' +
                 '<span class="tool-call-title">' + escapeHtml(truncatedTitle) + queueBadge + '</span>' +
                 '</div>' +
@@ -620,7 +643,7 @@
             return '<div class="tool-call-card history-card" data-id="' + escapeHtml(tc.id) + '">' +
                 '<div class="tool-call-header">' +
                 '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
-                '<div class="tool-call-icon"><span class="codicon codicon-comment"></span></div>' +
+                '<div class="tool-call-icon"><span class="codicon codicon-copilot"></span></div>' +
                 '<div class="tool-call-header-wrapper">' +
                 '<span class="tool-call-title">' + escapeHtml(truncatedTitle) + queueBadge + '</span>' +
                 '</div>' +
@@ -717,6 +740,40 @@
         // Wrap consecutive <oli> in <ol> then convert to li
         html = html.replace(/(<oli>.*<\/oli>\n?)+/g, function (match) {
             return '<ol>' + match.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>').replace(/\n/g, '') + '</ol>';
+        });
+
+        // Markdown tables
+        // Match table pattern: header row, separator row (with dashes), and data rows
+        // Performance: Limit table size to prevent regex backtracking on huge content
+        var MAX_TABLE_ROWS = 100;
+        html = html.replace(/((?:^\|[^\n]+\|\n?){2,})/gm, function (tableMatch) {
+            var lines = tableMatch.trim().split('\n');
+            if (lines.length < 2) return tableMatch; // Need at least header and separator
+            if (lines.length > MAX_TABLE_ROWS) return tableMatch; // Skip very large tables
+
+            // Check if second line is separator (contains only |, -, :, spaces)
+            var separatorRegex = /^\|[\s\-:|]+\|$/;
+            if (!separatorRegex.test(lines[1])) return tableMatch;
+
+            // Parse header
+            var headerCells = lines[0].split('|').filter(function (c) { return c.trim() !== ''; });
+            if (headerCells.length === 0) return tableMatch; // Invalid table
+
+            var headerHtml = '<tr>' + headerCells.map(function (c) {
+                return '<th>' + c.trim() + '</th>';
+            }).join('') + '</tr>';
+
+            // Parse data rows (skip separator at index 1)
+            var bodyHtml = '';
+            for (var i = 2; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                var cells = lines[i].split('|').filter(function (c) { return c.trim() !== ''; });
+                bodyHtml += '<tr>' + cells.map(function (c) {
+                    return '<td>' + c.trim() + '</td>';
+                }).join('') + '</tr>';
+            }
+
+            return '<table class="markdown-table"><thead>' + headerHtml + '</thead><tbody>' + bodyHtml + '</tbody></table>';
         });
 
         // Inline code (`code`)
@@ -942,11 +999,15 @@
         if (editActionsContainer) editActionsContainer.classList.remove('hidden');
 
         // Mark input container as in edit mode
-        if (inputContainer) inputContainer.classList.add('edit-mode');
+        if (inputContainer) {
+            inputContainer.classList.add('edit-mode');
+            inputContainer.setAttribute('aria-label', 'Editing queue prompt');
+        }
 
         // Set input value to the prompt being edited
         if (chatInput) {
             chatInput.value = promptText;
+            chatInput.setAttribute('aria-label', 'Edit prompt text. Press Enter to confirm, Escape to cancel.');
             chatInput.focus();
             // Move cursor to end
             chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
@@ -961,7 +1022,10 @@
         if (editActionsContainer) editActionsContainer.classList.add('hidden');
 
         // Remove edit mode class from input container
-        if (inputContainer) inputContainer.classList.remove('edit-mode');
+        if (inputContainer) {
+            inputContainer.classList.remove('edit-mode');
+            inputContainer.removeAttribute('aria-label');
+        }
 
         // Remove editing class from queue item
         if (queueList) {
@@ -969,9 +1033,10 @@
             if (editingItem) editingItem.classList.remove('editing');
         }
 
-        // Restore original input value
+        // Restore original input value and accessibility
         if (chatInput) {
             chatInput.value = savedInputValue;
+            chatInput.setAttribute('aria-label', 'Message input');
             autoResizeTextarea();
         }
 
@@ -1165,28 +1230,6 @@
         }
     }
 
-    function handleDragEnter(event) { event.preventDefault(); if (hasImageInDrag(event) && dropZone) dropZone.classList.remove('hidden'); }
-    function handleDragOver(event) { event.preventDefault(); if (hasImageInDrag(event)) event.dataTransfer.dropEffect = 'copy'; }
-    function handleDragLeave(event) { if (dropZone && !dropZone.contains(event.relatedTarget)) dropZone.classList.add('hidden'); }
-    function handleDrop(event) {
-        event.preventDefault();
-        if (dropZone) dropZone.classList.add('hidden');
-        if (!event.dataTransfer) return;
-        var files = event.dataTransfer.files;
-        for (var i = 0; i < files.length; i++) {
-            if (files[i].type.indexOf('image/') === 0) processImageFile(files[i]);
-        }
-    }
-
-    function hasImageInDrag(event) {
-        if (!event.dataTransfer || event.dataTransfer.types.indexOf('Files') === -1) return false;
-        var items = event.dataTransfer.items;
-        for (var i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image/') === 0) return true;
-        }
-        return false;
-    }
-
     function processImageFile(file) {
         var reader = new FileReader();
         reader.onload = function (e) {
@@ -1220,12 +1263,15 @@
                 });
             });
         }
+        // Persist attachments so they survive sidebar tab switches
+        saveWebviewState();
     }
 
     function removeAttachment(attachmentId) {
         vscode.postMessage({ type: 'removeAttachment', attachmentId: attachmentId });
         currentAttachments = currentAttachments.filter(function (a) { return a.id !== attachmentId; });
         updateChipsDisplay();
+        // saveWebviewState() is called in updateChipsDisplay
     }
 
     function escapeHtml(str) {

@@ -2,7 +2,6 @@
 .vscode-test/**
 src/**
 node_modules/**
-!node_modules/@vscode/codicons/dist/**
 .gitignore
 *.map
 *.ts
@@ -30,3 +29,10 @@ node_modules/**
 **/*.spec.js
 dist/localization.js
 dist/mcpServer.js
+
+# Exclude all build artifacts except the bundled extension entrypoint
+dist/**
+!dist/extension.js
+
+# Exclude test coverage output
+coverage/**

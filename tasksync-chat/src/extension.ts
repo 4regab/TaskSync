@@ -8,13 +8,21 @@ import { McpServerManager } from './mcp/mcpServer';
 
 let mcpServer: McpServerManager | undefined;
 let webviewProvider: TaskSyncWebviewProvider | undefined;
-let mcpStatusBarItem: vscode.StatusBarItem | undefined;
+
+// Memoized result for external MCP client check (only checked once per activation)
+let _hasExternalMcpClientsResult: boolean | undefined;
 
 /**
  * Check if external MCP client configs exist (Kiro, Cursor, Antigravity)
  * This indicates user has external tools that need the MCP server
+ * Result is memoized to avoid repeated file system reads
  */
 function hasExternalMcpClients(): boolean {
+    // Return cached result if available
+    if (_hasExternalMcpClientsResult !== undefined) {
+        return _hasExternalMcpClientsResult;
+    }
+
     const configPaths = [
         path.join(os.homedir(), '.kiro', 'settings', 'mcp.json'),
         path.join(os.homedir(), '.cursor', 'mcp.json'),
@@ -28,6 +36,7 @@ function hasExternalMcpClients(): boolean {
                 const config = JSON.parse(content);
                 // Check if tasksync-chat is registered
                 if (config.mcpServers?.['tasksync-chat']) {
+                    _hasExternalMcpClientsResult = true;
                     return true;
                 }
             }
@@ -35,24 +44,8 @@ function hasExternalMcpClients(): boolean {
             // Ignore parse errors
         }
     }
+    _hasExternalMcpClientsResult = false;
     return false;
-}
-
-/**
- * Update MCP status bar item
- */
-function updateMcpStatusBar(running: boolean): void {
-    if (!mcpStatusBarItem) return;
-
-    if (running) {
-        mcpStatusBarItem.text = '$(broadcast) MCP';
-        mcpStatusBarItem.tooltip = 'TaskSync MCP Server: Running\nClick to restart';
-        mcpStatusBarItem.backgroundColor = undefined;
-    } else {
-        mcpStatusBarItem.text = '$(circle-slash) MCP';
-        mcpStatusBarItem.tooltip = 'TaskSync MCP Server: Stopped\nClick to start';
-        mcpStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    }
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -67,11 +60,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register VS Code LM Tools (always available for Copilot)
     registerTools(context, provider);
-
-    // Create MCP status bar item
-    mcpStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    mcpStatusBarItem.command = 'tasksync.restartMcp';
-    context.subscriptions.push(mcpStatusBarItem);
 
     // Initialize MCP server manager (but don't start yet)
     mcpServer = new McpServerManager(context, provider);
@@ -88,22 +76,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (shouldStart) {
         mcpServer.start();
-        updateMcpStatusBar(true);
-        mcpStatusBarItem.show();
-    } else {
-        updateMcpStatusBar(false);
-        // Only show status bar if user might want MCP (has the setting visible)
-        if (mcpEnabled !== undefined) {
-            mcpStatusBarItem.show();
-        }
     }
 
     // Start MCP server command
     const startMcpCmd = vscode.commands.registerCommand('tasksync.startMcp', async () => {
         if (mcpServer && !mcpServer.isRunning()) {
             await mcpServer.start();
-            updateMcpStatusBar(true);
-            mcpStatusBarItem?.show();
             vscode.window.showInformationMessage('TaskSync MCP Server started');
         } else if (mcpServer?.isRunning()) {
             vscode.window.showInformationMessage('TaskSync MCP Server is already running');
@@ -114,8 +92,6 @@ export function activate(context: vscode.ExtensionContext) {
     const restartMcpCmd = vscode.commands.registerCommand('tasksync.restartMcp', async () => {
         if (mcpServer) {
             await mcpServer.restart();
-            updateMcpStatusBar(true);
-            mcpStatusBarItem?.show();
         }
     });
 

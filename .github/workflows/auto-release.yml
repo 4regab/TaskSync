@@ -1,0 +1,124 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tasksync-chat/**'
+      - '!tasksync-chat/package.json'  # Prevent infinite loop
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Skip if commit message contains [skip ci] or is a version bump
+    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version')"
+    defaults:
+      run:
+        working-directory: tasksync-chat
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Get current version
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT"
+          
+          # Bump patch version
+          IFS='.' read -r major minor patch <<< "$CURRENT"
+          NEW_VERSION="$major.$minor.$((patch + 1))"
+          echo "New version: $NEW_VERSION"
+          
+          # Update package.json
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update CHANGELOG
+        run: |
+          cd ..
+          DATE=$(date +%m-%d-%y)
+          VERSION="${{ steps.bump.outputs.version }}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          
+          # Create new changelog entry
+          TEMP_FILE=$(mktemp)
+          echo "# Changelog" > $TEMP_FILE
+          echo "" >> $TEMP_FILE
+          echo "All notable changes to this project will be documented in this file." >> $TEMP_FILE
+          echo "" >> $TEMP_FILE
+          echo "## TaskSync v$VERSION ($DATE)" >> $TEMP_FILE
+          echo "- $COMMIT_MSG" >> $TEMP_FILE
+          echo "" >> $TEMP_FILE
+          
+          # Append existing changelog (skip header)
+          tail -n +4 CHANGELOG.md >> $TEMP_FILE
+          mv $TEMP_FILE CHANGELOG.md
+
+      - name: Commit version bump
+        run: |
+          cd ..
+          git add tasksync-chat/package.json CHANGELOG.md
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package extension
+        run: vsce package
+
+      - name: Publish to VS Code Marketplace
+        run: vsce publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump.outputs.version }}
+          name: TaskSync v${{ steps.bump.outputs.version }}
+          files: '*.vsix'
+          generate_release_notes: true
+          body: |
+            ## TaskSync v${{ steps.bump.outputs.version }}
+            
+            **Commit:** ${{ github.event.head_commit.message }}
+            
+            ### Install
+            - **Marketplace**: [Install TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat)
+            - **Manual**: Download `.vsix` below → `Extensions: Install from VSIX...`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: '*.vsix'

@@ -3,8 +3,25 @@
 All notable changes to this project will be documented in this file.
 
 ## TaskSync v2.0.11 (12-24-25)
-- Clean up CHANGELOG by removing old release notes
-
+- Add context references (#terminal, #problems) for attaching terminal output and workspace diagnostics
+- Integrate context items into file autocomplete dropdown
+- Display attachments in tool call history cards
+- Add ReDoS protection for markdown table parsing (prevent regex backtracking attacks)
+- Fix memory leaks: proper cancellation cleanup, stale terminal execution tracking
+- Add input length validation (500KB max for questions, 100KB for queue prompts)
+- Use async file I/O for MCP client registration (non-blocking activation)
+- Extract context providers into dedicated modules (ContextManager, TerminalContext, ProblemsContext)
+- Consolidate duplicate CSS rules for code blocks and markdown
+- Remove unused CSS (.welcome-tips, duplicate inline-code styles)
+- Clean up JavaScript: remove unused variables, improve accessibility (ARIA labels)
+- Fix race conditions in queue handling and request superseding
+- Prevent orphaned promises when multiple ask_user calls occur
+- Fix temp image cleanup timing (now cleaned on session clear/dispose)
+- Improve webview ready state handling to prevent message race conditions
+- Better error handling with proper cancellation support
+- Cache context items dynamically (don't cache with file results)
+- Debounced history saves (2s) for better disk I/O performance
+- Process markdown tables line-by-line to avoid ReDoS vulnerability
 
 ## TaskSync v2.0.10 (12-24-25)
 - feat: v2.1.0 - Settings Modal, Reusable Prompts, Notification Sound & Codebase Cleanup

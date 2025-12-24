@@ -101,6 +101,38 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically register MCP server with Kiro and other supported clients."
+        },
+        "tasksync.notificationSound": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a notification sound when the AI triggers the ask_user tool."
+        },
+        "tasksync.interactiveApproval": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
+        },
+        "tasksync.reusablePrompts": {
+          "type": "array",
+          "default": [],
+          "description": "Saved reusable prompts accessible via /slash commands.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Short name for the prompt (used with /slash command)"
+              },
+              "prompt": {
+                "type": "string",
+                "description": "The full prompt text"
+              }
+            },
+            "required": [
+              "name",
+              "prompt"
+            ]
+          }
         }
       }
     },
@@ -121,6 +153,16 @@
         "command": "tasksync.openHistory",
         "title": "View History",
         "icon": "$(history)"
+      },
+      {
+        "command": "tasksync.clearCurrentSession",
+        "title": "Clear Current Session",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "tasksync.openSettings",
+        "title": "TaskSync Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -128,7 +170,17 @@
         {
           "command": "tasksync.openHistory",
           "when": "view == taskSyncView",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "tasksync.clearCurrentSession",
+          "when": "view == taskSyncView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "tasksync.openSettings",
+          "when": "view == taskSyncView",
+          "group": "navigation@3"
         }
       ]
     }

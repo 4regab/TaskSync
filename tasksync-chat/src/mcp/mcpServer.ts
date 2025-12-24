@@ -9,6 +9,41 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { TaskSyncWebviewProvider } from '../webview/webviewProvider';
 import { askUser } from '../tools';
+import { getImageMimeType } from '../utils/imageUtils';
+
+
+async function tryReadImageAsMcpContent(uri: string): Promise<null | { type: 'image'; data: string; mimeType: string }> {
+    try {
+        const fileUri = vscode.Uri.parse(uri);
+        if (fileUri.scheme !== 'file') {
+            return null;
+        }
+
+        const filePath = fileUri.fsPath;
+        const mimeType = getImageMimeType(filePath);
+        if (!mimeType.startsWith('image/')) {
+            return null;
+        }
+
+        // Keep tool results reasonably sized for MCP clients.
+        const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB
+        const stat = await fs.promises.stat(filePath);
+        if (stat.size > MAX_IMAGE_BYTES) {
+            console.warn(`[TaskSync MCP] Skipping image >4MB: ${filePath} (${stat.size} bytes)`);
+            return null;
+        }
+
+        const buffer = await fs.promises.readFile(filePath);
+        return {
+            type: 'image',
+            data: buffer.toString('base64'),
+            mimeType,
+        };
+    } catch (error) {
+        console.error('[TaskSync MCP] Failed to read image attachment:', error);
+        return null;
+    }
+}
 
 export class McpServerManager {
     private server: http.Server | undefined;
@@ -43,7 +78,6 @@ export class McpServerManager {
                     this.port = await this.findAvailablePort();
                 }
             }
-            console.log(`[TaskSync MCP] Starting server on port ${this.port}`);
 
             this.mcpServer = new McpServer({
                 name: "TaskSync Sidebar Chat",
@@ -73,9 +107,18 @@ export class McpServerManager {
                         tokenSource.token
                     );
 
-                    return {
-                        content: [{ type: "text", text: JSON.stringify(result) }]
-                    };
+                    const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+                        { type: 'text', text: JSON.stringify(result) }
+                    ];
+
+                    if (result.attachments?.length) {
+                        const imageParts = await Promise.all(result.attachments.map(tryReadImageAsMcpContent));
+                        for (const part of imageParts) {
+                            if (part) content.push(part);
+                        }
+                    }
+
+                    return { content };
                 }
             );
 
@@ -89,8 +132,6 @@ export class McpServerManager {
 
             // Create HTTP server
             this.server = http.createServer(async (req, res) => {
-                console.log(`[TaskSync MCP] ${req.method} ${req.url}`);
-
                 try {
                     const url = req.url || '/';
 
@@ -133,7 +174,6 @@ export class McpServerManager {
                 this.server?.listen(this.port, '127.0.0.1', () => resolve());
             });
 
-            console.log(`[TaskSync MCP] Server started on http://127.0.0.1:${this.port}/sse`);
             this._isRunning = true;
 
             // Auto-register with supported clients
@@ -155,7 +195,6 @@ export class McpServerManager {
         return new Promise((resolve) => {
             const testServer = http.createServer();
             testServer.once('error', () => {
-                console.log(`[TaskSync MCP] Port ${port} unavailable, using dynamic port`);
                 this.findAvailablePort().then(resolve);
             });
             testServer.listen(port, '127.0.0.1', () => {
@@ -185,7 +224,7 @@ export class McpServerManager {
             { serverUrl: serverUrl }
         );
 
-        console.log(`[TaskSync MCP] Auto-registered with clients at ${serverUrl}`);
+        // Registration complete - no need to log
     }
 
     /**
@@ -245,7 +284,6 @@ export class McpServerManager {
     }
 
     async restart() {
-        console.log('[TaskSync MCP] Restarting...');
         try {
             await Promise.race([
                 this.dispose(),

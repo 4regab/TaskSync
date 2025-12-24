@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.1.0 (12-25-25)
+- **feat(settings)**: Add in-sidebar Settings Modal with gear icon in title bar
+  - Configure TaskSync options directly within the sidebar
+  - Manage reusable prompts from the Settings panel
+- **feat(prompts)**: Reusable Prompts with `/slash` command support
+  - Create, edit, and delete saved prompts accessible via `/command` syntax
+  - Autocomplete dropdown when typing `/` in the input field
+  - Prompts persist across sessions via `tasksync.reusablePrompts` setting
+- **feat(session)**: Add "Clear Current Session" command with trash icon in title bar
+  - Quickly clear all tool calls from current session
+  - Confirmation modal to prevent accidental data loss
+- **feat(ui)**: Interactive Approval UI improvements
+  - New `tasksync.interactiveApproval` setting to toggle approval buttons
+  - Enhanced Yes/No and multiple choice button rendering
+- **feat(notifications)**: Notification sound for incoming tool calls
+  - Audio alert when AI requests user input
+  - Helps users notice pending questions while multitasking
+- **refactor(utils)**: Extract shared utility functions into dedicated modules
+  - New `src/constants/fileExclusions.ts` for centralized file exclusion patterns
+  - New `src/utils/imageUtils.ts` for image processing utilities
+- **chore(assets)**: Remove 5 unused SVG files from `media/` folder
+- **refactor(logging)**: Clean up logging statements across the codebase
+  - Remove all `console.log` and `console.warn` statements
+  - Retain only `console.error` for critical error handling
+- **refactor(code)**: Eliminate duplicate code and improve maintainability
+  - Extract shared constants and utility functions
+  - Clean up outdated and redundant comments
+- **chore(deps)**: Update dependencies and clean up `package.json`
+
+
 ## TaskSync v2.0.9 (12-21-25)
 - fix(workflow): properly handle multi-line commit messages in release notes
 - - Use heredoc syntax (EOF delimiter) for multi-line GitHub Actions output
@@ -9,12 +39,9 @@ All notable changes to this project will be documented in this file.
 - - Properly formats each line of commit message in CHANGELOG
 
 
+
 ## TaskSync v2.0.8 (12-21-25)
-- fix(sidebar): resolve race condition preventing AI questions from displaying%0A%0APROBLEM:%0A- TaskSync sidebar was not receiving/displaying questions from AI tool calls%0A- ask_user tool was returning empty responses immediately%0A- Users saw no question in sidebar, tool call ended without user input%0A%0AROOT CAUSE:%0A1. waitForUserResponse() threw 'Webview not visible' error when sidebar was closed%0A2. Error was silently swallowed in catch block, returning empty response%0A3. No mechanism to auto-open sidebar when AI called ask_user tool%0A4. Race condition: messages sent before webview JS was initialized were lost%0A%0AFIXES:%0A- Auto-open sidebar via 'taskSyncView.focus' command when view is undefined%0A- Add polling loop to wait for view resolution (up to 5 seconds)%0A- Add polling loop to wait for webview JS ready state (up to 3 seconds)%0A- Improved error handling: log errors and show user-facing error message%0A- Added missing 'numberedLinePattern' regex for choice parsing%0A- Re-send pending questions when webview is recreated (tab switch recovery)%0A%0AAFFECTED FILES:%0A- src/webview/webviewProvider.ts: Auto-open sidebar, wait for ready state%0A- src/tools.ts: Better error logging, user-facing error messages%0A- media/webview.js: Debug logging for message flow (retained for diagnosis)%0A%0AFixes issue where sidebar didn't show AI questions during ask_user calls
-
-
-## TaskSync v2.0.7 (12-21-25)
-- fix: handle merge commits in release notes, fix vsix path for attestation
+- fix(sidebar): resolve race condition preventing AI questions from displaying in the TaskSync sidebar when using ask_user tool; auto-opens sidebar, adds polling for view and webview readiness, and improves error handling
 
 
 ## TaskSync v2.0.6 (12-21-25)

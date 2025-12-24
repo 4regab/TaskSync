@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import * as path from 'path';
 import { TaskSyncWebviewProvider } from './webview/webviewProvider';
+import { getImageMimeType } from './utils/imageUtils';
 
 export interface Input {
     question: string;
@@ -21,26 +21,6 @@ async function readFileAsBuffer(filePath: string): Promise<Uint8Array> {
 }
 
 /**
- * Gets the MIME type for an image file based on its extension
- */
-function getImageMimeType(filePath: string): string {
-    const extension = path.extname(filePath).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp',
-        '.bmp': 'image/bmp',
-        '.svg': 'image/svg+xml',
-        '.ico': 'image/x-icon',
-        '.tiff': 'image/tiff',
-        '.tif': 'image/tiff',
-    };
-    return mimeTypes[extension] || 'application/octet-stream';
-}
-
-/**
  * Core logic to ask user, reusable by MCP server
  * Queue handling and history tracking is done in waitForUserResponse()
  */
@@ -50,9 +30,7 @@ export async function askUser(
     _token: vscode.CancellationToken
 ): Promise<AskUserToolResult> {
     try {
-        console.log('[TaskSync] askUser called with question:', params.question.substring(0, 100));
         const result = await provider.waitForUserResponse(params.question);
-        console.log('[TaskSync] askUser received response:', result.value.substring(0, 50));
         return {
             response: result.value,
             attachments: result.attachments.map(att => att.uri)
@@ -94,16 +72,24 @@ export function registerTools(context: vscode.ExtensionContext, provider: TaskSy
                         try {
                             const fileUri = vscode.Uri.parse(uri);
                             const filePath = fileUri.fsPath;
+
+                            // Check if file exists
+                            if (!fs.existsSync(filePath)) {
+                                console.error('[TaskSync] Attachment file does not exist:', filePath);
+                                return null;
+                            }
+
                             const mimeType = getImageMimeType(filePath);
 
                             // Only process image files (skip non-image attachments)
                             if (mimeType !== 'application/octet-stream') {
                                 const data = await readFileAsBuffer(filePath);
-                                return vscode.LanguageModelDataPart.image(data, mimeType);
+                                const dataPart = vscode.LanguageModelDataPart.image(data, mimeType);
+                                return dataPart;
                             }
                             return null;
                         } catch (error) {
-                            console.error('Failed to read image attachment:', error);
+                            console.error('[TaskSync] Failed to read image attachment:', error);
                             return null;
                         }
                     });

@@ -49,8 +49,6 @@ function hasExternalMcpClients(): boolean {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('TaskSync Extension is now active!');
-
     const provider = new TaskSyncWebviewProvider(context.extensionUri, context);
     webviewProvider = provider;
 
@@ -136,13 +134,30 @@ export function activate(context: vscode.ExtensionContext) {
         provider.openHistoryModal();
     });
 
-    context.subscriptions.push(startMcpCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd);
+    // Clear current session command (triggered from view title bar)
+    const clearSessionCmd = vscode.commands.registerCommand('tasksync.clearCurrentSession', async () => {
+        const result = await vscode.window.showWarningMessage(
+            'Clear all tool calls from current session?',
+            { modal: true },
+            'Clear'
+        );
+        if (result === 'Clear') {
+            provider.clearCurrentSession();
+        }
+    });
+
+    // Open settings modal command (triggered from view title bar)
+    const openSettingsCmd = vscode.commands.registerCommand('tasksync.openSettings', () => {
+        provider.openSettingsModal();
+    });
+
+    context.subscriptions.push(startMcpCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, clearSessionCmd, openSettingsCmd);
 }
 
 export async function deactivate() {
-    // Save current session to persisted history before deactivating
+    // Save current tool call history to persisted history before deactivating
     if (webviewProvider) {
-        webviewProvider.saveSessionToHistory();
+        webviewProvider.saveCurrentSessionToHistory();
         webviewProvider = undefined;
     }
 

@@ -21,6 +21,19 @@
     let isApprovalQuestion = false; // True when current pending question is an approval-type question
     let currentChoices = []; // Parsed choices from multi-choice questions
 
+    // Settings state
+    let soundEnabled = true;
+    let interactiveApprovalEnabled = true;
+    let reusablePrompts = [];
+    let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
+
+    // Slash command autocomplete state
+    let slashDropdownVisible = false;
+    let slashResults = [];
+    let selectedSlashIndex = -1;
+    let slashStartPos = -1;
+    let slashDebounceTimer = null;
+
     // Persisted input value (restored from state)
     let persistedInputValue = previousState.inputValue || '';
 
@@ -38,6 +51,7 @@
 
     // DOM Elements
     let chatInput, sendBtn, attachBtn, modeBtn, modeDropdown, modeLabel;
+    let inputHighlighter; // Overlay for syntax highlighting in input
     let queueSection, queueHeader, queueList, queueCount;
     let chatContainer, chipsContainer, autocompleteDropdown, autocompleteList, autocompleteEmpty;
     let inputContainer, inputAreaContainer, welcomeSection, welcomeTips;
@@ -47,6 +61,11 @@
     let actionsLeft, actionsBar, editActionsContainer, editCancelBtn, editConfirmBtn;
     // Approval modal elements
     let approvalModal, approvalContinueBtn, approvalNoBtn;
+    // Slash command elements
+    let slashDropdown, slashList, slashEmpty;
+    // Settings modal elements
+    let settingsModal, settingsModalOverlay, settingsModalClose;
+    let soundToggle, interactiveApprovalToggle, promptsList, addPromptBtn, addPromptForm;
 
     function init() {
         try {
@@ -55,7 +74,9 @@
             createHistoryModal();
             createEditModeUI();
             createApprovalModal();
+            createSettingsModal();
             bindEventListeners();
+            unlockAudioOnInteraction(); // Enable audio after first user interaction
             console.log('[TaskSync Webview] Event listeners bound, pendingMessage element:', !!pendingMessage);
             renderQueue();
             updateModeUI();
@@ -66,6 +87,7 @@
             if (chatInput && persistedInputValue) {
                 chatInput.value = persistedInputValue;
                 autoResizeTextarea();
+                updateInputHighlighter();
                 updateSendButtonState();
             }
 
@@ -94,6 +116,7 @@
 
     function cacheDOMElements() {
         chatInput = document.getElementById('chat-input');
+        inputHighlighter = document.getElementById('input-highlighter');
         sendBtn = document.getElementById('send-btn');
         attachBtn = document.getElementById('attach-btn');
         modeBtn = document.getElementById('mode-btn');
@@ -116,6 +139,10 @@
         cardSpec = document.getElementById('card-spec');
         toolHistoryArea = document.getElementById('tool-history-area');
         pendingMessage = document.getElementById('pending-message');
+        // Slash command dropdown
+        slashDropdown = document.getElementById('slash-dropdown');
+        slashList = document.getElementById('slash-list');
+        slashEmpty = document.getElementById('slash-empty');
         // Get actions bar elements for edit mode
         actionsBar = document.querySelector('.actions-bar');
         actionsLeft = document.querySelector('.actions-left');
@@ -144,7 +171,7 @@
         // Info text - left aligned after title
         var infoSpan = document.createElement('span');
         infoSpan.className = 'history-modal-info';
-        infoSpan.textContent = 'Your tool call history is stored in VS Code globalStorage/tool-history.json';
+        infoSpan.textContent = 'History is stored in VS Code globalStorage/tool-history.json';
         modalHeader.appendChild(infoSpan);
 
         // Clear all button (icon only)
@@ -258,11 +285,121 @@
         }
     }
 
+    function createSettingsModal() {
+        // Create modal overlay
+        settingsModalOverlay = document.createElement('div');
+        settingsModalOverlay.className = 'settings-modal-overlay hidden';
+        settingsModalOverlay.id = 'settings-modal-overlay';
+
+        // Create modal container
+        settingsModal = document.createElement('div');
+        settingsModal.className = 'settings-modal';
+        settingsModal.id = 'settings-modal';
+        settingsModal.setAttribute('role', 'dialog');
+        settingsModal.setAttribute('aria-labelledby', 'settings-modal-title');
+
+        // Modal header
+        var modalHeader = document.createElement('div');
+        modalHeader.className = 'settings-modal-header';
+
+        var titleSpan = document.createElement('span');
+        titleSpan.className = 'settings-modal-title';
+        titleSpan.id = 'settings-modal-title';
+        titleSpan.textContent = 'Settings';
+        modalHeader.appendChild(titleSpan);
+
+        // Header buttons container
+        var headerButtons = document.createElement('div');
+        headerButtons.className = 'settings-modal-header-buttons';
+
+        // Report Issue button
+        var reportBtn = document.createElement('button');
+        reportBtn.className = 'settings-modal-header-btn';
+        reportBtn.innerHTML = '<span class="codicon codicon-report"></span>';
+        reportBtn.title = 'Report Issue';
+        reportBtn.setAttribute('aria-label', 'Report an issue on GitHub');
+        reportBtn.addEventListener('click', function () {
+            vscode.postMessage({ type: 'openExternal', url: 'https://github.com/4regab/TaskSync/issues/new' });
+        });
+        headerButtons.appendChild(reportBtn);
+
+        // Close button
+        settingsModalClose = document.createElement('button');
+        settingsModalClose.className = 'settings-modal-header-btn';
+        settingsModalClose.innerHTML = '<span class="codicon codicon-close"></span>';
+        settingsModalClose.title = 'Close';
+        settingsModalClose.setAttribute('aria-label', 'Close settings');
+        headerButtons.appendChild(settingsModalClose);
+
+        modalHeader.appendChild(headerButtons);
+
+        // Modal content
+        var modalContent = document.createElement('div');
+        modalContent.className = 'settings-modal-content';
+
+        // Sound section - simplified, toggle right next to header
+        var soundSection = document.createElement('div');
+        soundSection.className = 'settings-section';
+        soundSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title"><span class="codicon codicon-unmute"></span> Notifications</div>' +
+            '<div class="toggle-switch active" id="sound-toggle" role="switch" aria-checked="true" aria-label="Enable notification sound" tabindex="0"></div>' +
+            '</div>';
+        modalContent.appendChild(soundSection);
+
+        // Interactive approval section - toggle interactive Yes/No + choices UI
+        var approvalSection = document.createElement('div');
+        approvalSection.className = 'settings-section';
+        approvalSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title"><span class="codicon codicon-checklist"></span> Interactive Approvals</div>' +
+            '<div class="toggle-switch active" id="interactive-approval-toggle" role="switch" aria-checked="true" aria-label="Enable interactive approval and choice buttons" tabindex="0"></div>' +
+            '</div>';
+        modalContent.appendChild(approvalSection);
+
+        // Reusable Prompts section - plus button next to title
+        var promptsSection = document.createElement('div');
+        promptsSection.className = 'settings-section';
+        promptsSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title"><span class="codicon codicon-symbol-keyword"></span> Reusable Prompts</div>' +
+            '<button class="add-prompt-btn-inline" id="add-prompt-btn" title="Add Prompt" aria-label="Add reusable prompt"><span class="codicon codicon-add"></span></button>' +
+            '</div>' +
+            '<div class="prompts-list" id="prompts-list"></div>' +
+            '<div class="add-prompt-form hidden" id="add-prompt-form">' +
+            '<div class="form-row"><label class="form-label" for="prompt-name-input">Name (used as /command)</label>' +
+            '<input type="text" class="form-input" id="prompt-name-input" placeholder="e.g., fix, test, refactor" maxlength="30"></div>' +
+            '<div class="form-row"><label class="form-label" for="prompt-text-input">Prompt Text</label>' +
+            '<textarea class="form-input form-textarea" id="prompt-text-input" placeholder="Enter the full prompt text..." maxlength="2000"></textarea></div>' +
+            '<div class="form-actions">' +
+            '<button class="form-btn form-btn-cancel" id="cancel-prompt-btn">Cancel</button>' +
+            '<button class="form-btn form-btn-save" id="save-prompt-btn">Save</button></div></div>';
+        modalContent.appendChild(promptsSection);
+
+        // Assemble modal
+        settingsModal.appendChild(modalHeader);
+        settingsModal.appendChild(modalContent);
+        settingsModalOverlay.appendChild(settingsModal);
+
+        // Add to DOM
+        document.body.appendChild(settingsModalOverlay);
+
+        // Cache inner elements
+        soundToggle = document.getElementById('sound-toggle');
+        interactiveApprovalToggle = document.getElementById('interactive-approval-toggle');
+        promptsList = document.getElementById('prompts-list');
+        addPromptBtn = document.getElementById('add-prompt-btn');
+        addPromptForm = document.getElementById('add-prompt-form');
+    }
+
     function bindEventListeners() {
         if (chatInput) {
             chatInput.addEventListener('input', handleTextareaInput);
             chatInput.addEventListener('keydown', handleTextareaKeydown);
             chatInput.addEventListener('paste', handlePaste);
+            // Sync scroll between textarea and highlighter
+            chatInput.addEventListener('scroll', function () {
+                if (inputHighlighter) {
+                    inputHighlighter.scrollTop = chatInput.scrollTop;
+                }
+            });
         }
         if (sendBtn) sendBtn.addEventListener('click', handleSend);
         if (attachBtn) attachBtn.addEventListener('click', handleAttach);
@@ -278,6 +415,7 @@
         document.addEventListener('click', function (e) {
             if (dropdownOpen && !e.target.closest('.mode-selector') && !e.target.closest('.mode-dropdown')) closeModeDropdown();
             if (autocompleteVisible && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('#chat-input')) hideAutocomplete();
+            if (slashDropdownVisible && !e.target.closest('.slash-dropdown') && !e.target.closest('#chat-input')) hideSlashDropdown();
         });
 
         if (queueHeader) queueHeader.addEventListener('click', handleQueueHeaderClick);
@@ -295,6 +433,38 @@
         // Approval modal button events
         if (approvalContinueBtn) approvalContinueBtn.addEventListener('click', handleApprovalContinue);
         if (approvalNoBtn) approvalNoBtn.addEventListener('click', handleApprovalNo);
+
+        // Settings modal events
+        if (settingsModalClose) settingsModalClose.addEventListener('click', closeSettingsModal);
+        if (settingsModalOverlay) {
+            settingsModalOverlay.addEventListener('click', function (e) {
+                if (e.target === settingsModalOverlay) closeSettingsModal();
+            });
+        }
+        if (soundToggle) {
+            soundToggle.addEventListener('click', toggleSoundSetting);
+            soundToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleSoundSetting();
+                }
+            });
+        }
+        if (interactiveApprovalToggle) {
+            interactiveApprovalToggle.addEventListener('click', toggleInteractiveApprovalSetting);
+            interactiveApprovalToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleInteractiveApprovalSetting();
+                }
+            });
+        }
+        if (addPromptBtn) addPromptBtn.addEventListener('click', showAddPromptForm);
+        // Add prompt form events (deferred - bind after modal created)
+        var cancelPromptBtn = document.getElementById('cancel-prompt-btn');
+        var savePromptBtn = document.getElementById('save-prompt-btn');
+        if (cancelPromptBtn) cancelPromptBtn.addEventListener('click', hideAddPromptForm);
+        if (savePromptBtn) savePromptBtn.addEventListener('click', saveNewPrompt);
 
         window.addEventListener('message', handleExtensionMessage);
     }
@@ -377,9 +547,61 @@
         chatInput.style.height = Math.min(chatInput.scrollHeight, 150) + 'px';
     }
 
+    /**
+     * Update the input highlighter overlay to show syntax highlighting
+     * for slash commands (/command) and file references (#file)
+     */
+    function updateInputHighlighter() {
+        if (!inputHighlighter || !chatInput) return;
+
+        var text = chatInput.value;
+        if (!text) {
+            inputHighlighter.innerHTML = '';
+            return;
+        }
+
+        // Build a list of known slash command names for exact matching
+        var knownSlashNames = reusablePrompts.map(function (p) { return p.name; });
+        // Also add any pending stored mappings
+        var mappings = chatInput._slashPrompts || {};
+        Object.keys(mappings).forEach(function (name) {
+            if (knownSlashNames.indexOf(name) === -1) knownSlashNames.push(name);
+        });
+
+        // Escape HTML first
+        var html = escapeHtml(text);
+
+        // Highlight slash commands - match /word patterns
+        // Only highlight if it's a known command OR any /word pattern
+        html = html.replace(/(^|\s)(\/[a-zA-Z0-9_-]+)(\s|$)/g, function (match, before, slash, after) {
+            var cmdName = slash.substring(1); // Remove the /
+            // Highlight if it's a known command or if we have prompts defined
+            if (knownSlashNames.length === 0 || knownSlashNames.indexOf(cmdName) >= 0) {
+                return before + '<span class="slash-highlight">' + slash + '</span>' + after;
+            }
+            // Still highlight as generic slash command
+            return before + '<span class="slash-highlight">' + slash + '</span>' + after;
+        });
+
+        // Highlight file references - match #word patterns
+        html = html.replace(/(^|\s)(#[a-zA-Z0-9_.\/-]+)(\s|$)/g, function (match, before, hash, after) {
+            return before + '<span class="hash-highlight">' + hash + '</span>' + after;
+        });
+
+        // Don't add trailing space - causes visual artifacts
+        // html += '&nbsp;';
+
+        inputHighlighter.innerHTML = html;
+
+        // Sync scroll position
+        inputHighlighter.scrollTop = chatInput.scrollTop;
+    }
+
     function handleTextareaInput() {
         autoResizeTextarea();
+        updateInputHighlighter();
         handleAutocomplete();
+        handleSlashCommands();
         syncAttachmentsWithText();
         updateSendButtonState();
         // Persist input value so it survives sidebar tab switches
@@ -429,6 +651,14 @@
             return;
         }
 
+        // Handle slash command dropdown navigation
+        if (slashDropdownVisible) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); if (selectedSlashIndex < slashResults.length - 1) { selectedSlashIndex++; updateSlashSelection(); } return; }
+            if (e.key === 'ArrowUp') { e.preventDefault(); if (selectedSlashIndex > 0) { selectedSlashIndex--; updateSlashSelection(); } return; }
+            if ((e.key === 'Enter' || e.key === 'Tab') && selectedSlashIndex >= 0) { e.preventDefault(); selectSlashItem(selectedSlashIndex); return; }
+            if (e.key === 'Escape') { e.preventDefault(); hideSlashDropdown(); return; }
+        }
+
         if (autocompleteVisible) {
             if (e.key === 'ArrowDown') { e.preventDefault(); if (selectedAutocompleteIndex < autocompleteResults.length - 1) { selectedAutocompleteIndex++; updateAutocompleteSelection(); } return; }
             if (e.key === 'ArrowUp') { e.preventDefault(); if (selectedAutocompleteIndex > 0) { selectedAutocompleteIndex--; updateAutocompleteSelection(); } return; }
@@ -441,6 +671,9 @@
     function handleSend() {
         var text = chatInput ? chatInput.value.trim() : '';
         if (!text && currentAttachments.length === 0) return;
+
+        // Expand slash commands to full prompt text
+        text = expandSlashCommands(text);
 
         // Hide approval modal when sending any response
         hideApprovalModal();
@@ -456,7 +689,11 @@
                 updateCardSelection();
                 vscode.postMessage({ type: 'toggleQueue', enabled: true });
             }
-            if (chatInput) { chatInput.value = ''; chatInput.style.height = 'auto'; }
+            if (chatInput) {
+                chatInput.value = '';
+                chatInput.style.height = 'auto';
+                updateInputHighlighter();
+            }
             currentAttachments = [];
             updateChipsDisplay();
             updateSendButtonState();
@@ -471,7 +708,11 @@
             vscode.postMessage({ type: 'submit', value: text, attachments: currentAttachments });
         }
 
-        if (chatInput) { chatInput.value = ''; chatInput.style.height = 'auto'; }
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+            updateInputHighlighter();
+        }
         currentAttachments = [];
         updateChipsDisplay();
         updateSendButtonState();
@@ -576,6 +817,23 @@
             case 'openHistoryModal':
                 openHistoryModal();
                 break;
+            case 'openSettingsModal':
+                openSettingsModal();
+                break;
+            case 'updateSettings':
+                soundEnabled = message.soundEnabled !== false;
+                interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+                reusablePrompts = message.reusablePrompts || [];
+                updateSoundToggleUI();
+                updateInteractiveApprovalToggleUI();
+                renderPromptsList();
+                break;
+            case 'slashCommandResults':
+                showSlashDropdown(message.prompts || []);
+                break;
+            case 'playNotificationSound':
+                playNotificationSound();
+                break;
             case 'fileSearchResults':
                 showAutocomplete(message.files || []);
                 break;
@@ -609,6 +867,9 @@
             welcomeSection.classList.add('hidden');
         }
 
+        // Add pending class to disable session switching UI
+        document.body.classList.add('has-pending-toolcall');
+
         // Show AI question as plain text (hide "Working...." since AI asked a question)
         if (pendingMessage) {
             console.log('[TaskSync Webview] Setting pendingMessage innerHTML...');
@@ -627,18 +888,31 @@
         scrollToBottom();
 
         // Show choice buttons if we have choices, otherwise show approval modal for yes/no questions
-        if (currentChoices.length > 0) {
-            showChoicesBar();
-        } else if (isApprovalQuestion) {
-            showApprovalModal();
+        // Only show if interactive approval is enabled
+        if (interactiveApprovalEnabled) {
+            if (currentChoices.length > 0) {
+                showChoicesBar();
+            } else if (isApprovalQuestion) {
+                showApprovalModal();
+            } else {
+                hideApprovalModal();
+                hideChoicesBar();
+            }
         } else {
+            // Interactive approval disabled - just focus input for manual typing
             hideApprovalModal();
             hideChoicesBar();
+            if (chatInput) {
+                chatInput.focus();
+            }
         }
     }
 
     function addToolCallToCurrentSession(entry) {
         pendingToolCall = null;
+
+        // Remove pending class to re-enable session switching UI
+        document.body.classList.remove('has-pending-toolcall');
 
         // Hide approval modal and choices bar when tool call completes
         hideApprovalModal();
@@ -727,13 +1001,12 @@
 
         if (historyModalClearAll) historyModalClearAll.classList.remove('hidden');
 
-        // Render as expandable cards (same style as current session)
-        var cardsHtml = persistedHistory.map(function (tc) {
+        // Helper to render tool call card
+        function renderToolCallCard(tc) {
             var firstSentence = tc.prompt.split(/[.!?]/)[0];
             var truncatedTitle = firstSentence.length > 80 ? firstSentence.substring(0, 80) + '...' : firstSentence;
             var queueBadge = tc.isFromQueue ? '<span class="tool-call-badge queue">Queue</span>' : '';
 
-            // Build expandable card HTML (collapsed by default in modal)
             return '<div class="tool-call-card history-card" data-id="' + escapeHtml(tc.id) + '">' +
                 '<div class="tool-call-header">' +
                 '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
@@ -749,7 +1022,12 @@
                 '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
                 '</div>' +
                 '</div></div>';
-        }).join('');
+        }
+
+        // Render all history items directly without grouping
+        var cardsHtml = '<div class="history-items-list">';
+        cardsHtml += persistedHistory.map(renderToolCallCard).join('');
+        cardsHtml += '</div>';
 
         historyModalList.innerHTML = cardsHtml;
 
@@ -1005,11 +1283,17 @@
     function addToQueue(prompt) {
         if (!prompt || !prompt.trim()) return;
         var id = 'q_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
-        promptQueue.push({ id: id, prompt: prompt.trim() });
+        // Store attachments with the queue item
+        var attachmentsToStore = currentAttachments.length > 0 ? currentAttachments.slice() : undefined;
+        promptQueue.push({ id: id, prompt: prompt.trim(), attachments: attachmentsToStore });
         renderQueue();
         // Expand queue section when adding items so user can see what was added
         if (queueSection) queueSection.classList.remove('collapsed');
-        vscode.postMessage({ type: 'addQueuePrompt', prompt: prompt.trim(), id: id });
+        // Send to backend with attachments
+        vscode.postMessage({ type: 'addQueuePrompt', prompt: prompt.trim(), id: id, attachments: attachmentsToStore || [] });
+        // Clear attachments after adding to queue (they're now stored with the queue item)
+        currentAttachments = [];
+        updateChipsDisplay();
     }
 
     function removeFromQueue(id) {
@@ -1033,9 +1317,14 @@
         queueList.innerHTML = promptQueue.map(function (item, index) {
             var bulletClass = index === 0 ? 'active' : 'pending';
             var truncatedPrompt = item.prompt.length > 80 ? item.prompt.substring(0, 80) + '...' : item.prompt;
+            // Show attachment indicator if this queue item has attachments
+            var attachmentBadge = (item.attachments && item.attachments.length > 0)
+                ? '<span class="queue-item-attachment-badge" title="' + item.attachments.length + ' attachment(s)"><span class="codicon codicon-file-media"></span></span>'
+                : '';
             return '<div class="queue-item" data-id="' + escapeHtml(item.id) + '" data-index="' + index + '" tabindex="0" draggable="true">' +
                 '<span class="bullet ' + bulletClass + '"></span>' +
                 '<span class="text" title="' + escapeHtml(item.prompt) + '">' + (index + 1) + '. ' + escapeHtml(truncatedPrompt) + '</span>' +
+                attachmentBadge +
                 '<div class="queue-item-actions">' +
                 '<button class="edit-btn" data-id="' + escapeHtml(item.id) + '" title="Edit"><span class="codicon codicon-edit"></span></button>' +
                 '<button class="remove-btn" data-id="' + escapeHtml(item.id) + '" title="Remove"><span class="codicon codicon-close"></span></button>' +
@@ -1184,6 +1473,7 @@
         if (chatInput) {
             chatInput.value = '';
             chatInput.style.height = 'auto';
+            updateInputHighlighter();
         }
         currentAttachments = [];
         updateChipsDisplay();
@@ -1208,7 +1498,9 @@
                 chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
             }
             autoResizeTextarea();
+            updateInputHighlighter();
             updateSendButtonState();
+            saveWebviewState();
         }
     }
 
@@ -1311,11 +1603,391 @@
         if (chatInput) {
             chatInput.value = '';
             chatInput.style.height = 'auto';
+            updateInputHighlighter();
         }
         currentAttachments = [];
         updateChipsDisplay();
         updateSendButtonState();
         saveWebviewState();
+    }
+
+    // ===== SETTINGS MODAL FUNCTIONS =====
+
+    function openSettingsModal() {
+        if (!settingsModalOverlay) return;
+        vscode.postMessage({ type: 'openSettingsModal' });
+        settingsModalOverlay.classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+        if (!settingsModalOverlay) return;
+        settingsModalOverlay.classList.add('hidden');
+        hideAddPromptForm();
+    }
+
+    function toggleSoundSetting() {
+        soundEnabled = !soundEnabled;
+        updateSoundToggleUI();
+        vscode.postMessage({ type: 'updateSoundSetting', enabled: soundEnabled });
+    }
+
+    function updateSoundToggleUI() {
+        if (!soundToggle) return;
+        soundToggle.classList.toggle('active', soundEnabled);
+        soundToggle.setAttribute('aria-checked', soundEnabled ? 'true' : 'false');
+    }
+
+    function toggleInteractiveApprovalSetting() {
+        interactiveApprovalEnabled = !interactiveApprovalEnabled;
+        updateInteractiveApprovalToggleUI();
+        vscode.postMessage({ type: 'updateInteractiveApprovalSetting', enabled: interactiveApprovalEnabled });
+    }
+
+    function updateInteractiveApprovalToggleUI() {
+        if (!interactiveApprovalToggle) return;
+        interactiveApprovalToggle.classList.toggle('active', interactiveApprovalEnabled);
+        interactiveApprovalToggle.setAttribute('aria-checked', interactiveApprovalEnabled ? 'true' : 'false');
+    }
+
+    function showAddPromptForm() {
+        if (!addPromptForm || !addPromptBtn) return;
+        addPromptForm.classList.remove('hidden');
+        addPromptBtn.classList.add('hidden');
+        var nameInput = document.getElementById('prompt-name-input');
+        var textInput = document.getElementById('prompt-text-input');
+        if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+        if (textInput) textInput.value = '';
+        // Clear edit mode
+        addPromptForm.removeAttribute('data-editing-id');
+    }
+
+    function hideAddPromptForm() {
+        if (!addPromptForm || !addPromptBtn) return;
+        addPromptForm.classList.add('hidden');
+        addPromptBtn.classList.remove('hidden');
+        addPromptForm.removeAttribute('data-editing-id');
+    }
+
+    function saveNewPrompt() {
+        var nameInput = document.getElementById('prompt-name-input');
+        var textInput = document.getElementById('prompt-text-input');
+        if (!nameInput || !textInput) return;
+
+        var name = nameInput.value.trim();
+        var prompt = textInput.value.trim();
+
+        if (!name || !prompt) {
+            return;
+        }
+
+        var editingId = addPromptForm.getAttribute('data-editing-id');
+        if (editingId) {
+            // Editing existing prompt
+            vscode.postMessage({ type: 'editReusablePrompt', id: editingId, name: name, prompt: prompt });
+        } else {
+            // Adding new prompt
+            vscode.postMessage({ type: 'addReusablePrompt', name: name, prompt: prompt });
+        }
+
+        hideAddPromptForm();
+    }
+
+    function renderPromptsList() {
+        if (!promptsList) return;
+
+        if (reusablePrompts.length === 0) {
+            promptsList.innerHTML = '';
+            return;
+        }
+
+        // Compact list - show only name, full prompt on hover via title
+        promptsList.innerHTML = reusablePrompts.map(function (p) {
+            // Truncate very long prompts for tooltip to prevent massive tooltips
+            var tooltipText = p.prompt.length > 300 ? p.prompt.substring(0, 300) + '...' : p.prompt;
+            // Escape for HTML attribute
+            tooltipText = tooltipText.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<div class="prompt-item compact" data-id="' + escapeHtml(p.id) + '" title="' + tooltipText + '">' +
+                '<div class="prompt-item-content">' +
+                '<span class="prompt-item-name">/' + escapeHtml(p.name) + '</span>' +
+                '</div>' +
+                '<div class="prompt-item-actions">' +
+                '<button class="prompt-item-btn edit" data-id="' + escapeHtml(p.id) + '" title="Edit"><span class="codicon codicon-edit"></span></button>' +
+                '<button class="prompt-item-btn delete" data-id="' + escapeHtml(p.id) + '" title="Delete"><span class="codicon codicon-trash"></span></button>' +
+                '</div></div>';
+        }).join('');
+
+        // Bind edit/delete events
+        promptsList.querySelectorAll('.prompt-item-btn.edit').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-id');
+                editPrompt(id);
+            });
+        });
+
+        promptsList.querySelectorAll('.prompt-item-btn.delete').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-id');
+                deletePrompt(id);
+            });
+        });
+    }
+
+    function editPrompt(id) {
+        var prompt = reusablePrompts.find(function (p) { return p.id === id; });
+        if (!prompt) return;
+
+        var nameInput = document.getElementById('prompt-name-input');
+        var textInput = document.getElementById('prompt-text-input');
+        if (!nameInput || !textInput) return;
+
+        // Show form with existing values
+        addPromptForm.classList.remove('hidden');
+        addPromptBtn.classList.add('hidden');
+        addPromptForm.setAttribute('data-editing-id', id);
+
+        nameInput.value = prompt.name;
+        textInput.value = prompt.prompt;
+        nameInput.focus();
+    }
+
+    function deletePrompt(id) {
+        vscode.postMessage({ type: 'removeReusablePrompt', id: id });
+    }
+
+    // ===== SLASH COMMAND FUNCTIONS =====
+
+    /**
+     * Expand /commandName patterns to their full prompt text
+     * Only expands known commands at the start of lines or after whitespace
+     */
+    function expandSlashCommands(text) {
+        if (!text || reusablePrompts.length === 0) return text;
+
+        // Use stored mappings from selectSlashItem if available
+        var mappings = chatInput && chatInput._slashPrompts ? chatInput._slashPrompts : {};
+
+        // Build a regex to match all known prompt names
+        var promptNames = reusablePrompts.map(function (p) { return p.name; });
+        if (Object.keys(mappings).length > 0) {
+            Object.keys(mappings).forEach(function (name) {
+                if (promptNames.indexOf(name) === -1) promptNames.push(name);
+            });
+        }
+
+        // Match /promptName at start or after whitespace
+        var expanded = text;
+        promptNames.forEach(function (name) {
+            // Escape special regex chars in name
+            var escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var regex = new RegExp('(^|\\s)/' + escapedName + '(?=\\s|$)', 'g');
+            var fullPrompt = mappings[name] || (reusablePrompts.find(function (p) { return p.name === name; }) || {}).prompt || '';
+            if (fullPrompt) {
+                expanded = expanded.replace(regex, '$1' + fullPrompt);
+            }
+        });
+
+        // Clear stored mappings after expansion
+        if (chatInput) chatInput._slashPrompts = {};
+
+        return expanded.trim();
+    }
+
+    function handleSlashCommands() {
+        if (!chatInput) return;
+        var value = chatInput.value;
+        var cursorPos = chatInput.selectionStart;
+
+        // Find slash at start of input or after whitespace
+        var slashPos = -1;
+        for (var i = cursorPos - 1; i >= 0; i--) {
+            if (value[i] === '/') {
+                // Check if it's at start or after whitespace
+                if (i === 0 || /\s/.test(value[i - 1])) {
+                    slashPos = i;
+                }
+                break;
+            }
+            if (/\s/.test(value[i])) break;
+        }
+
+        if (slashPos >= 0 && reusablePrompts.length > 0) {
+            var query = value.substring(slashPos + 1, cursorPos);
+            slashStartPos = slashPos;
+            if (slashDebounceTimer) clearTimeout(slashDebounceTimer);
+            slashDebounceTimer = setTimeout(function () {
+                // Filter locally for instant results
+                var queryLower = query.toLowerCase();
+                var matchingPrompts = reusablePrompts.filter(function (p) {
+                    return p.name.toLowerCase().includes(queryLower) ||
+                        p.prompt.toLowerCase().includes(queryLower);
+                });
+                showSlashDropdown(matchingPrompts);
+            }, 50);
+        } else if (slashDropdownVisible) {
+            hideSlashDropdown();
+        }
+    }
+
+    function showSlashDropdown(results) {
+        if (!slashDropdown || !slashList || !slashEmpty) return;
+        slashResults = results;
+        selectedSlashIndex = results.length > 0 ? 0 : -1;
+
+        // Hide file autocomplete if showing slash commands
+        hideAutocomplete();
+
+        if (results.length === 0) {
+            slashList.classList.add('hidden');
+            slashEmpty.classList.remove('hidden');
+        } else {
+            slashList.classList.remove('hidden');
+            slashEmpty.classList.add('hidden');
+            renderSlashList();
+        }
+        slashDropdown.classList.remove('hidden');
+        slashDropdownVisible = true;
+    }
+
+    function hideSlashDropdown() {
+        if (slashDropdown) slashDropdown.classList.add('hidden');
+        slashDropdownVisible = false;
+        slashResults = [];
+        selectedSlashIndex = -1;
+        slashStartPos = -1;
+        if (slashDebounceTimer) { clearTimeout(slashDebounceTimer); slashDebounceTimer = null; }
+    }
+
+    function renderSlashList() {
+        if (!slashList) return;
+        slashList.innerHTML = slashResults.map(function (p, index) {
+            var truncatedPrompt = p.prompt.length > 50 ? p.prompt.substring(0, 50) + '...' : p.prompt;
+            // Prepare tooltip text - escape for HTML attribute
+            var tooltipText = p.prompt.length > 500 ? p.prompt.substring(0, 500) + '...' : p.prompt;
+            tooltipText = tooltipText.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<div class="slash-item' + (index === selectedSlashIndex ? ' selected' : '') + '" data-index="' + index + '" data-tooltip="' + tooltipText + '">' +
+                '<span class="slash-item-icon"><span class="codicon codicon-symbol-keyword"></span></span>' +
+                '<div class="slash-item-content">' +
+                '<span class="slash-item-name">/' + escapeHtml(p.name) + '</span>' +
+                '<span class="slash-item-preview">' + escapeHtml(truncatedPrompt) + '</span>' +
+                '</div></div>';
+        }).join('');
+
+        slashList.querySelectorAll('.slash-item').forEach(function (item) {
+            item.addEventListener('click', function () { selectSlashItem(parseInt(item.getAttribute('data-index'), 10)); });
+            item.addEventListener('mouseenter', function () { selectedSlashIndex = parseInt(item.getAttribute('data-index'), 10); updateSlashSelection(); });
+        });
+        scrollToSelectedSlashItem();
+    }
+
+    function updateSlashSelection() {
+        if (!slashList) return;
+        slashList.querySelectorAll('.slash-item').forEach(function (item, index) {
+            item.classList.toggle('selected', index === selectedSlashIndex);
+        });
+        scrollToSelectedSlashItem();
+    }
+
+    function scrollToSelectedSlashItem() {
+        var selectedItem = slashList ? slashList.querySelector('.slash-item.selected') : null;
+        if (selectedItem) selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function selectSlashItem(index) {
+        if (index < 0 || index >= slashResults.length || !chatInput || slashStartPos < 0) return;
+        var prompt = slashResults[index];
+        var value = chatInput.value;
+        var cursorPos = chatInput.selectionStart;
+
+        // Create a slash tag representation - when sent, we'll expand it to full prompt
+        // For now, insert /name as text and store the mapping
+        var slashText = '/' + prompt.name + ' ';
+        chatInput.value = value.substring(0, slashStartPos) + slashText + value.substring(cursorPos);
+        var newCursorPos = slashStartPos + slashText.length;
+        chatInput.setSelectionRange(newCursorPos, newCursorPos);
+
+        // Store the prompt reference for expansion on send
+        if (!chatInput._slashPrompts) chatInput._slashPrompts = {};
+        chatInput._slashPrompts[prompt.name] = prompt.prompt;
+
+        hideSlashDropdown();
+        chatInput.focus();
+        updateSendButtonState();
+    }
+
+    // ===== NOTIFICATION SOUND FUNCTION =====
+
+    /**
+     * Unlock audio playback after first user interaction
+     * Required due to browser autoplay policy
+     */
+    function unlockAudioOnInteraction() {
+        function unlock() {
+            if (audioUnlocked) return;
+            var audio = document.getElementById('notification-sound');
+            if (audio) {
+                // Play and immediately pause to unlock
+                audio.volume = 0;
+                var playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(function () {
+                        audio.pause();
+                        audio.currentTime = 0;
+                        audio.volume = 0.5;
+                        audioUnlocked = true;
+                        console.log('[TaskSync] Audio unlocked successfully');
+                    }).catch(function () {
+                        // Still locked, will try again on next interaction
+                    });
+                }
+            }
+            // Remove listeners after first attempt
+            document.removeEventListener('click', unlock);
+            document.removeEventListener('keydown', unlock);
+        }
+        document.addEventListener('click', unlock, { once: true });
+        document.addEventListener('keydown', unlock, { once: true });
+    }
+
+    function playNotificationSound() {
+        console.log('[TaskSync] playNotificationSound called, audioUnlocked:', audioUnlocked);
+        // Play the preloaded audio element
+        try {
+            var audio = document.getElementById('notification-sound');
+            console.log('[TaskSync] Audio element found:', !!audio);
+            if (audio) {
+                audio.currentTime = 0; // Reset to beginning
+                audio.volume = 0.5;
+                console.log('[TaskSync] Attempting to play audio...');
+                var playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(function () {
+                        console.log('[TaskSync] Audio playback started successfully');
+                    }).catch(function (e) {
+                        console.log('[TaskSync] Could not play audio:', e.message);
+                        console.log('[TaskSync] Error name:', e.name);
+                        // If autoplay blocked, show visual feedback
+                        flashNotification();
+                    });
+                }
+            } else {
+                console.log('[TaskSync] No audio element found, showing visual notification');
+                flashNotification();
+            }
+        } catch (e) {
+            console.log('[TaskSync] Could not play notification sound:', e);
+            flashNotification();
+        }
+    }
+
+    function flashNotification() {
+        // Visual flash when audio fails
+        var body = document.body;
+        body.style.transition = 'background-color 0.1s ease';
+        var originalBg = body.style.backgroundColor;
+        body.style.backgroundColor = 'var(--vscode-textLink-foreground, #3794ff)';
+        setTimeout(function () {
+            body.style.backgroundColor = originalBg || '';
+        }, 150);
     }
 
     function bindDragAndDrop() {

@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { FILE_EXCLUSION_PATTERNS, FILE_SEARCH_EXCLUSION_PATTERNS, formatExcludePattern } from '../constants/fileExclusions';
 
 // Queued prompt interface
 export interface QueuedPrompt {
     id: string;
     prompt: string;
+    attachments?: AttachmentInfo[];  // Optional attachments (images, files) included with the prompt
 }
 
 // Attachment info
@@ -42,7 +44,6 @@ export interface ToolCallEntry {
     timestamp: number;
     isFromQueue: boolean;
     status: 'pending' | 'completed';
-    sessionId?: string; // Track which session this belongs to
 }
 
 // Parsed choice from question
@@ -50,6 +51,13 @@ export interface ParsedChoice {
     label: string;      // Display text (e.g., "1" or "Test functionality")
     value: string;      // Response value to send (e.g., "1" or full text)
     shortLabel?: string; // Short version for button (e.g., "1" for numbered)
+}
+
+// Reusable prompt interface
+export interface ReusablePrompt {
+    id: string;
+    name: string;       // Short name for /slash command (e.g., "fix", "test", "refactor")
+    prompt: string;     // Full prompt text
 }
 
 // Message types
@@ -61,11 +69,15 @@ type ToWebviewMessage =
     | { type: 'updatePersistedHistory'; history: ToolCallEntry[] }
     | { type: 'fileSearchResults'; files: FileSearchResult[] }
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
-    | { type: 'imageSaved'; attachment: AttachmentInfo };
+    | { type: 'imageSaved'; attachment: AttachmentInfo }
+    | { type: 'openSettingsModal' }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; reusablePrompts: ReusablePrompt[] }
+    | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
+    | { type: 'playNotificationSound' };
 
 type FromWebviewMessage =
     | { type: 'submit'; value: string; attachments: AttachmentInfo[] }
-    | { type: 'addQueuePrompt'; prompt: string; id: string }
+    | { type: 'addQueuePrompt'; prompt: string; id: string; attachments?: AttachmentInfo[] }
     | { type: 'removeQueuePrompt'; promptId: string }
     | { type: 'editQueuePrompt'; promptId: string; newPrompt: string }
     | { type: 'reorderQueue'; fromIndex: number; toIndex: number }
@@ -79,7 +91,15 @@ type FromWebviewMessage =
     | { type: 'searchFiles'; query: string }
     | { type: 'saveImage'; data: string; mimeType: string }
     | { type: 'addFileReference'; file: FileSearchResult }
-    | { type: 'webviewReady' };
+    | { type: 'webviewReady' }
+    | { type: 'openSettingsModal' }
+    | { type: 'updateSoundSetting'; enabled: boolean }
+    | { type: 'updateInteractiveApprovalSetting'; enabled: boolean }
+    | { type: 'addReusablePrompt'; name: string; prompt: string }
+    | { type: 'editReusablePrompt'; id: string; name: string; prompt: string }
+    | { type: 'removeReusablePrompt'; id: string }
+    | { type: 'searchSlashCommands'; query: string }
+    | { type: 'openExternal'; url: string };
 
 export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
     public static readonly viewType = 'taskSyncView';
@@ -99,8 +119,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Persisted history from past sessions (loaded from disk)
     private _persistedHistory: ToolCallEntry[] = [];
     private _currentToolCallId: string | null = null;
-    // Session ID to track current session
-    private _sessionId: string = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     // Webview ready state - prevents race condition on first message
     private _webviewReady: boolean = false;
@@ -121,6 +139,18 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Map for O(1) lookup of tool calls by ID (synced with _currentSessionCalls array)
     private _currentSessionCallsMap: Map<string, ToolCallEntry> = new Map();
 
+    // Reusable prompts (loaded from VS Code settings)
+    private _reusablePrompts: ReusablePrompt[] = [];
+
+    // Notification sound enabled (loaded from VS Code settings)
+    private _soundEnabled: boolean = true;
+
+    // Interactive approval buttons enabled (loaded from VS Code settings)
+    private _interactiveApprovalEnabled: boolean = true;
+
+    // Flag to prevent config reload during our own updates (avoids race condition)
+    private _isUpdatingConfig: boolean = false;
+
     // Disposables to clean up
     private _disposables: vscode.Disposable[] = [];
 
@@ -135,12 +165,30 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         this._loadPersistedHistoryFromDiskAsync().catch(err => {
             console.error('Failed to load history:', err);
         });
+        // Load settings (sync - fast operation)
+        this._loadSettings();
+
+        // Listen for settings changes
+        this._disposables.push(
+            vscode.workspace.onDidChangeConfiguration(e => {
+                // Skip reload if we're the ones updating config (prevents race condition)
+                if (this._isUpdatingConfig) {
+                    return;
+                }
+                if (e.affectsConfiguration('tasksync.notificationSound') ||
+                    e.affectsConfiguration('tasksync.interactiveApproval') ||
+                    e.affectsConfiguration('tasksync.reusablePrompts')) {
+                    this._loadSettings();
+                    this._updateSettingsUI();
+                }
+            })
+        );
     }
 
     /**
-     * Save current session to persisted history (called on deactivate)
+     * Save current tool call history to persisted history (called on deactivate)
      */
-    public saveSessionToHistory(): void {
+    public saveCurrentSessionToHistory(): void {
         // Only save completed calls from current session
         const completedCalls = this._currentSessionCalls.filter(tc => tc.status === 'completed');
         if (completedCalls.length > 0) {
@@ -159,9 +207,131 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
+     * Open settings modal (called from view title bar button)
+     */
+    public openSettingsModal(): void {
+        this._view?.webview.postMessage({ type: 'openSettingsModal' } as ToWebviewMessage);
+        // Don't reload settings here - they should already be in sync
+        // Just send current state without reloading from config
+        this._updateSettingsUI();
+    }
+
+    /**
+     * Clear current session tool calls (called from view title bar button)
+     * Preserves any pending tool call entry so responses don't lose their prompt
+     */
+    public clearCurrentSession(): void {
+        // Preserve pending entry if there is one
+        let pendingEntry: ToolCallEntry | undefined;
+        if (this._currentToolCallId) {
+            pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
+        }
+
+        // Clear all entries
+        this._currentSessionCalls = [];
+        this._currentSessionCallsMap.clear();
+
+        // Restore pending entry if we had one
+        if (pendingEntry) {
+            this._currentSessionCalls.push(pendingEntry);
+            this._currentSessionCallsMap.set(pendingEntry.id, pendingEntry);
+        }
+
+        this._updateCurrentSessionUI();
+    }
+
+    /**
+     * Play notification sound (called when ask_user tool is triggered)
+     * Works even when webview is not visible by using system sound
+     */
+    public playNotificationSound(): void {
+        if (this._soundEnabled) {
+            // Play system sound from extension host (works even when webview is hidden)
+            this._playSystemSound();
+
+            // Also try webview audio if visible (better quality)
+            this._view?.webview.postMessage({ type: 'playNotificationSound' } as ToWebviewMessage);
+        }
+    }
+
+    /**
+     * Play system sound using OS-native methods
+     * Works even when webview is minimized or hidden
+     */
+    private _playSystemSound(): void {
+        const { exec } = require('child_process');
+        const platform = process.platform;
+
+        try {
+            if (platform === 'win32') {
+                // Windows: Use PowerShell to play system exclamation sound
+                exec('[System.Media.SystemSounds]::Exclamation.Play()', { shell: 'powershell.exe' });
+            } else if (platform === 'darwin') {
+                // macOS: Use afplay with system sound
+                exec('afplay /System/Library/Sounds/Tink.aiff 2>/dev/null || printf "\\a"');
+            } else {
+                // Linux: Try multiple methods
+                exec('paplay /usr/share/sounds/freedesktop/stereo/message.oga 2>/dev/null || printf "\\a"');
+            }
+        } catch (e) {
+            // Sound playing failed - not critical
+        }
+    }
+
+    /**
+     * Load settings from VS Code configuration
+     */
+    private _loadSettings(): void {
+        const config = vscode.workspace.getConfiguration('tasksync');
+        this._soundEnabled = config.get<boolean>('notificationSound', true);
+        this._interactiveApprovalEnabled = config.get<boolean>('interactiveApproval', true);
+
+        // Load reusable prompts from settings
+        const savedPrompts = config.get<Array<{ name: string; prompt: string }>>('reusablePrompts', []);
+        this._reusablePrompts = savedPrompts.map((p, index) => ({
+            id: `rp_${index}_${Date.now()}`,
+            name: p.name,
+            prompt: p.prompt
+        }));
+    }
+
+    /**
+     * Save reusable prompts to VS Code configuration
+     */
+    private async _saveReusablePrompts(): Promise<void> {
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            const promptsToSave = this._reusablePrompts.map(p => ({
+                name: p.name,
+                prompt: p.prompt
+            }));
+            await config.update('reusablePrompts', promptsToSave, vscode.ConfigurationTarget.Global);
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Update settings UI in webview
+     */
+    private _updateSettingsUI(): void {
+        this._view?.webview.postMessage({
+            type: 'updateSettings',
+            soundEnabled: this._soundEnabled,
+            interactiveApprovalEnabled: this._interactiveApprovalEnabled,
+            reusablePrompts: this._reusablePrompts
+        } as ToWebviewMessage);
+    }
+
+    /**
      * Clean up resources when the provider is disposed
      */
     public dispose(): void {
+        // Save session history BEFORE clearing arrays
+        // This ensures tool calls are persisted when VS Code reloads
+        this.saveCurrentSessionToHistory();
+
         // Clear debounce timer
         if (this._queueSaveTimer) {
             clearTimeout(this._queueSaveTimer);
@@ -216,6 +386,16 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             this._view = undefined;
             // Clear file search cache when view is hidden
             this._fileSearchCache.clear();
+            // Save current session to persisted history when view is disposed
+            this.saveCurrentSessionToHistory();
+        }, null, this._disposables);
+
+        // Save history when webview visibility changes (backup for reload)
+        webviewView.onDidChangeVisibility(() => {
+            if (!webviewView.visible) {
+                // Save current session when switching away
+                this.saveCurrentSessionToHistory();
+            }
         }, null, this._disposables);
 
         // Don't send initial state here - wait for webviewReady message
@@ -263,18 +443,17 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     response: queuedPrompt.prompt,
                     timestamp: Date.now(),
                     isFromQueue: true,
-                    status: 'completed',
-                    sessionId: this._sessionId
+                    status: 'completed'
                 };
                 this._currentSessionCalls.unshift(entry);
-                this._currentSessionCallsMap.set(entry.id, entry); // BUG FIX: Add to Map for O(1) lookup
+                this._currentSessionCallsMap.set(entry.id, entry); // Maintain O(1) lookup map
                 this._updateCurrentSessionUI();
                 this._currentToolCallId = null;
 
                 return {
                     value: queuedPrompt.prompt,
                     queue: true,
-                    attachments: []
+                    attachments: queuedPrompt.attachments || []  // Return stored attachments
                 };
             }
         }
@@ -288,8 +467,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             response: '',
             timestamp: Date.now(),
             isFromQueue: false,
-            status: 'pending',
-            sessionId: this._sessionId
+            status: 'pending'
         };
         this._currentSessionCalls.unshift(pendingEntry);
         this._currentSessionCallsMap.set(toolCallId, pendingEntry); // O(1) lookup
@@ -319,6 +497,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 isApprovalQuestion: isApproval,
                 choices: choices.length > 0 ? choices : undefined
             });
+            // Play notification sound when AI triggers ask_user
+            this.playNotificationSound();
         } else {
             // Fallback: queue the message (should rarely happen now)
             this._pendingToolCallMessage = { id: toolCallId, prompt: question };
@@ -346,7 +526,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 this._handleSubmit(message.value, message.attachments || []);
                 break;
             case 'addQueuePrompt':
-                this._handleAddQueuePrompt(message.prompt, message.id);
+                this._handleAddQueuePrompt(message.prompt, message.id, message.attachments || []);
                 break;
             case 'removeQueuePrompt':
                 this._handleRemoveQueuePrompt(message.promptId);
@@ -390,6 +570,32 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             case 'webviewReady':
                 this._handleWebviewReady();
                 break;
+            case 'openSettingsModal':
+                this._handleOpenSettingsModal();
+                break;
+            case 'updateSoundSetting':
+                this._handleUpdateSoundSetting(message.enabled);
+                break;
+            case 'updateInteractiveApprovalSetting':
+                this._handleUpdateInteractiveApprovalSetting(message.enabled);
+                break;
+            case 'addReusablePrompt':
+                this._handleAddReusablePrompt(message.name, message.prompt);
+                break;
+            case 'editReusablePrompt':
+                this._handleEditReusablePrompt(message.id, message.name, message.prompt);
+                break;
+            case 'removeReusablePrompt':
+                this._handleRemoveReusablePrompt(message.id);
+                break;
+            case 'searchSlashCommands':
+                this._handleSearchSlashCommands(message.query);
+                break;
+            case 'openExternal':
+                if (message.url) {
+                    vscode.env.openExternal(vscode.Uri.parse(message.url));
+                }
+                break;
         }
     }
 
@@ -399,7 +605,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private _handleWebviewReady(): void {
         this._webviewReady = true;
 
-        // Send initial queue state and current session (not persisted history - that's for modal)
+        // Send settings
+        this._updateSettingsUI();
+        // Send initial queue state and current session history
         this._updateQueueUI();
         this._updateCurrentSessionUI();
 
@@ -417,7 +625,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             });
             this._pendingToolCallMessage = null;
         }
-        // BUG FIX #2: If there's an active pending request (webview was hidden/recreated while waiting),
+        // If there's an active pending request (webview was hidden/recreated while waiting),
         // re-send the pending tool call message so the user sees the question again
         else if (this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
             // Find the pending entry to get the prompt
@@ -462,8 +670,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                         response: value,
                         timestamp: Date.now(),
                         isFromQueue: false,
-                        status: 'completed',
-                        sessionId: this._sessionId
+                        status: 'completed'
                     };
                     this._currentSessionCalls.unshift(completedEntry);
                     this._currentSessionCallsMap.set(completedEntry.id, completedEntry);
@@ -479,30 +686,58 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 resolve({ value, queue: this._queueEnabled, attachments });
                 this._pendingRequests.delete(this._currentToolCallId);
                 this._currentToolCallId = null;
+            } else {
+                // No pending tool call - add message to queue for later use
+                if (value && value.trim()) {
+                    const queuedPrompt: QueuedPrompt = {
+                        id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                        prompt: value.trim()
+                    };
+                    this._promptQueue.push(queuedPrompt);
+                    // Auto-switch to queue mode so user sees their message went to queue
+                    this._queueEnabled = true;
+                    this._saveQueueToDisk();
+                    this._updateQueueUI();
+                }
             }
-        } else {
-            // No pending tool call - add message to queue for later use
-            if (value && value.trim()) {
-                const queuedPrompt: QueuedPrompt = {
-                    id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-                    prompt: value.trim()
-                };
-                this._promptQueue.push(queuedPrompt);
-                // Auto-switch to queue mode so user sees their message went to queue
-                this._queueEnabled = true;
-                this._saveQueueToDisk();
-                this._updateQueueUI();
+            // CRITICAL FIX: Delay cleanup of temp images to allow tool to read them first
+            // The tool reads images asynchronously after resolve() is called
+            // Schedule cleanup after a short delay to ensure images are read
+            const tempImagesToCleanup = this._attachments.filter(a => a.isTemporary).map(a => a.uri);
+            if (tempImagesToCleanup.length > 0) {
+                setTimeout(() => {
+                    this._cleanupTempImagesByUri(tempImagesToCleanup);
+                }, 2000); // 2 second delay to allow tool to read images
+            }
+            // Clear attachments after submit and sync with webview
+            this._attachments = [];
+            this._updateAttachmentsUI();
+        }
+    }
+
+    /**
+     * Clean up temporary image files from disk by URI list (delayed cleanup)
+     */
+    private _cleanupTempImagesByUri(uris: string[]): void {
+        for (const uri of uris) {
+            try {
+                const filePath = vscode.Uri.parse(uri).fsPath;
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (error) {
+                console.error('[TaskSync] Failed to cleanup temp image:', error);
             }
         }
-        // Clear attachments after submit
-        this._attachments = [];
     }
 
     /**
      * Handle adding attachment via file picker
      */
     private async _handleAddAttachment(): Promise<void> {
-        const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 1000);
+        // Use shared exclude pattern
+        const excludePattern = formatExcludePattern(FILE_EXCLUSION_PATTERNS);
+        const files = await vscode.workspace.findFiles('**/*', excludePattern, 1000);
 
         if (files.length === 0) {
             vscode.window.showInformationMessage('No files found in workspace');
@@ -567,7 +802,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             }
 
             // Exclude common unwanted files/folders for cleaner search results
-            const excludePattern = '{**/node_modules/**,**/.vscode/**,**/*.log,**/.env,**/.env.*,**/*instructions.md,**/dist/**,**/.git/**,**/build/**,**/*.vsix}';
+            // Includes: package managers, virtual envs, build outputs, hidden/config files
+            const excludePattern = formatExcludePattern(FILE_SEARCH_EXCLUSION_PATTERNS);
             // Reduced from 2000 to _MAX_FILE_SEARCH_RESULTS for better performance
             const allFiles = await vscode.workspace.findFiles('**/*', excludePattern, this._MAX_FILE_SEARCH_RESULTS);
 
@@ -689,7 +925,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             };
             const ext = extMap[mimeType] || '.png';
 
-            const storageUri = this._context.storageUri;
+            // Use storageUri if available (workspace-specific), otherwise fallback to globalStorageUri
+            const storageUri = this._context.storageUri || this._context.globalStorageUri;
             if (!storageUri) {
                 throw new Error('Storage URI not available');
             }
@@ -779,17 +1016,23 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     /**
      * Handle adding a prompt to queue
      */
-    private _handleAddQueuePrompt(prompt: string, id: string): void {
+    private _handleAddQueuePrompt(prompt: string, id: string, attachments: AttachmentInfo[]): void {
         const trimmed = prompt.trim();
         if (!trimmed || trimmed.length > 10000) return;
 
         const queuedPrompt: QueuedPrompt = {
             id: id || `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            prompt: trimmed
+            prompt: trimmed,
+            attachments: attachments.length > 0 ? [...attachments] : undefined  // Store attachments if any
         };
         this._promptQueue.push(queuedPrompt);
         this._saveQueueToDisk();
         this._updateQueueUI();
+
+        // Clear attachments after adding to queue (they're now stored with the queue item)
+        // This prevents old images from reappearing when pasting new images
+        this._attachments = [];
+        this._updateAttachmentsUI();
 
         // Auto-respond with the newly added prompt if there's a pending request
         if (this._queueEnabled && this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
@@ -818,8 +1061,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     response: consumedPrompt.prompt,
                     timestamp: Date.now(),
                     isFromQueue: true,
-                    status: 'completed',
-                    sessionId: this._sessionId
+                    status: 'completed'
                 };
                 this._currentSessionCalls.unshift(completedEntry);
                 this._currentSessionCallsMap.set(completedEntry.id, completedEntry);
@@ -835,7 +1077,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             this._saveQueueToDisk();
             this._updateQueueUI();
 
-            resolve({ value: consumedPrompt.prompt, queue: true, attachments: [] });
+            resolve({ value: consumedPrompt.prompt, queue: true, attachments: consumedPrompt.attachments || [] });
             this._pendingRequests.delete(this._currentToolCallId);
             this._currentToolCallId = null;
         }
@@ -920,6 +1162,127 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private _handleOpenHistoryModal(): void {
         this._updatePersistedHistoryUI();
+    }
+
+    /**
+     * Handle opening settings modal - send settings to webview
+     */
+    private _handleOpenSettingsModal(): void {
+        // Don't reload settings here - just send current state
+        // Settings are already kept in sync via onDidChangeConfiguration
+        this._updateSettingsUI();
+    }
+
+    /**
+     * Handle updating sound setting
+     */
+    private async _handleUpdateSoundSetting(enabled: boolean): Promise<void> {
+        this._soundEnabled = enabled;
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('notificationSound', enabled, vscode.ConfigurationTarget.Global);
+            // Reload settings after update to ensure consistency
+            this._loadSettings();
+            // Update UI to reflect the saved state
+            this._updateSettingsUI();
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating interactive approval setting
+     */
+    private async _handleUpdateInteractiveApprovalSetting(enabled: boolean): Promise<void> {
+        this._interactiveApprovalEnabled = enabled;
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('interactiveApproval', enabled, vscode.ConfigurationTarget.Global);
+            // Reload settings after update to ensure consistency
+            this._loadSettings();
+            // Update UI to reflect the saved state
+            this._updateSettingsUI();
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle adding a reusable prompt
+     */
+    private async _handleAddReusablePrompt(name: string, prompt: string): Promise<void> {
+        const trimmedName = name.trim().toLowerCase().replace(/\s+/g, '-');
+        const trimmedPrompt = prompt.trim();
+
+        if (!trimmedName || !trimmedPrompt) return;
+
+        // Check for duplicate names
+        if (this._reusablePrompts.some(p => p.name.toLowerCase() === trimmedName)) {
+            vscode.window.showWarningMessage(`A prompt with name "/${trimmedName}" already exists.`);
+            return;
+        }
+
+        const newPrompt: ReusablePrompt = {
+            id: `rp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            name: trimmedName,
+            prompt: trimmedPrompt
+        };
+
+        this._reusablePrompts.push(newPrompt);
+        await this._saveReusablePrompts();
+        this._updateSettingsUI();
+    }
+
+    /**
+     * Handle editing a reusable prompt
+     */
+    private async _handleEditReusablePrompt(id: string, name: string, prompt: string): Promise<void> {
+        const trimmedName = name.trim().toLowerCase().replace(/\s+/g, '-');
+        const trimmedPrompt = prompt.trim();
+
+        if (!trimmedName || !trimmedPrompt) return;
+
+        const existingPrompt = this._reusablePrompts.find(p => p.id === id);
+        if (!existingPrompt) return;
+
+        // Check for duplicate names (excluding current prompt)
+        if (this._reusablePrompts.some(p => p.id !== id && p.name.toLowerCase() === trimmedName)) {
+            vscode.window.showWarningMessage(`A prompt with name "/${trimmedName}" already exists.`);
+            return;
+        }
+
+        existingPrompt.name = trimmedName;
+        existingPrompt.prompt = trimmedPrompt;
+
+        await this._saveReusablePrompts();
+        this._updateSettingsUI();
+    }
+
+    /**
+     * Handle removing a reusable prompt
+     */
+    private async _handleRemoveReusablePrompt(id: string): Promise<void> {
+        this._reusablePrompts = this._reusablePrompts.filter(p => p.id !== id);
+        await this._saveReusablePrompts();
+        this._updateSettingsUI();
+    }
+
+    /**
+     * Handle searching slash commands for autocomplete
+     */
+    private _handleSearchSlashCommands(query: string): void {
+        const queryLower = query.toLowerCase();
+        const matchingPrompts = this._reusablePrompts.filter(p =>
+            p.name.toLowerCase().includes(queryLower) ||
+            p.prompt.toLowerCase().includes(queryLower)
+        );
+
+        this._view?.webview.postMessage({
+            type: 'slashCommandResults',
+            prompts: matchingPrompts
+        } as ToWebviewMessage);
     }
 
     /**
@@ -1043,7 +1406,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     .slice(0, this._MAX_HISTORY_ENTRIES)
                 : [];
         } catch (error) {
-            console.error('Failed to load persisted history:', error);
+            console.error('[TaskSync] Failed to load persisted history:', error);
             this._persistedHistory = [];
         }
     }
@@ -1076,7 +1439,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
             fs.writeFileSync(historyPath, data, 'utf8');
         } catch (error) {
-            console.error('Failed to save persisted history:', error);
+            console.error('[TaskSync] Failed to save persisted history:', error);
         }
     }
 
@@ -1088,6 +1451,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'webview.js'));
         const codiconsUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'));
         const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'TS-logo.svg'));
+        const notificationSoundUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'notification.wav'));
         const nonce = this._getNonce();
 
         return `<!DOCTYPE html>
@@ -1095,10 +1459,11 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource}; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource}; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net; media-src ${webview.cspSource} data:;">
     <link href="${codiconsUri}" rel="stylesheet">
     <link href="${styleUri}" rel="stylesheet">
     <title>TaskSync Chat</title>
+    <audio id="notification-sound" preload="auto" src="${notificationSoundUri}"></audio>
 </head>
 <body>
     <div class="main-container">
@@ -1128,15 +1493,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                         <p class="welcome-card-desc">Batch your responses. AI consumes from queue automatically, one by one.</p>
                     </div>
                 </div>
-
-                <div class="welcome-tips" id="welcome-tips">
-                    <div class="tips-label">Great for:</div>
-                    <ul class="tips-list">
-                        <li>Automating repetitive AI interactions</li>
-                        <li>Batch processing multiple prompts</li>
-                        <li>Hands-free workflow execution</li>
-                    </ul>
-                </div>
             </div>
 
             <!-- Tool Call History Area -->
@@ -1152,6 +1508,11 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             <div class="autocomplete-dropdown hidden" id="autocomplete-dropdown">
                 <div class="autocomplete-list" id="autocomplete-list"></div>
                 <div class="autocomplete-empty hidden" id="autocomplete-empty">No files found</div>
+            </div>
+            <!-- Slash Command Autocomplete Dropdown -->
+            <div class="slash-dropdown hidden" id="slash-dropdown">
+                <div class="slash-list" id="slash-list"></div>
+                <div class="slash-empty hidden" id="slash-empty">No prompts found. Add prompts in Settings.</div>
             </div>
             <div class="input-wrapper" id="input-wrapper">
             <!-- Prompt Queue Section - Integrated above input -->
@@ -1173,22 +1534,27 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             <!-- Attachment Chips INSIDE input container -->
             <div class="chips-container hidden" id="chips-container"></div>
             <div class="input-row">
-                <textarea id="chat-input" placeholder="Message TaskSync... (paste image or use #)" rows="1"></textarea>
-                <button id="send-btn" title="Send message">
-                    <span class="codicon codicon-arrow-up"></span>
-                </button>
+                <div class="input-highlighter-wrapper">
+                    <div class="input-highlighter" id="input-highlighter" aria-hidden="true"></div>
+                    <textarea id="chat-input" placeholder="Reply to tool call. (use # for files, / for prompts)" rows="1" aria-label="Message input. Use # for file references, / for saved prompts"></textarea>
+                </div>
             </div>
             <div class="actions-bar">
                 <div class="actions-left">
-                    <button id="attach-btn" class="icon-btn" title="Add attachment (+)">
+                    <button id="attach-btn" class="icon-btn" title="Add attachment (+)" aria-label="Add attachment">
                         <span class="codicon codicon-add"></span>
                     </button>
                     <div class="mode-selector" id="mode-selector">
-                        <button id="mode-btn" class="mode-btn" title="Select mode">
+                        <button id="mode-btn" class="mode-btn" title="Select mode" aria-label="Select mode">
                             <span id="mode-label">Queue</span>
                             <span class="codicon codicon-chevron-down"></span>
                         </button>
                     </div>
+                </div>
+                <div class="actions-right">
+                    <button id="send-btn" title="Send message" aria-label="Send message">
+                        <span class="codicon codicon-arrow-up"></span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1234,7 +1600,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         const choices: ParsedChoice[] = [];
         let match;
 
-        // FIX: Search the ENTIRE text for numbered/lettered lists, not just after the last "?"
+        // Search the ENTIRE text for numbered/lettered lists, not just after the last "?"
         // The previous approach failed when examples within the text contained "?" characters
         // (e.g., "Example: What's your favorite language?")
 
@@ -1262,11 +1628,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             }
         }
 
-        // Find the last contiguous sequence by detecting number restarts
-        // FIX: Changed to find the FIRST contiguous list (which contains the main choices)
+        // Find the FIRST contiguous list (which contains the main choices)
         // Previously used LAST list which missed choices when examples appeared later in text
         if (numberedLines.length >= 2) {
-            // Find all list boundaries by detecting restarts
+            // Find all list boundaries by detecting number restarts
             const listBoundaries: number[] = [0]; // First list starts at index 0
 
             for (let i = 1; i < numberedLines.length; i++) {
@@ -1282,7 +1647,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 }
             }
 
-            // FIX: Get the FIRST list (the main choices list), not the last
+            // Get the FIRST list (the main choices list)
             // The first numbered list is typically the actual choices
             // Later lists are often examples or descriptions within each choice
             const firstListEnd = listBoundaries.length > 1 ? listBoundaries[1] : numberedLines.length;
@@ -1345,7 +1710,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         }
 
         if (letteredLines.length >= 2) {
-            // FIX: Find FIRST contiguous group instead of last
             // Find all list boundaries by detecting letter restarts or gaps
             const listBoundaries: number[] = [0];
 

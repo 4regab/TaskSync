@@ -18,35 +18,6 @@ All notable changes to this project will be documented in this file.
 - - Update dependencies and clean up package.json
 
 
-## TaskSync v2.1.0 (12-25-25)
-- **feat(settings)**: Add in-sidebar Settings Modal with gear icon in title bar
-  - Configure TaskSync options directly within the sidebar
-  - Manage reusable prompts from the Settings panel
-- **feat(prompts)**: Reusable Prompts with `/slash` command support
-  - Create, edit, and delete saved prompts accessible via `/command` syntax
-  - Autocomplete dropdown when typing `/` in the input field
-  - Prompts persist across sessions via `tasksync.reusablePrompts` setting
-- **feat(session)**: Add "Clear Current Session" command with trash icon in title bar
-  - Quickly clear all tool calls from current session
-  - Confirmation modal to prevent accidental data loss
-- **feat(ui)**: Interactive Approval UI improvements
-  - New `tasksync.interactiveApproval` setting to toggle approval buttons
-  - Enhanced Yes/No and multiple choice button rendering
-- **feat(notifications)**: Notification sound for incoming tool calls
-  - Audio alert when AI requests user input
-  - Helps users notice pending questions while multitasking
-- **refactor(utils)**: Extract shared utility functions into dedicated modules
-  - New `src/constants/fileExclusions.ts` for centralized file exclusion patterns
-  - New `src/utils/imageUtils.ts` for image processing utilities
-- **chore(assets)**: Remove 5 unused SVG files from `media/` folder
-- **refactor(logging)**: Clean up logging statements across the codebase
-  - Remove all `console.log` and `console.warn` statements
-  - Retain only `console.error` for critical error handling
-- **refactor(code)**: Eliminate duplicate code and improve maintainability
-  - Extract shared constants and utility functions
-  - Clean up outdated and redundant comments
-- **chore(deps)**: Update dependencies and clean up `package.json`
-
 
 ## TaskSync v2.0.9 (12-21-25)
 - fix(workflow): properly handle multi-line commit messages in release notes

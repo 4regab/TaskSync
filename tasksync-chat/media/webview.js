@@ -54,7 +54,7 @@
     let inputHighlighter; // Overlay for syntax highlighting in input
     let queueSection, queueHeader, queueList, queueCount;
     let chatContainer, chipsContainer, autocompleteDropdown, autocompleteList, autocompleteEmpty;
-    let inputContainer, inputAreaContainer, welcomeSection, welcomeTips;
+    let inputContainer, inputAreaContainer, welcomeSection;
     let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
     let historyModal, historyModalOverlay, historyModalList, historyModalClose, historyModalClearAll;
     // Edit mode elements
@@ -134,7 +134,6 @@
         inputContainer = document.getElementById('input-container');
         inputAreaContainer = document.getElementById('input-area-container');
         welcomeSection = document.getElementById('welcome-section');
-        welcomeTips = document.getElementById('welcome-tips');
         cardVibe = document.getElementById('card-vibe');
         cardSpec = document.getElementById('card-spec');
         toolHistoryArea = document.getElementById('tool-history-area');
@@ -512,7 +511,6 @@
         selectedCard = card;
         queueEnabled = card === 'queue';
         updateCardSelection();
-        updateTips(card);
         updateModeUI();
         updateQueueVisibility();
 
@@ -526,19 +524,6 @@
         // card-vibe = Normal mode, card-spec = Queue mode
         if (cardVibe) cardVibe.classList.toggle('selected', !queueEnabled);
         if (cardSpec) cardSpec.classList.toggle('selected', queueEnabled);
-    }
-
-    function updateTips(card) {
-        if (!welcomeTips) return;
-        var tipsList = welcomeTips.querySelector('.tips-list');
-        if (!tipsList) return;
-        if (card === 'normal') {
-            // Normal mode tips
-            tipsList.innerHTML = '<li>Full control over each response</li><li>Complex multi-step tasks</li><li>Detailed feedback to AI</li>';
-        } else {
-            // Queue mode tips
-            tipsList.innerHTML = '<li>Automating repetitive AI interactions</li><li>Batch processing multiple prompts</li><li>Hands-free workflow execution</li>';
-        }
     }
 
     function autoResizeTextarea() {
@@ -602,6 +587,7 @@
         updateInputHighlighter();
         handleAutocomplete();
         handleSlashCommands();
+        // Context items (#terminal, #problems) now handled via handleAutocomplete()
         syncAttachmentsWithText();
         updateSendButtonState();
         // Persist input value so it survives sidebar tab switches
@@ -665,6 +651,9 @@
             if ((e.key === 'Enter' || e.key === 'Tab') && selectedAutocompleteIndex >= 0) { e.preventDefault(); selectAutocompleteItem(selectedAutocompleteIndex); return; }
             if (e.key === 'Escape') { e.preventDefault(); hideAutocomplete(); return; }
         }
+
+        // Context dropdown navigation removed - context now uses # via file autocomplete
+
         if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); handleSend(); }
     }
 
@@ -791,7 +780,6 @@
                 updateModeUI();
                 updateQueueVisibility();
                 updateCardSelection();
-                updateTips(queueEnabled ? 'queue' : 'normal');
                 // Hide welcome section if we have current session calls
                 updateWelcomeSectionVisibility();
                 break;
@@ -971,6 +959,7 @@
                 '<div class="tool-call-ai-response">' + formatMarkdown(tc.prompt) + '</div>' +
                 '<div class="tool-call-user-section">' +
                 '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
+                (tc.attachments ? renderAttachmentsHtml(tc.attachments) : '') +
                 '</div>' +
                 '</div></div>';
             return cardHtml;
@@ -1020,6 +1009,7 @@
                 '<div class="tool-call-ai-response">' + formatMarkdown(tc.prompt) + '</div>' +
                 '<div class="tool-call-user-section">' +
                 '<div class="tool-call-user-response">' + escapeHtml(tc.response) + '</div>' +
+                (tc.attachments ? renderAttachmentsHtml(tc.attachments) : '') +
                 '</div>' +
                 '</div></div>';
         }
@@ -1054,8 +1044,53 @@
         });
     }
 
+    // Constants for security and performance limits
+    var MARKDOWN_MAX_LENGTH = 100000; // Max markdown input length to prevent ReDoS
+    var MAX_TABLE_ROWS = 100; // Max table rows to process
+
+    /**
+     * Process a buffer of table lines into HTML table markup (ReDoS-safe implementation)
+     * @param {string[]} lines - Array of table row strings
+     * @param {number} maxRows - Maximum number of rows to process
+     * @returns {string} HTML table markup or original lines joined
+     */
+    function processTableBuffer(lines, maxRows) {
+        if (lines.length < 2) return lines.join('\n');
+        if (lines.length > maxRows) return lines.join('\n'); // Skip very large tables
+
+        // Check if second line is separator (contains only |, -, :, spaces)
+        var separatorRegex = /^\|[\s\-:|]+\|$/;
+        if (!separatorRegex.test(lines[1].trim())) return lines.join('\n');
+
+        // Parse header
+        var headerCells = lines[0].split('|').filter(function (c) { return c.trim() !== ''; });
+        if (headerCells.length === 0) return lines.join('\n'); // Invalid table
+
+        var headerHtml = '<tr>' + headerCells.map(function (c) {
+            return '<th>' + c.trim() + '</th>';
+        }).join('') + '</tr>';
+
+        // Parse data rows (skip separator at index 1)
+        var bodyHtml = '';
+        for (var i = 2; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            var cells = lines[i].split('|').filter(function (c) { return c.trim() !== ''; });
+            bodyHtml += '<tr>' + cells.map(function (c) {
+                return '<td>' + c.trim() + '</td>';
+            }).join('') + '</tr>';
+        }
+
+        return '<table class="markdown-table"><thead>' + headerHtml + '</thead><tbody>' + bodyHtml + '</tbody></table>';
+    }
+
     function formatMarkdown(text) {
         if (!text) return '';
+
+        // ReDoS prevention: truncate very long inputs before regex processing
+        // This prevents exponential backtracking on crafted inputs (OWASP ReDoS mitigation)
+        if (text.length > MARKDOWN_MAX_LENGTH) {
+            text = text.substring(0, MARKDOWN_MAX_LENGTH) + '\n... (content truncated for display)';
+        }
 
         // Normalize line endings (Windows \r\n to \n)
         var processedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -1114,39 +1149,38 @@
             return '<ol>' + match.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>').replace(/\n/g, '') + '</ol>';
         });
 
-        // Markdown tables
-        // Match table pattern: header row, separator row (with dashes), and data rows
-        // Performance: Limit table size to prevent regex backtracking on huge content
-        var MAX_TABLE_ROWS = 100;
-        html = html.replace(/((?:^\|[^\n]+\|\n?){2,})/gm, function (tableMatch) {
-            var lines = tableMatch.trim().split('\n');
-            if (lines.length < 2) return tableMatch; // Need at least header and separator
-            if (lines.length > MAX_TABLE_ROWS) return tableMatch; // Skip very large tables
+        // Markdown tables - SAFE approach to prevent ReDoS
+        // Instead of using nested quantifiers with regex (which can cause exponential backtracking),
+        // we use a line-by-line processing approach for safety
+        var tableLines = html.split('\n');
+        var processedLines = [];
+        var tableBuffer = [];
+        var inTable = false;
 
-            // Check if second line is separator (contains only |, -, :, spaces)
-            var separatorRegex = /^\|[\s\-:|]+\|$/;
-            if (!separatorRegex.test(lines[1])) return tableMatch;
+        for (var lineIdx = 0; lineIdx < tableLines.length; lineIdx++) {
+            var line = tableLines[lineIdx];
+            // Check if line looks like a table row (starts and ends with |)
+            var isTableRow = /^\|.+\|$/.test(line.trim());
 
-            // Parse header
-            var headerCells = lines[0].split('|').filter(function (c) { return c.trim() !== ''; });
-            if (headerCells.length === 0) return tableMatch; // Invalid table
-
-            var headerHtml = '<tr>' + headerCells.map(function (c) {
-                return '<th>' + c.trim() + '</th>';
-            }).join('') + '</tr>';
-
-            // Parse data rows (skip separator at index 1)
-            var bodyHtml = '';
-            for (var i = 2; i < lines.length; i++) {
-                if (!lines[i].trim()) continue;
-                var cells = lines[i].split('|').filter(function (c) { return c.trim() !== ''; });
-                bodyHtml += '<tr>' + cells.map(function (c) {
-                    return '<td>' + c.trim() + '</td>';
-                }).join('') + '</tr>';
+            if (isTableRow) {
+                tableBuffer.push(line);
+                inTable = true;
+            } else {
+                if (inTable && tableBuffer.length >= 2) {
+                    // Process accumulated table buffer
+                    var tableHtml = processTableBuffer(tableBuffer, MAX_TABLE_ROWS);
+                    processedLines.push(tableHtml);
+                }
+                tableBuffer = [];
+                inTable = false;
+                processedLines.push(line);
             }
-
-            return '<table class="markdown-table"><thead>' + headerHtml + '</thead><tbody>' + bodyHtml + '</tbody></table>';
-        });
+        }
+        // Handle table at end of content
+        if (inTable && tableBuffer.length >= 2) {
+            processedLines.push(processTableBuffer(tableBuffer, MAX_TABLE_ROWS));
+        }
+        html = processedLines.join('\n');
 
         // Inline code (`code`)
         html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
@@ -1319,15 +1353,15 @@
             var truncatedPrompt = item.prompt.length > 80 ? item.prompt.substring(0, 80) + '...' : item.prompt;
             // Show attachment indicator if this queue item has attachments
             var attachmentBadge = (item.attachments && item.attachments.length > 0)
-                ? '<span class="queue-item-attachment-badge" title="' + item.attachments.length + ' attachment(s)"><span class="codicon codicon-file-media"></span></span>'
+                ? '<span class="queue-item-attachment-badge" title="' + item.attachments.length + ' attachment(s)" aria-label="' + item.attachments.length + ' attachments"><span class="codicon codicon-file-media" aria-hidden="true"></span></span>'
                 : '';
-            return '<div class="queue-item" data-id="' + escapeHtml(item.id) + '" data-index="' + index + '" tabindex="0" draggable="true">' +
-                '<span class="bullet ' + bulletClass + '"></span>' +
+            return '<div class="queue-item" data-id="' + escapeHtml(item.id) + '" data-index="' + index + '" tabindex="0" draggable="true" role="listitem" aria-label="Queue item ' + (index + 1) + ': ' + escapeHtml(truncatedPrompt) + '">' +
+                '<span class="bullet ' + bulletClass + '" aria-hidden="true"></span>' +
                 '<span class="text" title="' + escapeHtml(item.prompt) + '">' + (index + 1) + '. ' + escapeHtml(truncatedPrompt) + '</span>' +
                 attachmentBadge +
                 '<div class="queue-item-actions">' +
-                '<button class="edit-btn" data-id="' + escapeHtml(item.id) + '" title="Edit"><span class="codicon codicon-edit"></span></button>' +
-                '<button class="remove-btn" data-id="' + escapeHtml(item.id) + '" title="Remove"><span class="codicon codicon-close"></span></button>' +
+                '<button class="edit-btn" data-id="' + escapeHtml(item.id) + '" title="Edit" aria-label="Edit queue item ' + (index + 1) + '"><span class="codicon codicon-edit" aria-hidden="true"></span></button>' +
+                '<button class="remove-btn" data-id="' + escapeHtml(item.id) + '" title="Remove" aria-label="Remove queue item ' + (index + 1) + '"><span class="codicon codicon-close" aria-hidden="true"></span></button>' +
                 '</div></div>';
         }).join('');
 
@@ -2109,6 +2143,31 @@
         var file = autocompleteResults[index];
         var value = chatInput.value;
         var cursorPos = chatInput.selectionStart;
+
+        // Check if this is a context item (#terminal, #problems)
+        if (file.isContext && file.uri && file.uri.startsWith('context://')) {
+            // Remove the #query from input - chip will be added
+            chatInput.value = value.substring(0, autocompleteStartPos) + value.substring(cursorPos);
+            var newCursorPos = autocompleteStartPos;
+            chatInput.setSelectionRange(newCursorPos, newCursorPos);
+
+            // Send context reference request to backend
+            vscode.postMessage({
+                type: 'selectContextReference',
+                contextType: file.name, // 'terminal' or 'problems'
+                options: undefined
+            });
+
+            hideAutocomplete();
+            chatInput.focus();
+            autoResizeTextarea();
+            updateInputHighlighter();
+            saveWebviewState();
+            updateSendButtonState();
+            return;
+        }
+
+        // Regular file/folder reference
         var referenceText = '#' + file.name + ' ';
         chatInput.value = value.substring(0, autocompleteStartPos) + referenceText + value.substring(cursorPos);
         var newCursorPos = autocompleteStartPos + referenceText.length;
@@ -2122,7 +2181,13 @@
         var text = chatInput ? chatInput.value : '';
         var toRemove = [];
         currentAttachments.forEach(function (att) {
-            if (att.isTemporary || !att.isTextReference) return;
+            // Skip temporary attachments (like pasted images)
+            if (att.isTemporary) return;
+            // Skip context attachments (#terminal, #problems) - they use context:// URI
+            if (att.uri && att.uri.startsWith('context://')) return;
+            // Only sync file references that have isTextReference flag
+            if (!att.isTextReference) return;
+            // Check if the #filename reference still exists in text
             if (text.indexOf('#' + att.name) === -1) toRemove.push(att.id);
         });
         if (toRemove.length > 0) {
@@ -2194,6 +2259,24 @@
         var div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    function renderAttachmentsHtml(attachments) {
+        if (!attachments || attachments.length === 0) return '';
+        var items = attachments.map(function (att) {
+            var iconClass = 'file';
+            if (att.isFolder) iconClass = 'folder';
+            else if (att.name && (att.name.endsWith('.png') || att.name.endsWith('.jpg') || att.name.endsWith('.jpeg'))) iconClass = 'file-media';
+            else if ((att.uri || '').indexOf('context://terminal') !== -1) iconClass = 'terminal';
+            else if ((att.uri || '').indexOf('context://problems') !== -1) iconClass = 'error';
+
+            return '<div class="chip" style="margin-top:0;" title="' + escapeHtml(att.name) + '">' +
+                '<span class="chip-icon"><span class="codicon codicon-' + iconClass + '"></span></span>' +
+                '<span class="chip-text">' + escapeHtml(att.name) + '</span>' +
+                '</div>';
+        }).join('');
+
+        return '<div class="chips-container" style="padding: 6px 0 0 0; border: none;">' + items + '</div>';
     }
 
     if (document.readyState === 'loading') {

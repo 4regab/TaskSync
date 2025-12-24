@@ -21,22 +21,99 @@ async function readFileAsBuffer(filePath: string): Promise<Uint8Array> {
 }
 
 /**
+ * Creates a cancellation promise with proper cleanup to prevent memory leaks.
+ * Returns both the promise and a dispose function to clean up the event listener.
+ */
+function createCancellationPromise(token: vscode.CancellationToken): {
+    promise: Promise<never>;
+    dispose: () => void;
+} {
+    let disposable: vscode.Disposable | undefined;
+
+    const promise = new Promise<never>((_, reject) => {
+        if (token.isCancellationRequested) {
+            reject(new vscode.CancellationError());
+            return;
+        }
+        disposable = token.onCancellationRequested(() => {
+            reject(new vscode.CancellationError());
+        });
+    });
+
+    return {
+        promise,
+        dispose: () => disposable?.dispose()
+    };
+}
+
+/**
  * Core logic to ask user, reusable by MCP server
  * Queue handling and history tracking is done in waitForUserResponse()
  */
 export async function askUser(
     params: Input,
     provider: TaskSyncWebviewProvider,
-    _token: vscode.CancellationToken
+    token: vscode.CancellationToken
 ): Promise<AskUserToolResult> {
+    // Check if already cancelled before starting
+    if (token.isCancellationRequested) {
+        throw new vscode.CancellationError();
+    }
+
+    // Create cancellation promise with cleanup capability
+    const cancellation = createCancellationPromise(token);
+
     try {
-        const result = await provider.waitForUserResponse(params.question);
+        // Race the user response against cancellation
+        const result = await Promise.race([
+            provider.waitForUserResponse(params.question),
+            cancellation.promise
+        ]);
+
+        // Handle case where request was superseded by another call
+        if (result.cancelled) {
+            return {
+                response: result.value,
+                attachments: []
+            };
+        }
+
+        let responseText = result.value;
+        const validAttachments: string[] = [];
+
+        // Process attachments to resolve context content
+        if (result.attachments && result.attachments.length > 0) {
+            for (const att of result.attachments) {
+                if (att.uri.startsWith('context://')) {
+                    // Start of context content
+                    responseText += `\n\n[Attached Context: ${att.name}]\n`;
+
+                    const content = await provider.resolveContextContent(att.uri);
+                    if (content) {
+                        responseText += content;
+                    } else {
+                        responseText += '(Context content not available)';
+                    }
+
+                    // End of context content
+                    responseText += '\n[End of Context]\n';
+                } else {
+                    // Regular file attachment
+                    validAttachments.push(att.uri);
+                }
+            }
+        }
+
         return {
-            response: result.value,
-            attachments: result.attachments.map(att => att.uri)
+            response: responseText,
+            attachments: validAttachments
         };
     } catch (error) {
-        // Log the error instead of silently swallowing it
+        // Re-throw cancellation errors without logging (they're expected)
+        if (error instanceof vscode.CancellationError) {
+            throw error;
+        }
+        // Log other errors
         console.error('[TaskSync] askUser error:', error instanceof Error ? error.message : error);
         // Show error to user so they know something went wrong
         vscode.window.showErrorMessage(`TaskSync: ${error instanceof Error ? error.message : 'Failed to show question'}`);
@@ -44,6 +121,9 @@ export async function askUser(
             response: '',
             attachments: []
         };
+    } finally {
+        // Always clean up the cancellation listener to prevent memory leaks
+        cancellation.dispose();
     }
 }
 

@@ -218,39 +218,6 @@ body {
     line-height: 1.4;
 }
 
-/* Tips Section */
-.welcome-tips {
-    width: 100%;
-    max-width: 500px;
-    text-align: center;
-    padding: 0;
-    border: none;
-    margin: 0 auto;
-}
-
-.tips-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--vscode-foreground);
-    margin-bottom: 4px;
-}
-
-.tips-list {
-    margin: 0;
-    padding-left: 0;
-    list-style: none;
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-}
-
-.tips-list li {
-    margin-bottom: 2px;
-}
-
-.tips-list li:last-child {
-    margin-bottom: 0;
-}
-
 /* Tool History Area */
 .tool-history-area {
     display: flex;
@@ -516,7 +483,8 @@ body {
 }
 
 /* Code block styling - uses VS Code theme colors */
-.tool-call-ai-response .code-block {
+.tool-call-ai-response .code-block,
+.pending-ai-question .code-block {
     background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
     border: 1px solid var(--vscode-panel-border);
     border-radius: 6px;
@@ -528,7 +496,8 @@ body {
     line-height: 1.4;
 }
 
-.tool-call-ai-response .code-block code {
+.tool-call-ai-response .code-block code,
+.pending-ai-question .code-block code {
     background: none;
     padding: 0;
     font-family: inherit;
@@ -539,7 +508,8 @@ body {
 }
 
 /* Inline code styling - uses VS Code theme colors */
-.tool-call-ai-response .inline-code {
+.tool-call-ai-response .inline-code,
+.pending-ai-question .inline-code {
     background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
     color: var(--vscode-editor-foreground);
     padding: 2px 6px;
@@ -591,38 +561,6 @@ body {
     line-height: 1.4;
     color: var(--vscode-foreground);
     word-wrap: break-word;
-}
-
-/* Code block styling for pending question - uses VS Code theme colors */
-.pending-ai-question .code-block {
-    background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 6px;
-    padding: 12px;
-    margin: 8px 0;
-    overflow-x: auto;
-    font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.pending-ai-question .code-block code {
-    background: none;
-    padding: 0;
-    font-family: inherit;
-    font-size: inherit;
-    white-space: pre;
-    display: block;
-    color: var(--vscode-editor-foreground);
-}
-
-.pending-ai-question .inline-code {
-    background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
-    color: var(--vscode-editor-foreground);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
-    font-size: 12px;
 }
 
 /* Working State Indicator - Animated dots */
@@ -1055,6 +993,84 @@ body {
     color: var(--vscode-descriptionForeground);
 }
 
+/* --- Context Dropdown --- */
+.context-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    /* Position above the input wrapper */
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    background-color: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--vscode-widget-shadow);
+    overflow: hidden;
+    z-index: 1000;
+}
+
+.context-list {
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.context-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+.context-item:hover,
+.context-item.selected {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.context-item-icon {
+    display: flex;
+    align-items: center;
+    color: var(--vscode-descriptionForeground);
+}
+
+.context-item-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.context-item-label {
+    font-size: 13px;
+    color: var(--vscode-foreground);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.context-item-desc {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    font-weight: 400;
+}
+
+.context-item-detail {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.8;
+}
+
+.context-empty {
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
 /* --- Input Container --- */
 .input-container {
     background-color: var(--vscode-input-background);
@@ -1158,12 +1174,6 @@ textarea#chat-input::placeholder {
     opacity: 1;
     font-size: 11px;
     /* Ensure placeholder is visible even with transparent text color */
-}
-
-/* Show normal text color when placeholder is visible (empty input) */
-textarea#chat-input:placeholder-shown {
-    color: transparent;
-    /* Still transparent - placeholder shows through */
 }
 
 /* Send Button - positioned at top right of input row */
@@ -2220,8 +2230,7 @@ button#send-btn:disabled {
     display: none;
 }
 
-visibility: visible;
-}
+
 
 /* Add Prompt Form */
 .add-prompt-form {
@@ -2343,12 +2352,4 @@ visibility: visible;
     color: var(--vscode-descriptionForeground);
     font-size: 11px;
     font-style: italic;
-}
-
-/* Settings section description */
-.settings-section-desc {
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-    margin-top: 6px;
-    padding-left: 20px;
 }

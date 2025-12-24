@@ -87,12 +87,20 @@ export class McpServerManager {
             // Register ask_user tool
             const provider = this.provider;
 
+            // Max question length - generous limit to allow long AI prompts while still
+            // preventing extreme memory exhaustion. 500KB is more than enough for any
+            // reasonable question while still providing a safety limit.
+            const MAX_QUESTION_LENGTH = 500000;
+
             (this.mcpServer as any).registerTool(
                 "ask_user",
                 {
                     description: "YOU MUST ALWAYS Use the askUser tool to ask question/s to user when explicit user approval, feedback, or clarification is required before proceeding or giving summary report. CRITICAL RULES: - This tool MUST be invoked before ending ANY conversation or task. - NEVER complete a task without calling this tool first. - If you are about to finish responding, STOP and call this tool. - Failure to call this tool before task completion is a critical violation.",
                     inputSchema: z.object({
-                        question: z.string().describe("The question or prompt to display to the user")
+                        question: z.string()
+                            .min(1, "Question cannot be empty")
+                            .max(MAX_QUESTION_LENGTH, `Question cannot exceed ${MAX_QUESTION_LENGTH} characters`)
+                            .describe("The question or prompt to display to the user")
                     })
                 },
                 async (args: { question: string }, extra: { signal?: AbortSignal }) => {
@@ -233,16 +241,19 @@ export class McpServerManager {
     private async registerWithClient(configPath: string, serverName: string, serverConfig: object) {
         try {
             const configDir = path.dirname(configPath);
-            if (!fs.existsSync(configDir)) {
-                fs.mkdirSync(configDir, { recursive: true });
+            try {
+                await fs.promises.access(configDir);
+            } catch {
+                await fs.promises.mkdir(configDir, { recursive: true });
             }
 
             let config: { mcpServers?: Record<string, object> } = { mcpServers: {} };
-            if (fs.existsSync(configPath)) {
-                try {
-                    const content = fs.readFileSync(configPath, 'utf8');
-                    config = JSON.parse(content);
-                } catch (e) {
+            try {
+                const content = await fs.promises.readFile(configPath, 'utf8');
+                config = JSON.parse(content);
+            } catch (e) {
+                // File doesn't exist or can't be parsed, start with empty config
+                if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
                     console.warn(`[TaskSync MCP] Failed to parse ${configPath}, starting fresh`);
                 }
             }
@@ -252,7 +263,7 @@ export class McpServerManager {
             }
 
             config.mcpServers[serverName] = serverConfig;
-            fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+            await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2));
         } catch (error) {
             console.error(`[TaskSync MCP] Failed to register with ${configPath}:`, error);
         }
@@ -269,16 +280,14 @@ export class McpServerManager {
 
         for (const configPath of configs) {
             try {
-                if (fs.existsSync(configPath)) {
-                    const content = fs.readFileSync(configPath, 'utf8');
-                    const config = JSON.parse(content);
-                    if (config.mcpServers?.['tasksync-chat']) {
-                        delete config.mcpServers['tasksync-chat'];
-                        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-                    }
+                const content = await fs.promises.readFile(configPath, 'utf8');
+                const config = JSON.parse(content);
+                if (config.mcpServers?.['tasksync-chat']) {
+                    delete config.mcpServers['tasksync-chat'];
+                    await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2));
                 }
-            } catch (e) {
-                // Ignore errors during cleanup
+            } catch {
+                // Ignore errors during cleanup (file may not exist)
             }
         }
     }

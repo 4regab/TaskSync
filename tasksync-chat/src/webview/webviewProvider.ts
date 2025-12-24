@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FILE_EXCLUSION_PATTERNS, FILE_SEARCH_EXCLUSION_PATTERNS, formatExcludePattern } from '../constants/fileExclusions';
+import { ContextManager, ContextReferenceType, ContextReference } from '../context';
 
 // Queued prompt interface
 export interface QueuedPrompt {
@@ -20,13 +21,14 @@ export interface AttachmentInfo {
     isTextReference?: boolean;
 }
 
-// File search result
+// File search result (also used for context items like #terminal, #problems)
 export interface FileSearchResult {
     name: string;
     path: string;
     uri: string;
     icon: string;
     isFolder?: boolean;
+    isContext?: boolean; // true for #terminal, #problems context items
 }
 
 // User response result
@@ -34,6 +36,7 @@ export interface UserResponseResult {
     value: string;
     queue: boolean;
     attachments: AttachmentInfo[];
+    cancelled?: boolean;  // Indicates if the request was superseded by a new one
 }
 
 // Tool call history entry
@@ -43,7 +46,8 @@ export interface ToolCallEntry {
     response: string;
     timestamp: number;
     isFromQueue: boolean;
-    status: 'pending' | 'completed';
+    status: 'pending' | 'completed' | 'cancelled';
+    attachments?: AttachmentInfo[];
 }
 
 // Parsed choice from question
@@ -73,7 +77,9 @@ type ToWebviewMessage =
     | { type: 'openSettingsModal' }
     | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; reusablePrompts: ReusablePrompt[] }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
-    | { type: 'playNotificationSound' };
+    | { type: 'playNotificationSound' }
+    | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
+    | { type: 'contextReferenceAdded'; reference: { id: string; type: string; label: string; content: string } };
 
 type FromWebviewMessage =
     | { type: 'submit'; value: string; attachments: AttachmentInfo[] }
@@ -99,7 +105,10 @@ type FromWebviewMessage =
     | { type: 'editReusablePrompt'; id: string; name: string; prompt: string }
     | { type: 'removeReusablePrompt'; id: string }
     | { type: 'searchSlashCommands'; query: string }
-    | { type: 'openExternal'; url: string };
+    | { type: 'openExternal'; url: string }
+    | { type: 'searchContext'; query: string }
+    | { type: 'selectContextReference'; contextType: string; options?: Record<string, unknown> };
+
 
 export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
     public static readonly viewType = 'taskSyncView';
@@ -128,9 +137,19 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private _queueSaveTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly _QUEUE_SAVE_DEBOUNCE_MS = 300;
 
+    // Debounce timer for history persistence (async background saves)
+    private _historySaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly _HISTORY_SAVE_DEBOUNCE_MS = 2000; // 2 seconds debounce
+    private _historyDirty: boolean = false; // Track if history needs saving
+
     // Performance limits
     private readonly _MAX_HISTORY_ENTRIES = 100;
     private readonly _MAX_FILE_SEARCH_RESULTS = 500;
+    private readonly _MAX_QUEUE_PROMPT_LENGTH = 100000; // 100KB for queue prompts
+    private readonly _MAX_FOLDER_SEARCH_RESULTS = 1000;
+    private readonly _VIEW_OPEN_TIMEOUT_MS = 5000;
+    private readonly _VIEW_OPEN_POLL_INTERVAL_MS = 100;
+    private readonly _SHORT_QUESTION_THRESHOLD = 100; // chars for approval heuristic
 
     // File search cache with TTL
     private _fileSearchCache: Map<string, { results: FileSearchResult[], timestamp: number }> = new Map();
@@ -154,10 +173,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Disposables to clean up
     private _disposables: vscode.Disposable[] = [];
 
+    // Context manager for #terminal, #problems references
+    private readonly _contextManager: ContextManager;
+
     constructor(
         private readonly _extensionUri: vscode.Uri,
-        private readonly _context: vscode.ExtensionContext
+        private readonly _context: vscode.ExtensionContext,
+        contextManager: ContextManager
     ) {
+        this._contextManager = contextManager;
         // Load both queue and history async to not block activation
         this._loadQueueFromDiskAsync().catch(err => {
             console.error('Failed to load queue:', err);
@@ -187,15 +211,25 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
     /**
      * Save current tool call history to persisted history (called on deactivate)
+     * Uses synchronous save because deactivate cannot await async operations
      */
     public saveCurrentSessionToHistory(): void {
+        // Cancel any pending debounced saves
+        if (this._historySaveTimer) {
+            clearTimeout(this._historySaveTimer);
+            this._historySaveTimer = null;
+        }
+
         // Only save completed calls from current session
         const completedCalls = this._currentSessionCalls.filter(tc => tc.status === 'completed');
         if (completedCalls.length > 0) {
             // Prepend current session calls to persisted history, enforce max limit
             this._persistedHistory = [...completedCalls, ...this._persistedHistory].slice(0, this._MAX_HISTORY_ENTRIES);
-            this._savePersistedHistoryToDisk();
+            this._historyDirty = true;
         }
+
+        // Force sync save on deactivation (async operations can't complete in deactivate)
+        this._savePersistedHistoryToDiskSync();
     }
 
     /**
@@ -219,6 +253,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     /**
      * Clear current session tool calls (called from view title bar button)
      * Preserves any pending tool call entry so responses don't lose their prompt
+     * Cleans up temporary images associated with cleared entries
      */
     public clearCurrentSession(): void {
         // Preserve pending entry if there is one
@@ -226,6 +261,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         if (this._currentToolCallId) {
             pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
         }
+
+        // Clean up temp images from entries being cleared (except pending)
+        const entriesToClear = pendingEntry
+            ? this._currentSessionCalls.filter(e => e.id !== pendingEntry!.id)
+            : this._currentSessionCalls;
+        this._cleanupTempImagesFromEntries(entriesToClear);
 
         // Clear all entries
         this._currentSessionCalls = [];
@@ -347,6 +388,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         // Clear pending requests (reject any waiting promises)
         this._pendingRequests.clear();
 
+        // Clean up temp images from current session before clearing
+        this._cleanupTempImagesFromEntries(this._currentSessionCalls);
+
         // Clear session data
         this._currentSessionCalls = [];
         this._attachments = [];
@@ -411,18 +455,42 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             // Open the TaskSync sidebar view
             await vscode.commands.executeCommand('taskSyncView.focus');
 
-            // Wait for view to be resolved (up to 5 seconds)
-            const maxWaitMs = 5000;
-            const pollIntervalMs = 100;
+            // Wait for view to be resolved (up to configured timeout)
             let waited = 0;
-            while (!this._view && waited < maxWaitMs) {
-                await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-                waited += pollIntervalMs;
+            while (!this._view && waited < this._VIEW_OPEN_TIMEOUT_MS) {
+                await new Promise(resolve => setTimeout(resolve, this._VIEW_OPEN_POLL_INTERVAL_MS));
+                waited += this._VIEW_OPEN_POLL_INTERVAL_MS;
             }
 
             if (!this._view) {
-                console.error('[TaskSync] Failed to open sidebar view after waiting');
-                throw new Error('Failed to open TaskSync sidebar');
+                console.error(`[TaskSync] Failed to open sidebar view after waiting ${this._VIEW_OPEN_TIMEOUT_MS}ms`);
+                throw new Error(`Failed to open TaskSync sidebar after ${this._VIEW_OPEN_TIMEOUT_MS}ms. The webview may not be properly initialized.`);
+            }
+        }
+
+        // Race condition prevention: If there's already a pending request, cancel it
+        // This prevents orphaned promises when waitForUserResponse is called multiple times
+        if (this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
+            const oldToolCallId = this._currentToolCallId;
+            const oldResolve = this._pendingRequests.get(oldToolCallId);
+            if (oldResolve) {
+                // Resolve the orphaned promise with a cancellation indicator
+                oldResolve({
+                    value: '[CANCELLED: New request superseded this one]',
+                    queue: false,
+                    attachments: [],
+                    cancelled: true
+                });
+                this._pendingRequests.delete(oldToolCallId);
+
+                // Update the old entry status to indicate it was superseded
+                const oldEntry = this._currentSessionCallsMap.get(oldToolCallId);
+                if (oldEntry && oldEntry.status === 'pending') {
+                    oldEntry.status = 'cancelled';
+                    oldEntry.response = '[Superseded by new request]';
+                    this._updateCurrentSessionUI();
+                }
+                console.warn(`[TaskSync] Previous request ${oldToolCallId} was superseded by new request`);
             }
         }
 
@@ -596,6 +664,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     vscode.env.openExternal(vscode.Uri.parse(message.url));
                 }
                 break;
+            case 'searchContext':
+                this._handleSearchContext(message.query);
+                break;
+            case 'selectContextReference':
+                this._handleSelectContextReference(message.contextType, message.options);
+                break;
         }
     }
 
@@ -659,6 +733,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 if (pendingEntry && pendingEntry.status === 'pending') {
                     // Update existing pending entry
                     pendingEntry.response = value;
+                    pendingEntry.attachments = attachments;
                     pendingEntry.status = 'completed';
                     pendingEntry.timestamp = Date.now();
                     completedEntry = pendingEntry;
@@ -668,6 +743,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                         id: this._currentToolCallId,
                         prompt: 'Tool call',
                         response: value,
+                        attachments: attachments,
                         timestamp: Date.now(),
                         isFromQueue: false,
                         status: 'completed'
@@ -700,15 +776,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     this._updateQueueUI();
                 }
             }
-            // CRITICAL FIX: Delay cleanup of temp images to allow tool to read them first
-            // The tool reads images asynchronously after resolve() is called
-            // Schedule cleanup after a short delay to ensure images are read
-            const tempImagesToCleanup = this._attachments.filter(a => a.isTemporary).map(a => a.uri);
-            if (tempImagesToCleanup.length > 0) {
-                setTimeout(() => {
-                    this._cleanupTempImagesByUri(tempImagesToCleanup);
-                }, 2000); // 2 second delay to allow tool to read images
-            }
+            // NOTE: Temp images are NOT cleaned up here anymore.
+            // They are stored in the ToolCallEntry.attachments and will be cleaned up when:
+            // 1. clearCurrentSession() is called
+            // 2. dispose() is called (extension deactivation)
+            // This ensures images are available for the entire session duration.
+
             // Clear attachments after submit and sync with webview
             this._attachments = [];
             this._updateAttachmentsUI();
@@ -716,7 +789,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
-     * Clean up temporary image files from disk by URI list (delayed cleanup)
+     * Clean up temporary image files from disk by URI list
      */
     private _cleanupTempImagesByUri(uris: string[]): void {
         for (const uri of uris) {
@@ -732,12 +805,33 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
+     * Clean up temporary images from tool call entries
+     * Called when entries are removed from current session or on dispose
+     */
+    private _cleanupTempImagesFromEntries(entries: ToolCallEntry[]): void {
+        const tempUris: string[] = [];
+        for (const entry of entries) {
+            if (entry.attachments) {
+                for (const att of entry.attachments) {
+                    // Only clean up temporary attachments (pasted/dropped images)
+                    if (att.isTemporary && att.uri) {
+                        tempUris.push(att.uri);
+                    }
+                }
+            }
+        }
+        if (tempUris.length > 0) {
+            this._cleanupTempImagesByUri(tempUris);
+        }
+    }
+
+    /**
      * Handle adding attachment via file picker
      */
     private async _handleAddAttachment(): Promise<void> {
         // Use shared exclude pattern
         const excludePattern = formatExcludePattern(FILE_EXCLUSION_PATTERNS);
-        const files = await vscode.workspace.findFiles('**/*', excludePattern, 1000);
+        const files = await vscode.workspace.findFiles('**/*', excludePattern, this._MAX_FOLDER_SEARCH_RESULTS);
 
         if (files.length === 0) {
             vscode.window.showInformationMessage('No files found in workspace');
@@ -784,7 +878,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
-     * Handle file search for autocomplete
+     * Handle file search for autocomplete (also includes #terminal, #problems context)
      */
     private async _handleSearchFiles(query: string): Promise<void> {
         try {
@@ -799,6 +893,38 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     files: cached.results
                 } as ToWebviewMessage);
                 return;
+            }
+
+            // First, get context suggestions (#terminal, #problems)
+            const contextResults: FileSearchResult[] = [];
+
+            // Check if query matches "terminal"
+            if (!queryLower || 'terminal'.includes(queryLower)) {
+                const commands = this._contextManager.terminal.formatCommandListForAutocomplete();
+                const description = commands.length > 0
+                    ? `${commands.length} recent commands`
+                    : 'No commands yet';
+                contextResults.push({
+                    name: 'terminal',
+                    path: description,
+                    uri: 'context://terminal',
+                    icon: 'terminal',
+                    isFolder: false,
+                    isContext: true
+                });
+            }
+
+            // Check if query matches "problems"
+            if (!queryLower || 'problems'.includes(queryLower)) {
+                const problemsInfo = this._contextManager.problems.formatForAutocomplete();
+                contextResults.push({
+                    name: 'problems',
+                    path: problemsInfo.description,
+                    uri: 'context://problems',
+                    icon: 'error',
+                    isFolder: false,
+                    isContext: true
+                });
             }
 
             // Exclude common unwanted files/folders for cleaner search results
@@ -845,7 +971,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 })
                 .filter(file => !queryLower || file.name.toLowerCase().includes(queryLower) || file.path.toLowerCase().includes(queryLower));
 
-            const allResults = [...folderResults, ...fileResults]
+            // Combine: context results first, then folders, then files
+            const fileAndFolderResults = [...folderResults, ...fileResults]
                 .sort((a, b) => {
                     if (a.isFolder && !b.isFolder) return -1;
                     if (!a.isFolder && b.isFolder) return 1;
@@ -855,10 +982,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     if (!aExact && bExact) return 1;
                     return a.name.localeCompare(b.name);
                 })
-                .slice(0, 50);
+                .slice(0, 48); // Leave room for context items
 
-            // Cache results
-            this._fileSearchCache.set(cacheKey, { results: allResults, timestamp: Date.now() });
+            // Context results go first, then files/folders
+            const allResults = [...contextResults, ...fileAndFolderResults];
+
+            // Cache results (don't cache context results as they're dynamic)
+            this._fileSearchCache.set(cacheKey, { results: fileAndFolderResults, timestamp: Date.now() });
             // Limit cache size to prevent memory bloat
             if (this._fileSearchCache.size > 20) {
                 const firstKey = this._fileSearchCache.keys().next().value;
@@ -928,7 +1058,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             // Use storageUri if available (workspace-specific), otherwise fallback to globalStorageUri
             const storageUri = this._context.storageUri || this._context.globalStorageUri;
             if (!storageUri) {
-                throw new Error('Storage URI not available');
+                throw new Error('VS Code extension storage URI not available. Cannot save temporary images without storage access.');
             }
 
             const tempDir = path.join(storageUri.fsPath, 'temp-images');
@@ -1018,47 +1148,42 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private _handleAddQueuePrompt(prompt: string, id: string, attachments: AttachmentInfo[]): void {
         const trimmed = prompt.trim();
-        if (!trimmed || trimmed.length > 10000) return;
+        if (!trimmed || trimmed.length > this._MAX_QUEUE_PROMPT_LENGTH) return;
 
         const queuedPrompt: QueuedPrompt = {
             id: id || `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             prompt: trimmed,
             attachments: attachments.length > 0 ? [...attachments] : undefined  // Store attachments if any
         };
-        this._promptQueue.push(queuedPrompt);
-        this._saveQueueToDisk();
-        this._updateQueueUI();
 
-        // Clear attachments after adding to queue (they're now stored with the queue item)
-        // This prevents old images from reappearing when pasting new images
-        this._attachments = [];
-        this._updateAttachmentsUI();
+        // Check if we should auto-respond BEFORE adding to queue (race condition fix)
+        // This prevents the window between push and findIndex where queue could be modified
+        const shouldAutoRespond = this._queueEnabled &&
+            this._currentToolCallId &&
+            this._pendingRequests.has(this._currentToolCallId);
 
-        // Auto-respond with the newly added prompt if there's a pending request
-        if (this._queueEnabled && this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
-            // Find and remove the prompt we just added by its specific ID (not pop() which could be wrong)
-            const promptIndex = this._promptQueue.findIndex(p => p.id === queuedPrompt.id);
-            if (promptIndex === -1) return; // Prompt was somehow removed already
-
-            const consumedPrompt = this._promptQueue.splice(promptIndex, 1)[0];
-            const resolve = this._pendingRequests.get(this._currentToolCallId);
+        if (shouldAutoRespond) {
+            // Don't add to queue - consume directly for the pending request
+            const resolve = this._pendingRequests.get(this._currentToolCallId!);
             if (!resolve) return;
 
             // Update the pending entry to completed
-            const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
+            const pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId!);
 
             let completedEntry: ToolCallEntry;
             if (pendingEntry && pendingEntry.status === 'pending') {
-                pendingEntry.response = consumedPrompt.prompt;
+                pendingEntry.response = queuedPrompt.prompt;
+                pendingEntry.attachments = queuedPrompt.attachments;
                 pendingEntry.status = 'completed';
                 pendingEntry.isFromQueue = true;
                 pendingEntry.timestamp = Date.now();
                 completedEntry = pendingEntry;
             } else {
                 completedEntry = {
-                    id: this._currentToolCallId,
+                    id: this._currentToolCallId!,
                     prompt: 'Tool call',
-                    response: consumedPrompt.prompt,
+                    response: queuedPrompt.prompt,
+                    attachments: queuedPrompt.attachments,
                     timestamp: Date.now(),
                     isFromQueue: true,
                     status: 'completed'
@@ -1077,16 +1202,34 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             this._saveQueueToDisk();
             this._updateQueueUI();
 
-            resolve({ value: consumedPrompt.prompt, queue: true, attachments: consumedPrompt.attachments || [] });
-            this._pendingRequests.delete(this._currentToolCallId);
+            resolve({ value: queuedPrompt.prompt, queue: true, attachments: queuedPrompt.attachments || [] });
+            this._pendingRequests.delete(this._currentToolCallId!);
             this._currentToolCallId = null;
+        } else {
+            // No pending request - add to queue normally
+            this._promptQueue.push(queuedPrompt);
+            this._saveQueueToDisk();
+            this._updateQueueUI();
         }
+
+        // Clear attachments after adding to queue (they're now stored with the queue item)
+        // This prevents old images from reappearing when pasting new images
+        this._attachments = [];
+        this._updateAttachmentsUI();
+    }
+
+    /**
+     * Validate queue prompt ID format (defense in depth)
+     */
+    private _isValidQueueId(id: unknown): id is string {
+        return typeof id === 'string' && /^q_\d+_[a-z0-9]+$/.test(id);
     }
 
     /**
      * Handle removing a prompt from queue
      */
     private _handleRemoveQueuePrompt(promptId: string): void {
+        if (!this._isValidQueueId(promptId)) return;
         this._promptQueue = this._promptQueue.filter(p => p.id !== promptId);
         this._saveQueueToDisk();
         this._updateQueueUI();
@@ -1096,8 +1239,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Handle editing a prompt in queue
      */
     private _handleEditQueuePrompt(promptId: string, newPrompt: string): void {
+        if (!this._isValidQueueId(promptId)) return;
         const trimmed = newPrompt.trim();
-        if (!trimmed || trimmed.length > 10000) return;
+        if (!trimmed || trimmed.length > this._MAX_QUEUE_PROMPT_LENGTH) return;
 
         const prompt = this._promptQueue.find(p => p.id === promptId);
         if (prompt) {
@@ -1286,6 +1430,105 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
+     * Handle searching context references (#terminal, #problems) - deprecated, now handled via file search
+     */
+    private async _handleSearchContext(query: string): Promise<void> {
+        try {
+            const suggestions = await this._contextManager.getContextSuggestions(query);
+            this._view?.webview.postMessage({
+                type: 'contextSearchResults',
+                suggestions: suggestions.map(s => ({
+                    type: s.type,
+                    label: s.label,
+                    description: s.description,
+                    detail: s.detail
+                }))
+            } as ToWebviewMessage);
+        } catch (error) {
+            console.error('[TaskSync] Error searching context:', error);
+            this._view?.webview.postMessage({
+                type: 'contextSearchResults',
+                suggestions: []
+            } as ToWebviewMessage);
+        }
+    }
+
+    /**
+     * Handle selecting a context reference to add as attachment
+     */
+    private async _handleSelectContextReference(contextType: string, options?: Record<string, unknown>): Promise<void> {
+        try {
+            const reference = await this._contextManager.getContextContent(
+                contextType as ContextReferenceType,
+                options
+            );
+
+            if (reference) {
+                // Add context reference as a special attachment
+                const contextAttachment: AttachmentInfo = {
+                    id: reference.id,
+                    name: reference.label,
+                    uri: `context://${reference.type}/${reference.id}`,
+                    isTextReference: true
+                };
+                this._attachments.push(contextAttachment);
+                this._updateAttachmentsUI();
+
+                // Also send the reference content so it can be displayed
+                this._view?.webview.postMessage({
+                    type: 'contextReferenceAdded',
+                    reference: {
+                        id: reference.id,
+                        type: reference.type,
+                        label: reference.label,
+                        content: reference.content
+                    }
+                } as ToWebviewMessage);
+            } else {
+                // Still add a placeholder attachment showing it was selected but empty
+                const emptyId = `ctx_empty_${Date.now()}`;
+                const friendlyType = contextType.replace(':', ' ');
+                const contextAttachment: AttachmentInfo = {
+                    id: emptyId,
+                    name: `#${friendlyType} (no content)`,
+                    uri: `context://${contextType}/${emptyId}`,
+                    isTextReference: true
+                };
+                this._attachments.push(contextAttachment);
+                this._updateAttachmentsUI();
+
+                // Show info message
+                vscode.window.showInformationMessage(`No ${contextType} content available yet`);
+            }
+        } catch (error) {
+            console.error('[TaskSync] Error selecting context reference:', error);
+            vscode.window.showErrorMessage(`Failed to get ${contextType} content`);
+        }
+    }
+
+    /**
+     * Resolve context content from a context URI
+     * URI format: context://type/id
+     */
+    public async resolveContextContent(uri: string): Promise<string | undefined> {
+        try {
+            const parsed = vscode.Uri.parse(uri);
+            if (parsed.scheme !== 'context') return undefined;
+
+            const type = parsed.authority as ContextReferenceType;
+            // id is likely in path, e.g. /id
+            const id = parsed.path.startsWith('/') ? parsed.path.substring(1) : parsed.path;
+
+            const contextRef = await this._contextManager.getContextContent(type);
+            return contextRef?.content;
+
+        } catch (error) {
+            console.error('[TaskSync] Error resolving context content:', error);
+            return undefined;
+        }
+    }
+
+    /**
      * Update queue UI in webview
      */
     private _updateQueueUI(): void {
@@ -1412,16 +1655,62 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
-     * Save persisted history to disk (called on deactivate or when clearing)
+     * Save persisted history to disk with debounced async write
+     * Uses background async saves to avoid blocking the main thread
      */
     private _savePersistedHistoryToDisk(): void {
-        this._savePersistedHistoryToDiskSync();
+        this._historyDirty = true;
+
+        // Cancel any pending save
+        if (this._historySaveTimer) {
+            clearTimeout(this._historySaveTimer);
+        }
+
+        // Schedule debounced async save
+        this._historySaveTimer = setTimeout(() => {
+            this._savePersistedHistoryToDiskAsync();
+        }, this._HISTORY_SAVE_DEBOUNCE_MS);
     }
 
     /**
-     * Actually persist history to disk (synchronous for deactivate)
+     * Async save persisted history (non-blocking background save)
+     */
+    private async _savePersistedHistoryToDiskAsync(): Promise<void> {
+        try {
+            const storagePath = this._context.globalStorageUri.fsPath;
+            const historyPath = path.join(storagePath, 'tool-history.json');
+
+            // Use async fs operations from fs/promises
+            const fsPromises = await import('fs/promises');
+
+            try {
+                await fsPromises.access(storagePath);
+            } catch {
+                await fsPromises.mkdir(storagePath, { recursive: true });
+            }
+
+            // Only save completed entries
+            const completedHistory = this._persistedHistory.filter(entry => entry.status === 'completed');
+
+            const data = JSON.stringify({
+                history: completedHistory
+            }, null, 2);
+
+            await fsPromises.writeFile(historyPath, data, 'utf8');
+            this._historyDirty = false;
+        } catch (error) {
+            console.error('[TaskSync] Failed to save persisted history (async):', error);
+        }
+    }
+
+    /**
+     * Actually persist history to disk (synchronous - only for deactivate)
+     * Called during extension deactivation when async operations cannot complete
      */
     private _savePersistedHistoryToDiskSync(): void {
+        // Only save if there are pending changes
+        if (!this._historyDirty) return;
+
         try {
             const storagePath = this._context.globalStorageUri.fsPath;
             const historyPath = path.join(storagePath, 'tool-history.json');
@@ -1438,6 +1727,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             }, null, 2);
 
             fs.writeFileSync(historyPath, data, 'utf8');
+            this._historyDirty = false;
         } catch (error) {
             console.error('[TaskSync] Failed to save persisted history:', error);
         }
@@ -1516,16 +1806,16 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             </div>
             <div class="input-wrapper" id="input-wrapper">
             <!-- Prompt Queue Section - Integrated above input -->
-            <div class="queue-section" id="queue-section">
-                <div class="queue-header" id="queue-header">
-                    <div class="accordion-icon">
+            <div class="queue-section" id="queue-section" role="region" aria-label="Prompt queue">
+                <div class="queue-header" id="queue-header" role="button" tabindex="0" aria-expanded="true" aria-controls="queue-list">
+                    <div class="accordion-icon" aria-hidden="true">
                         <span class="codicon codicon-chevron-down"></span>
                     </div>
                     <span class="queue-header-title">Prompt Queue</span>
-                    <span class="queue-count" id="queue-count">0</span>
+                    <span class="queue-count" id="queue-count" aria-live="polite">0</span>
                 </div>
-                <div class="queue-list" id="queue-list">
-                    <div class="queue-empty">No prompts in queue</div>
+                <div class="queue-list" id="queue-list" role="list" aria-label="Queued prompts">
+                    <div class="queue-empty" role="status">No prompts in queue</div>
                 </div>
             </div>
 
@@ -1888,8 +2178,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             }
         }
 
-        // Additional heuristic: short questions (< 100 chars) ending with ? are likely yes/no
-        if (lowerText.length < 100 && lowerText.trim().endsWith('?')) {
+        // Additional heuristic: short questions ending with ? are likely yes/no
+        if (lowerText.length < this._SHORT_QUESTION_THRESHOLD && lowerText.trim().endsWith('?')) {
             // But exclude questions with interrogative words that typically need specific answers
             const interrogatives = /^(?:what|which|where|when|why|how|who|whom|whose)\b/i;
             if (!interrogatives.test(lowerText.trim())) {

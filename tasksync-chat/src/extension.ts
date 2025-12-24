@@ -5,9 +5,11 @@ import * as os from 'os';
 import { TaskSyncWebviewProvider } from './webview/webviewProvider';
 import { registerTools } from './tools';
 import { McpServerManager } from './mcp/mcpServer';
+import { ContextManager } from './context';
 
 let mcpServer: McpServerManager | undefined;
 let webviewProvider: TaskSyncWebviewProvider | undefined;
+let contextManager: ContextManager | undefined;
 
 // Memoized result for external MCP client check (only checked once per activation)
 let _hasExternalMcpClientsResult: boolean | undefined;
@@ -16,8 +18,9 @@ let _hasExternalMcpClientsResult: boolean | undefined;
  * Check if external MCP client configs exist (Kiro, Cursor, Antigravity)
  * This indicates user has external tools that need the MCP server
  * Result is memoized to avoid repeated file system reads
+ * Uses async I/O to avoid blocking the extension host thread
  */
-function hasExternalMcpClients(): boolean {
+async function hasExternalMcpClientsAsync(): Promise<boolean> {
     // Return cached result if available
     if (_hasExternalMcpClientsResult !== undefined) {
         return _hasExternalMcpClientsResult;
@@ -31,17 +34,15 @@ function hasExternalMcpClients(): boolean {
 
     for (const configPath of configPaths) {
         try {
-            if (fs.existsSync(configPath)) {
-                const content = fs.readFileSync(configPath, 'utf8');
-                const config = JSON.parse(content);
-                // Check if tasksync-chat is registered
-                if (config.mcpServers?.['tasksync-chat']) {
-                    _hasExternalMcpClientsResult = true;
-                    return true;
-                }
+            const content = await fs.promises.readFile(configPath, 'utf8');
+            const config = JSON.parse(content);
+            // Check if tasksync-chat is registered
+            if (config.mcpServers?.['tasksync-chat']) {
+                _hasExternalMcpClientsResult = true;
+                return true;
             }
         } catch {
-            // Ignore parse errors
+            // File doesn't exist or parse error - continue to next path
         }
     }
     _hasExternalMcpClientsResult = false;
@@ -49,7 +50,11 @@ function hasExternalMcpClients(): boolean {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    const provider = new TaskSyncWebviewProvider(context.extensionUri, context);
+    // Initialize context manager for #terminal, #problems features
+    contextManager = new ContextManager();
+    context.subscriptions.push({ dispose: () => contextManager?.dispose() });
+
+    const provider = new TaskSyncWebviewProvider(context.extensionUri, context, contextManager);
     webviewProvider = provider;
 
     // Register the provider and add it to disposables for proper cleanup
@@ -65,6 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
     mcpServer = new McpServerManager(provider);
 
     // Check if MCP should auto-start based on settings and external client configs
+    // Deferred to avoid blocking activation with file I/O
     const config = vscode.workspace.getConfiguration('tasksync');
     const mcpEnabled = config.get<boolean>('mcpEnabled', false);
     const autoStartIfClients = config.get<boolean>('mcpAutoStartIfClients', true);
@@ -72,10 +78,19 @@ export function activate(context: vscode.ExtensionContext) {
     // Start MCP server only if:
     // 1. Explicitly enabled in settings, OR
     // 2. Auto-start is enabled AND external clients are configured
-    const shouldStart = mcpEnabled || (autoStartIfClients && hasExternalMcpClients());
-
-    if (shouldStart) {
+    // Note: Check is deferred to avoid blocking extension activation with file I/O
+    if (mcpEnabled) {
+        // Explicitly enabled - start immediately without checking external clients
         mcpServer.start();
+    } else if (autoStartIfClients) {
+        // Defer the external client check to avoid blocking activation
+        hasExternalMcpClientsAsync().then(hasClients => {
+            if (hasClients && mcpServer) {
+                mcpServer.start();
+            }
+        }).catch(err => {
+            console.error('[TaskSync] Failed to check external MCP clients:', err);
+        });
     }
 
     // Start MCP server command

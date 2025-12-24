@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.11 (12-24-25)
+- Clean up CHANGELOG by removing old release notes
+
+
 ## TaskSync v2.0.10 (12-24-25)
 - feat: v2.1.0 - Settings Modal, Reusable Prompts, Notification Sound & Codebase Cleanup
 - New Features:

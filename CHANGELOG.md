@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.10 (12-24-25)
+- feat: v2.1.0 - Settings Modal, Reusable Prompts, Notification Sound & Codebase Cleanup
+- New Features:
+- - Add in-sidebar Settings Modal with gear icon in title bar
+- - Reusable Prompts with /slash command support and autocomplete
+- - Clear Current Session command with trash icon and confirmation
+- - Interactive Approval UI improvements with toggle setting
+- - Notification sound for incoming tool calls
+- Codebase Cleanup & Refactoring:
+- - Extract shared utilities (fileExclusions.ts, imageUtils.ts)
+- - Remove 5 unused SVG files from media folder
+- - Clean up logging (remove console.log/warn, keep console.error)
+- - Eliminate duplicate code and outdated comments
+- - Update dependencies and clean up package.json
+
+
 ## TaskSync v2.1.0 (12-25-25)
 - **feat(settings)**: Add in-sidebar Settings Modal with gear icon in title bar
   - Configure TaskSync options directly within the sidebar

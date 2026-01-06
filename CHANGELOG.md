@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.12 (01-06-26)
+- let the github actions update the package
+
+
 ## TaskSync v2.0.11 (12-24-25)
 - Add context references (#terminal, #problems) for attaching terminal output and workspace diagnostics
 - Integrate context items into file autocomplete dropdown

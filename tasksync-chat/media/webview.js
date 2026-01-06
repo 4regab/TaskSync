@@ -947,7 +947,8 @@
             var queueBadge = tc.isFromQueue ? '<span class="tool-call-badge queue">Queue</span>' : '';
 
             // Build card HTML - NO X button for current session cards
-            var cardHtml = '<div class="tool-call-card expanded" data-id="' + escapeHtml(tc.id) + '">' +
+            var isLatest = index === sortedCalls.length - 1;
+            var cardHtml = '<div class="tool-call-card' + (isLatest ? ' expanded' : '') + '" data-id="' + escapeHtml(tc.id) + '">' +
                 '<div class="tool-call-header">' +
                 '<div class="tool-call-chevron"><span class="codicon codicon-chevron-down"></span></div>' +
                 '<div class="tool-call-icon"><span class="codicon codicon-copilot"></span></div>' +

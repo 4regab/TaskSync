@@ -1887,6 +1887,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                         <p class="welcome-card-desc">Batch your responses. AI consumes from queue automatically, one by one.</p>
                     </div>
                 </div>
+
+                <div class="welcome-auto-answer" id="welcome-auto-answer">
+                    <div class="welcome-auto-answer-label">
+                        <span class="codicon codicon-rocket"></span>
+                        <span>Auto answer</span>
+                    </div>
+                    <div class="toggle-switch" id="auto-answer-main-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>
+                </div>
             </div>
 
             <!-- Tool Call History Area -->

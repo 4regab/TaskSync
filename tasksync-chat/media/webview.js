@@ -72,7 +72,7 @@
     let slashDropdown, slashList, slashEmpty;
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
-    let soundToggle, interactiveApprovalToggle, autoAnswerToggle, autoAnswerTextInput, promptsList, addPromptBtn, addPromptForm;
+    let soundToggle, interactiveApprovalToggle, autoAnswerToggle, autoAnswerMainToggle, autoAnswerTextInput, promptsList, addPromptBtn, addPromptForm;
 
     function init() {
         try {
@@ -143,6 +143,7 @@
         welcomeSection = document.getElementById('welcome-section');
         cardVibe = document.getElementById('card-vibe');
         cardSpec = document.getElementById('card-spec');
+        autoAnswerMainToggle = document.getElementById('auto-answer-main-toggle');
         toolHistoryArea = document.getElementById('tool-history-area');
         pendingMessage = document.getElementById('pending-message');
         // Slash command dropdown
@@ -482,6 +483,15 @@
         if (autoAnswerToggle) {
             autoAnswerToggle.addEventListener('click', toggleAutoAnswerSetting);
             autoAnswerToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleAutoAnswerSetting();
+                }
+            });
+        }
+        if (autoAnswerMainToggle) {
+            autoAnswerMainToggle.addEventListener('click', toggleAutoAnswerSetting);
+            autoAnswerMainToggle.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     toggleAutoAnswerSetting();
@@ -1730,9 +1740,11 @@
     }
 
     function updateAutoAnswerToggleUI() {
-        if (!autoAnswerToggle) return;
-        autoAnswerToggle.classList.toggle('active', autoAnswerEnabled);
-        autoAnswerToggle.setAttribute('aria-checked', autoAnswerEnabled ? 'true' : 'false');
+        [autoAnswerToggle, autoAnswerMainToggle].forEach(function (toggle) {
+            if (!toggle) return;
+            toggle.classList.toggle('active', autoAnswerEnabled);
+            toggle.setAttribute('aria-checked', autoAnswerEnabled ? 'true' : 'false');
+        });
     }
 
     function handleAutoAnswerTextInput() {

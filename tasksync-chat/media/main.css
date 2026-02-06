@@ -151,6 +151,32 @@ body {
     margin-bottom: 12px;
 }
 
+.welcome-auto-answer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    max-width: 500px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--vscode-panel-border);
+    background-color: var(--vscode-input-background);
+}
+
+.welcome-auto-answer-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--vscode-foreground);
+}
+
+.welcome-auto-answer-label .codicon {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
 .welcome-card {
     padding: 12px;
     border-radius: 8px;

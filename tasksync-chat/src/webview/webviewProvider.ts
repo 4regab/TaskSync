@@ -256,7 +256,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Open settings modal (called from view title bar button)
      */
     public openSettingsModal(): void {
-        this._view?.webview.postMessage({ type: 'openSettingsModal' } as ToWebviewMessage);        
+        this._view?.webview.postMessage({ type: 'openSettingsModal' } as ToWebviewMessage);
         this._updateSettingsUI();
     }
 
@@ -1380,7 +1380,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     /**
      * Handle opening settings modal - send settings to webview
      */
-    private _handleOpenSettingsModal(): void {     
+    private _handleOpenSettingsModal(): void {
         this._updateSettingsUI();
     }
 

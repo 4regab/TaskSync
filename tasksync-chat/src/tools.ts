@@ -76,7 +76,7 @@ export async function askUser(
             return {
                 response: result.value,
                 attachments: [],
-                queue: false
+                queue: result.queue
             };
         }
 

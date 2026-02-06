@@ -488,7 +488,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             // Resolve the orphaned promise with a cancellation indicator
             oldResolve({
                 value: '[CANCELLED: New request superseded this one]',
-                queue: false,
+                queue: this._queueEnabled && this._promptQueue.length > 0,
                 attachments: [],
                 cancelled: true
             });
@@ -530,7 +530,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
             return {
                 value: effectiveText,
-                queue: false,
+                queue: this._queueEnabled && this._promptQueue.length > 0,
                 attachments: []
             };
         }
@@ -583,7 +583,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
                 return {
                     value: queuedPrompt.prompt,
-                    queue: true,
+                    queue: this._queueEnabled && this._promptQueue.length > 0,
                     attachments: queuedPrompt.attachments || []  // Return stored attachments
                 };
             }
@@ -828,7 +828,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 } as ToWebviewMessage);
 
                 this._updateCurrentSessionUI();
-                resolve({ value, queue: false, attachments });
+                resolve({ value, queue: this._queueEnabled && this._promptQueue.length > 0, attachments });
                 this._pendingRequests.delete(this._currentToolCallId);
                 this._currentToolCallId = null;
             } else {
@@ -1271,7 +1271,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             this._saveQueueToDisk();
             this._updateQueueUI();
 
-            resolve({ value: queuedPrompt.prompt, queue: true, attachments: queuedPrompt.attachments || [] });
+            resolve({ value: queuedPrompt.prompt, queue: this._queueEnabled && this._promptQueue.length > 0, attachments: queuedPrompt.attachments || [] });
             this._pendingRequests.delete(this._currentToolCallId!);
             this._currentToolCallId = null;
         } else {

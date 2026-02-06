@@ -1889,9 +1889,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 </div>
 
                 <div class="welcome-auto-answer" id="welcome-auto-answer">
-                    <div class="welcome-auto-answer-label">
-                        <span class="codicon codicon-rocket"></span>
-                        <span>Auto answer</span>
+                    <div class="welcome-auto-answer-text">
+                        <div class="welcome-auto-answer-label">
+                            <span class="codicon codicon-rocket"></span>
+                            <span class="welcome-auto-answer-title">Auto answer</span>
+                        </div>
+                        <p class="welcome-auto-answer-desc">Useful if you need to temporarily provide autonomy for an agent.</p>
                     </div>
                     <div class="toggle-switch" id="auto-answer-main-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>
                 </div>

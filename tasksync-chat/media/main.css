@@ -153,7 +153,7 @@ body {
 
 .welcome-auto-answer {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
@@ -162,6 +162,16 @@ body {
     border-radius: 8px;
     border: 1px solid var(--vscode-panel-border);
     background-color: var(--vscode-input-background);
+    text-align: left;
+}
+
+.welcome-auto-answer-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
 }
 
 .welcome-auto-answer-label {
@@ -175,6 +185,19 @@ body {
 .welcome-auto-answer-label .codicon {
     font-size: 14px;
     opacity: 0.9;
+}
+
+.welcome-auto-answer-desc {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--vscode-descriptionForeground);
+    text-align: left;
+}
+
+.welcome-auto-answer .toggle-switch {
+    align-self: flex-start;
+    margin-top: 2px;
 }
 
 .welcome-card {

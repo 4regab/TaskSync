@@ -507,7 +507,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     public async waitForUserResponse(question: string): Promise<UserResponseResult> {
-        if (this._autoAnswerEnabled) {
+        if (this._autoAnswerEnabled && !(this._queueEnabled && this._promptQueue.length > 0)) {
             // Race condition prevention: If there's already a pending request, cancel it
             // This prevents orphaned promises when waitForUserResponse is called multiple times
             this._cancelSupersededPendingRequest();

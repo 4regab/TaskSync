@@ -27,6 +27,10 @@
     let autoAnswerEnabled = false;
     let autoAnswerText = '';
     let autoAnswerTextDebounceTimer = null;
+
+    // Tracks local edits to prevent stale settings overwriting user input mid-typing.
+    let autoAnswerTextEditVersion = 0;
+    let autoAnswerTextLastSentVersion = 0;
     let reusablePrompts = [];
     let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
 
@@ -1734,6 +1738,7 @@
     function handleAutoAnswerTextInput() {
         if (!autoAnswerTextInput) return;
         autoAnswerText = autoAnswerTextInput.value;
+        autoAnswerTextEditVersion++;
         scheduleAutoAnswerTextUpdate();
     }
 
@@ -1749,13 +1754,34 @@
         }
         if (!autoAnswerTextInput) return;
         autoAnswerText = autoAnswerTextInput.value;
+        autoAnswerTextLastSentVersion = autoAnswerTextEditVersion;
         vscode.postMessage({ type: 'updateAutoAnswerText', text: autoAnswerText });
     }
 
     function updateAutoAnswerTextUI() {
         if (!autoAnswerTextInput) return;
+
+        var isFocused = document.activeElement === autoAnswerTextInput;
+        var hasUnflushedEdits = autoAnswerTextEditVersion > autoAnswerTextLastSentVersion;
+
+        // While user is typing, do not apply incoming settings updates that could revert new characters.
+        if (isFocused && hasUnflushedEdits) {
+            return;
+        }
+
         if (autoAnswerTextInput.value !== autoAnswerText) {
+            var selectionStart = autoAnswerTextInput.selectionStart;
+            var selectionEnd = autoAnswerTextInput.selectionEnd;
+
             autoAnswerTextInput.value = autoAnswerText;
+
+            if (isFocused && selectionStart !== null && selectionEnd !== null) {
+                var maxPos = autoAnswerTextInput.value.length;
+                autoAnswerTextInput.setSelectionRange(
+                    Math.min(selectionStart, maxPos),
+                    Math.min(selectionEnd, maxPos)
+                );
+            }
         }
     }
 

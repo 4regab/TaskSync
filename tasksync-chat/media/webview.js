@@ -365,7 +365,6 @@
             '<div class="toggle-switch" id="auto-answer-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>' +
             '</div>' +
             '<div class="form-row">' +
-            '<label class="form-label" for="auto-answer-text">Auto answer text</label>' +
             '<textarea class="form-input form-textarea" id="auto-answer-text" placeholder="Enter auto answer text..." maxlength="2000"></textarea>' +
             '</div>';
         modalContent.appendChild(autoAnswerSection);

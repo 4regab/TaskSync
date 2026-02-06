@@ -2084,6 +2084,10 @@ button#send-btn:disabled {
     margin-bottom: 0;
 }
 
+.settings-section>.form-row {
+    margin-top: 8px;
+}
+
 /* Toggle Switch */
 .toggle-row {
     display: flex;

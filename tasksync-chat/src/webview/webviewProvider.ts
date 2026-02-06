@@ -169,7 +169,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Interactive approval buttons enabled (loaded from VS Code settings)
     private _interactiveApprovalEnabled: boolean = true;
 
-    private readonly _AUTO_ANSWER_DEFAULT_TEXT = 'You are in autonomous mode and must make all decisions on your own.';
+    private readonly _AUTO_ANSWER_DEFAULT_TEXT = 'You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.';
 
     // Auto answer enabled (loaded from VS Code settings)
     private _autoAnswerEnabled: boolean = false;

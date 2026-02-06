@@ -109,7 +109,7 @@
         },
         "tasksync.autoAnswerText": {
           "type": "string",
-          "default": "You are in autonomous mode and must make all decisions on your own.",
+          "default": "You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.",
           "description": "Text returned when Auto answer is enabled."
         },
         "tasksync.notificationSound": {

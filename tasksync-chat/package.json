@@ -102,6 +102,16 @@
           "default": true,
           "description": "Automatically register MCP server with Kiro and other supported clients."
         },
+        "tasksync.autoAnswer": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically answer ask_user prompts without waiting for user input."
+        },
+        "tasksync.autoAnswerText": {
+          "type": "string",
+          "default": "You are in autonomous mode and must make all decisions on your own.",
+          "description": "Text returned when Auto answer is enabled."
+        },
         "tasksync.notificationSound": {
           "type": "boolean",
           "default": true,

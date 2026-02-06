@@ -24,6 +24,9 @@
     // Settings state
     let soundEnabled = true;
     let interactiveApprovalEnabled = true;
+    let autoAnswerEnabled = false;
+    let autoAnswerText = '';
+    let autoAnswerTextDebounceTimer = null;
     let reusablePrompts = [];
     let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
 
@@ -65,7 +68,7 @@
     let slashDropdown, slashList, slashEmpty;
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
-    let soundToggle, interactiveApprovalToggle, promptsList, addPromptBtn, addPromptForm;
+    let soundToggle, interactiveApprovalToggle, autoAnswerToggle, autoAnswerTextInput, promptsList, addPromptBtn, addPromptForm;
 
     function init() {
         try {
@@ -354,6 +357,19 @@
             '</div>';
         modalContent.appendChild(approvalSection);
 
+        // Auto answer section
+        var autoAnswerSection = document.createElement('div');
+        autoAnswerSection.className = 'settings-section';
+        autoAnswerSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title"><span class="codicon codicon-rocket"></span> Auto answer</div>' +
+            '<div class="toggle-switch" id="auto-answer-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>' +
+            '</div>' +
+            '<div class="form-row">' +
+            '<label class="form-label" for="auto-answer-text">Auto answer text</label>' +
+            '<textarea class="form-input form-textarea" id="auto-answer-text" placeholder="Enter auto answer text..." maxlength="2000"></textarea>' +
+            '</div>';
+        modalContent.appendChild(autoAnswerSection);
+
         // Reusable Prompts section - plus button next to title
         var promptsSection = document.createElement('div');
         promptsSection.className = 'settings-section';
@@ -383,6 +399,8 @@
         // Cache inner elements
         soundToggle = document.getElementById('sound-toggle');
         interactiveApprovalToggle = document.getElementById('interactive-approval-toggle');
+        autoAnswerToggle = document.getElementById('auto-answer-toggle');
+        autoAnswerTextInput = document.getElementById('auto-answer-text');
         promptsList = document.getElementById('prompts-list');
         addPromptBtn = document.getElementById('add-prompt-btn');
         addPromptForm = document.getElementById('add-prompt-form');
@@ -457,6 +475,19 @@
                     toggleInteractiveApprovalSetting();
                 }
             });
+        }
+        if (autoAnswerToggle) {
+            autoAnswerToggle.addEventListener('click', toggleAutoAnswerSetting);
+            autoAnswerToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleAutoAnswerSetting();
+                }
+            });
+        }
+        if (autoAnswerTextInput) {
+            autoAnswerTextInput.addEventListener('input', handleAutoAnswerTextInput);
+            autoAnswerTextInput.addEventListener('blur', flushAutoAnswerTextUpdate);
         }
         if (addPromptBtn) addPromptBtn.addEventListener('click', showAddPromptForm);
         // Add prompt form events (deferred - bind after modal created)
@@ -811,9 +842,13 @@
             case 'updateSettings':
                 soundEnabled = message.soundEnabled !== false;
                 interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+                autoAnswerEnabled = message.autoAnswerEnabled === true;
+                autoAnswerText = typeof message.autoAnswerText === 'string' ? message.autoAnswerText : '';
                 reusablePrompts = message.reusablePrompts || [];
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
+                updateAutoAnswerToggleUI();
+                updateAutoAnswerTextUI();
                 renderPromptsList();
                 break;
             case 'slashCommandResults':
@@ -1656,6 +1691,7 @@
 
     function closeSettingsModal() {
         if (!settingsModalOverlay) return;
+        flushAutoAnswerTextUpdate();
         settingsModalOverlay.classList.add('hidden');
         hideAddPromptForm();
     }
@@ -1682,6 +1718,46 @@
         if (!interactiveApprovalToggle) return;
         interactiveApprovalToggle.classList.toggle('active', interactiveApprovalEnabled);
         interactiveApprovalToggle.setAttribute('aria-checked', interactiveApprovalEnabled ? 'true' : 'false');
+    }
+
+    function toggleAutoAnswerSetting() {
+        autoAnswerEnabled = !autoAnswerEnabled;
+        updateAutoAnswerToggleUI();
+        vscode.postMessage({ type: 'updateAutoAnswerSetting', enabled: autoAnswerEnabled });
+    }
+
+    function updateAutoAnswerToggleUI() {
+        if (!autoAnswerToggle) return;
+        autoAnswerToggle.classList.toggle('active', autoAnswerEnabled);
+        autoAnswerToggle.setAttribute('aria-checked', autoAnswerEnabled ? 'true' : 'false');
+    }
+
+    function handleAutoAnswerTextInput() {
+        if (!autoAnswerTextInput) return;
+        autoAnswerText = autoAnswerTextInput.value;
+        scheduleAutoAnswerTextUpdate();
+    }
+
+    function scheduleAutoAnswerTextUpdate() {
+        if (autoAnswerTextDebounceTimer) clearTimeout(autoAnswerTextDebounceTimer);
+        autoAnswerTextDebounceTimer = setTimeout(flushAutoAnswerTextUpdate, 400);
+    }
+
+    function flushAutoAnswerTextUpdate() {
+        if (autoAnswerTextDebounceTimer) {
+            clearTimeout(autoAnswerTextDebounceTimer);
+            autoAnswerTextDebounceTimer = null;
+        }
+        if (!autoAnswerTextInput) return;
+        autoAnswerText = autoAnswerTextInput.value;
+        vscode.postMessage({ type: 'updateAutoAnswerText', text: autoAnswerText });
+    }
+
+    function updateAutoAnswerTextUI() {
+        if (!autoAnswerTextInput) return;
+        if (autoAnswerTextInput.value !== autoAnswerText) {
+            autoAnswerTextInput.value = autoAnswerText;
+        }
     }
 
     function showAddPromptForm() {

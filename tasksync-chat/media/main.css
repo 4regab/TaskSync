@@ -1332,7 +1332,7 @@ button#send-btn .codicon {
 /* Mode Dropdown */
 .mode-dropdown {
     position: fixed;
-    min-width: 120px;
+    min-width: 160px;
     background-color: var(--vscode-dropdown-background);
     border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
     border-radius: 6px;
@@ -1361,6 +1361,26 @@ button#send-btn .codicon {
     padding: 8px 12px;
     cursor: pointer;
     transition: background-color 0.1s ease;
+}
+
+.mode-option .codicon {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.mode-option-toggle {
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.mode-option-toggle .mode-option-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mode-option-toggle .toggle-switch {
+    margin-left: auto;
 }
 
 .mode-option:first-child {

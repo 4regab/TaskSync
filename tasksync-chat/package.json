@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Automate AI conversations. Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "2.0.12",
+  "version": "2.0.13",
   "engines": {
     "vscode": "^1.90.0"
   },

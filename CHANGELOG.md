@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.14 (02-07-26)
+- refactor: rename Auto Answer to Autopilot, improve UI and settings
+- - Rename all autoAnswer references to autopilot across codebase
+-   (package.json, webviewProvider.ts, webview.js, CHANGELOG, READMEs)
+- - Add backward-compatible settings migration from old keys
+-   (tasksync.autoAnswer  tasksync.autopilot, tasksync.autoAnswerText  tasksync.autopilotText)
+- - Move Autopilot toggle beside the send button in the action bar
+- - Remove redundant autopilot-bar row to eliminate unnecessary spacing
+- - Update welcome section info tip with clearer Autopilot description
+- - Replace toggle switch in Settings modal with Edit button for Autopilot prompt
+-   (on/off control remains solely in the action bar toggle)
+
+
 ## TaskSync v2.0.13 
 - **Autopilot Mode** (renamed from Auto Answer): Automatically respond to `ask_user` prompts with configurable text for hands-free agent operation
 - Autopilot toggle below the send button for quick access

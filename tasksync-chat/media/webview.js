@@ -24,6 +24,13 @@
     // Settings state
     let soundEnabled = true;
     let interactiveApprovalEnabled = true;
+    let autoAnswerEnabled = false;
+    let autoAnswerText = '';
+    let autoAnswerTextDebounceTimer = null;
+
+    // Tracks local edits to prevent stale settings overwriting user input mid-typing.
+    let autoAnswerTextEditVersion = 0;
+    let autoAnswerTextLastSentVersion = 0;
     let reusablePrompts = [];
     let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
 
@@ -65,7 +72,7 @@
     let slashDropdown, slashList, slashEmpty;
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
-    let soundToggle, interactiveApprovalToggle, promptsList, addPromptBtn, addPromptForm;
+    let soundToggle, interactiveApprovalToggle, autoAnswerToggle, autoAnswerMainToggle, autoAnswerTextInput, promptsList, addPromptBtn, addPromptForm;
 
     function init() {
         try {
@@ -122,6 +129,7 @@
         modeBtn = document.getElementById('mode-btn');
         modeDropdown = document.getElementById('mode-dropdown');
         modeLabel = document.getElementById('mode-label');
+
         queueSection = document.getElementById('queue-section');
         queueHeader = document.getElementById('queue-header');
         queueList = document.getElementById('queue-list');
@@ -136,6 +144,7 @@
         welcomeSection = document.getElementById('welcome-section');
         cardVibe = document.getElementById('card-vibe');
         cardSpec = document.getElementById('card-spec');
+        autoAnswerMainToggle = document.getElementById('auto-answer-main-toggle');
         toolHistoryArea = document.getElementById('tool-history-area');
         pendingMessage = document.getElementById('pending-message');
         // Slash command dropdown
@@ -354,6 +363,22 @@
             '</div>';
         modalContent.appendChild(approvalSection);
 
+        // Auto answer section
+        var autoAnswerSection = document.createElement('div');
+        autoAnswerSection.className = 'settings-section';
+        autoAnswerSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title">' +
+            '<span class="codicon codicon-rocket"></span> Auto Answer' +
+            '<span class="settings-info-icon" title="When enabled, the AI will automatically receive this text \n as a response instead of waiting for your input. \n Useful for granting temporary autonomy to agents. \n "auto-answer respects your prompt queue and waits until it is clear" " > ' +
+            '<span class="codicon codicon-info"></span></span>' +
+            '</div>' +
+            '<div class="toggle-switch" id="auto-answer-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>' +
+            '</div>' +
+            '<div class="form-row hidden">' +
+            '<textarea class="form-input form-textarea" id="auto-answer-text" placeholder="Enter auto answer text..." maxlength="2000"></textarea>' +
+            '</div>';
+        modalContent.appendChild(autoAnswerSection);
+
         // Reusable Prompts section - plus button next to title
         var promptsSection = document.createElement('div');
         promptsSection.className = 'settings-section';
@@ -383,6 +408,8 @@
         // Cache inner elements
         soundToggle = document.getElementById('sound-toggle');
         interactiveApprovalToggle = document.getElementById('interactive-approval-toggle');
+        autoAnswerToggle = document.getElementById('auto-answer-toggle');
+        autoAnswerTextInput = document.getElementById('auto-answer-text');
         promptsList = document.getElementById('prompts-list');
         addPromptBtn = document.getElementById('add-prompt-btn');
         addPromptForm = document.getElementById('add-prompt-form');
@@ -404,7 +431,7 @@
         if (attachBtn) attachBtn.addEventListener('click', handleAttach);
         if (modeBtn) modeBtn.addEventListener('click', toggleModeDropdown);
 
-        document.querySelectorAll('.mode-option').forEach(function (option) {
+        document.querySelectorAll('.mode-option[data-mode]').forEach(function (option) {
             option.addEventListener('click', function () {
                 setMode(option.getAttribute('data-mode'), true);
                 closeModeDropdown();
@@ -457,6 +484,28 @@
                     toggleInteractiveApprovalSetting();
                 }
             });
+        }
+        if (autoAnswerToggle) {
+            autoAnswerToggle.addEventListener('click', toggleAutoAnswerSetting);
+            autoAnswerToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleAutoAnswerSetting();
+                }
+            });
+        }
+        if (autoAnswerMainToggle) {
+            autoAnswerMainToggle.addEventListener('click', toggleAutoAnswerSetting);
+            autoAnswerMainToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleAutoAnswerSetting();
+                }
+            });
+        }
+        if (autoAnswerTextInput) {
+            autoAnswerTextInput.addEventListener('input', handleAutoAnswerTextInput);
+            autoAnswerTextInput.addEventListener('blur', flushAutoAnswerTextUpdate);
         }
         if (addPromptBtn) addPromptBtn.addEventListener('click', showAddPromptForm);
         // Add prompt form events (deferred - bind after modal created)
@@ -747,7 +796,7 @@
 
     function updateModeUI() {
         if (modeLabel) modeLabel.textContent = queueEnabled ? 'Queue' : 'Normal';
-        document.querySelectorAll('.mode-option').forEach(function (opt) {
+        document.querySelectorAll('.mode-option[data-mode]').forEach(function (opt) {
             opt.classList.toggle('selected', opt.getAttribute('data-mode') === (queueEnabled ? 'queue' : 'normal'));
         });
     }
@@ -811,9 +860,13 @@
             case 'updateSettings':
                 soundEnabled = message.soundEnabled !== false;
                 interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+                autoAnswerEnabled = message.autoAnswerEnabled === true;
+                autoAnswerText = typeof message.autoAnswerText === 'string' ? message.autoAnswerText : '';
                 reusablePrompts = message.reusablePrompts || [];
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
+                updateAutoAnswerToggleUI();
+                updateAutoAnswerTextUI();
                 renderPromptsList();
                 break;
             case 'slashCommandResults':
@@ -1656,6 +1709,7 @@
 
     function closeSettingsModal() {
         if (!settingsModalOverlay) return;
+        flushAutoAnswerTextUpdate();
         settingsModalOverlay.classList.add('hidden');
         hideAddPromptForm();
     }
@@ -1682,6 +1736,75 @@
         if (!interactiveApprovalToggle) return;
         interactiveApprovalToggle.classList.toggle('active', interactiveApprovalEnabled);
         interactiveApprovalToggle.setAttribute('aria-checked', interactiveApprovalEnabled ? 'true' : 'false');
+    }
+
+    function toggleAutoAnswerSetting() {
+        autoAnswerEnabled = !autoAnswerEnabled;
+        updateAutoAnswerToggleUI();
+        vscode.postMessage({ type: 'updateAutoAnswerSetting', enabled: autoAnswerEnabled });
+    }
+
+    function updateAutoAnswerToggleUI() {
+        [autoAnswerToggle, autoAnswerMainToggle].forEach(function (toggle) {
+            if (!toggle) return;
+            toggle.classList.toggle('active', autoAnswerEnabled);
+            toggle.setAttribute('aria-checked', autoAnswerEnabled ? 'true' : 'false');
+        });
+        // Show/hide the auto answer text input based on toggle state
+        var autoAnswerTextRow = autoAnswerTextInput ? autoAnswerTextInput.closest('.form-row') : null;
+        if (autoAnswerTextRow) {
+            autoAnswerTextRow.classList.toggle('hidden', !autoAnswerEnabled);
+        }
+    }
+
+    function handleAutoAnswerTextInput() {
+        if (!autoAnswerTextInput) return;
+        autoAnswerText = autoAnswerTextInput.value;
+        autoAnswerTextEditVersion++;
+        scheduleAutoAnswerTextUpdate();
+    }
+
+    function scheduleAutoAnswerTextUpdate() {
+        if (autoAnswerTextDebounceTimer) clearTimeout(autoAnswerTextDebounceTimer);
+        autoAnswerTextDebounceTimer = setTimeout(flushAutoAnswerTextUpdate, 400);
+    }
+
+    function flushAutoAnswerTextUpdate() {
+        if (autoAnswerTextDebounceTimer) {
+            clearTimeout(autoAnswerTextDebounceTimer);
+            autoAnswerTextDebounceTimer = null;
+        }
+        if (!autoAnswerTextInput) return;
+        autoAnswerText = autoAnswerTextInput.value;
+        autoAnswerTextLastSentVersion = autoAnswerTextEditVersion;
+        vscode.postMessage({ type: 'updateAutoAnswerText', text: autoAnswerText });
+    }
+
+    function updateAutoAnswerTextUI() {
+        if (!autoAnswerTextInput) return;
+
+        var isFocused = document.activeElement === autoAnswerTextInput;
+        var hasUnflushedEdits = autoAnswerTextEditVersion > autoAnswerTextLastSentVersion;
+
+        // While user is typing, do not apply incoming settings updates that could revert new characters.
+        if (isFocused && hasUnflushedEdits) {
+            return;
+        }
+
+        if (autoAnswerTextInput.value !== autoAnswerText) {
+            var selectionStart = autoAnswerTextInput.selectionStart;
+            var selectionEnd = autoAnswerTextInput.selectionEnd;
+
+            autoAnswerTextInput.value = autoAnswerText;
+
+            if (isFocused && selectionStart !== null && selectionEnd !== null) {
+                var maxPos = autoAnswerTextInput.value.length;
+                autoAnswerTextInput.setSelectionRange(
+                    Math.min(selectionStart, maxPos),
+                    Math.min(selectionEnd, maxPos)
+                );
+            }
+        }
     }
 
     function showAddPromptForm() {

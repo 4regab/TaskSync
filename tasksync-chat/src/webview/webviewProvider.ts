@@ -75,7 +75,7 @@ type ToWebviewMessage =
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
     | { type: 'imageSaved'; attachment: AttachmentInfo }
     | { type: 'openSettingsModal' }
-    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; reusablePrompts: ReusablePrompt[] }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autoAnswerEnabled: boolean; autoAnswerText: string; reusablePrompts: ReusablePrompt[] }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
     | { type: 'playNotificationSound' }
     | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
@@ -101,6 +101,8 @@ type FromWebviewMessage =
     | { type: 'openSettingsModal' }
     | { type: 'updateSoundSetting'; enabled: boolean }
     | { type: 'updateInteractiveApprovalSetting'; enabled: boolean }
+    | { type: 'updateAutoAnswerSetting'; enabled: boolean }
+    | { type: 'updateAutoAnswerText'; text: string }
     | { type: 'addReusablePrompt'; name: string; prompt: string }
     | { type: 'editReusablePrompt'; id: string; name: string; prompt: string }
     | { type: 'removeReusablePrompt'; id: string }
@@ -167,6 +169,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Interactive approval buttons enabled (loaded from VS Code settings)
     private _interactiveApprovalEnabled: boolean = true;
 
+    private readonly _AUTO_ANSWER_DEFAULT_TEXT = 'You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.';
+
+    // Auto answer enabled (loaded from VS Code settings)
+    private _autoAnswerEnabled: boolean = false;
+
+    // Auto answer text (loaded from VS Code settings)
+    private _autoAnswerText: string = '';
+
     // Flag to prevent config reload during our own updates (avoids race condition)
     private _isUpdatingConfig: boolean = false;
 
@@ -201,6 +211,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 }
                 if (e.affectsConfiguration('tasksync.notificationSound') ||
                     e.affectsConfiguration('tasksync.interactiveApproval') ||
+                    e.affectsConfiguration('tasksync.autoAnswer') ||
+                    e.affectsConfiguration('tasksync.autoAnswerText') ||
                     e.affectsConfiguration('tasksync.reusablePrompts')) {
                     this._loadSettings();
                     this._updateSettingsUI();
@@ -245,8 +257,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     public openSettingsModal(): void {
         this._view?.webview.postMessage({ type: 'openSettingsModal' } as ToWebviewMessage);
-        // Don't reload settings here - they should already be in sync
-        // Just send current state without reloading from config
         this._updateSettingsUI();
     }
 
@@ -322,10 +332,26 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     /**
      * Load settings from VS Code configuration
      */
+    private _getAutoAnswerDefaultText(config?: vscode.WorkspaceConfiguration): string {
+        const settings = config ?? vscode.workspace.getConfiguration('tasksync');
+        const inspected = settings.inspect<string>('autoAnswerText');
+        const defaultValue = typeof inspected?.defaultValue === 'string' ? inspected.defaultValue : '';
+        return defaultValue.trim().length > 0 ? defaultValue : this._AUTO_ANSWER_DEFAULT_TEXT;
+    }
+
+    private _normalizeAutoAnswerText(text: string, config?: vscode.WorkspaceConfiguration): string {
+        const defaultAutoAnswerText = this._getAutoAnswerDefaultText(config);
+        return text.trim().length > 0 ? text : defaultAutoAnswerText;
+    }
+
     private _loadSettings(): void {
         const config = vscode.workspace.getConfiguration('tasksync');
         this._soundEnabled = config.get<boolean>('notificationSound', true);
         this._interactiveApprovalEnabled = config.get<boolean>('interactiveApproval', true);
+        this._autoAnswerEnabled = config.get<boolean>('autoAnswer', false);
+        const defaultAutoAnswerText = this._getAutoAnswerDefaultText(config);
+        const configuredAutoAnswerText = config.get<string>('autoAnswerText', defaultAutoAnswerText);
+        this._autoAnswerText = this._normalizeAutoAnswerText(configuredAutoAnswerText, config);
 
         // Load reusable prompts from settings
         const savedPrompts = config.get<Array<{ name: string; prompt: string }>>('reusablePrompts', []);
@@ -361,6 +387,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             type: 'updateSettings',
             soundEnabled: this._soundEnabled,
             interactiveApprovalEnabled: this._interactiveApprovalEnabled,
+            autoAnswerEnabled: this._autoAnswerEnabled,
+            autoAnswerText: this._autoAnswerText,
             reusablePrompts: this._reusablePrompts
         } as ToWebviewMessage);
     }
@@ -449,7 +477,64 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     /**
      * Wait for user response
      */
+    private _cancelSupersededPendingRequest(): void {
+        if (!this._currentToolCallId || !this._pendingRequests.has(this._currentToolCallId)) {
+            return;
+        }
+
+        const oldToolCallId = this._currentToolCallId;
+        const oldResolve = this._pendingRequests.get(oldToolCallId);
+        if (oldResolve) {
+            // Resolve the orphaned promise with a cancellation indicator
+            oldResolve({
+                value: '[CANCELLED: New request superseded this one]',
+                queue: this._queueEnabled && this._promptQueue.length > 0,
+                attachments: [],
+                cancelled: true
+            });
+            this._pendingRequests.delete(oldToolCallId);
+
+            // Update the old entry status to indicate it was superseded
+            const oldEntry = this._currentSessionCallsMap.get(oldToolCallId);
+            if (oldEntry && oldEntry.status === 'pending') {
+                oldEntry.status = 'cancelled';
+                oldEntry.response = '[Superseded by new request]';
+                this._updateCurrentSessionUI();
+            }
+            console.warn(`[TaskSync] Previous request ${oldToolCallId} was superseded by new request`);
+        }
+    }
+
     public async waitForUserResponse(question: string): Promise<UserResponseResult> {
+        if (this._autoAnswerEnabled && !(this._queueEnabled && this._promptQueue.length > 0)) {
+            // Race condition prevention: If there's already a pending request, cancel it
+            // This prevents orphaned promises when waitForUserResponse is called multiple times
+            this._cancelSupersededPendingRequest();
+
+            const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            this._currentToolCallId = toolCallId;
+
+            const effectiveText = this._normalizeAutoAnswerText(this._autoAnswerText);
+            const entry: ToolCallEntry = {
+                id: toolCallId,
+                prompt: question,
+                response: effectiveText,
+                timestamp: Date.now(),
+                isFromQueue: false,
+                status: 'completed'
+            };
+            this._currentSessionCalls.unshift(entry);
+            this._currentSessionCallsMap.set(entry.id, entry);
+            this._updateCurrentSessionUI();
+            this._currentToolCallId = null;
+
+            return {
+                value: effectiveText,
+                queue: this._queueEnabled && this._promptQueue.length > 0,
+                attachments: []
+            };
+        }
+
         // If view is not available, open the sidebar first
         if (!this._view) {
             // Open the TaskSync sidebar view
@@ -470,29 +555,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
         // Race condition prevention: If there's already a pending request, cancel it
         // This prevents orphaned promises when waitForUserResponse is called multiple times
-        if (this._currentToolCallId && this._pendingRequests.has(this._currentToolCallId)) {
-            const oldToolCallId = this._currentToolCallId;
-            const oldResolve = this._pendingRequests.get(oldToolCallId);
-            if (oldResolve) {
-                // Resolve the orphaned promise with a cancellation indicator
-                oldResolve({
-                    value: '[CANCELLED: New request superseded this one]',
-                    queue: false,
-                    attachments: [],
-                    cancelled: true
-                });
-                this._pendingRequests.delete(oldToolCallId);
-
-                // Update the old entry status to indicate it was superseded
-                const oldEntry = this._currentSessionCallsMap.get(oldToolCallId);
-                if (oldEntry && oldEntry.status === 'pending') {
-                    oldEntry.status = 'cancelled';
-                    oldEntry.response = '[Superseded by new request]';
-                    this._updateCurrentSessionUI();
-                }
-                console.warn(`[TaskSync] Previous request ${oldToolCallId} was superseded by new request`);
-            }
-        }
+        this._cancelSupersededPendingRequest();
 
         const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         this._currentToolCallId = toolCallId;
@@ -520,7 +583,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
                 return {
                     value: queuedPrompt.prompt,
-                    queue: true,
+                    queue: this._queueEnabled && this._promptQueue.length > 0,
                     attachments: queuedPrompt.attachments || []  // Return stored attachments
                 };
             }
@@ -647,6 +710,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             case 'updateInteractiveApprovalSetting':
                 this._handleUpdateInteractiveApprovalSetting(message.enabled);
                 break;
+            case 'updateAutoAnswerSetting':
+                this._handleUpdateAutoAnswerSetting(message.enabled);
+                break;
+            case 'updateAutoAnswerText':
+                this._handleUpdateAutoAnswerText(message.text);
+                break;
             case 'addReusablePrompt':
                 this._handleAddReusablePrompt(message.name, message.prompt);
                 break;
@@ -759,7 +828,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 } as ToWebviewMessage);
 
                 this._updateCurrentSessionUI();
-                resolve({ value, queue: this._queueEnabled, attachments });
+                resolve({ value, queue: this._queueEnabled && this._promptQueue.length > 0, attachments });
                 this._pendingRequests.delete(this._currentToolCallId);
                 this._currentToolCallId = null;
             } else {
@@ -1202,7 +1271,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             this._saveQueueToDisk();
             this._updateQueueUI();
 
-            resolve({ value: queuedPrompt.prompt, queue: true, attachments: queuedPrompt.attachments || [] });
+            resolve({ value: queuedPrompt.prompt, queue: this._queueEnabled && this._promptQueue.length > 0, attachments: queuedPrompt.attachments || [] });
             this._pendingRequests.delete(this._currentToolCallId!);
             this._currentToolCallId = null;
         } else {
@@ -1312,8 +1381,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Handle opening settings modal - send settings to webview
      */
     private _handleOpenSettingsModal(): void {
-        // Don't reload settings here - just send current state
-        // Settings are already kept in sync via onDidChangeConfiguration
         this._updateSettingsUI();
     }
 
@@ -1344,6 +1411,43 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
             await config.update('interactiveApproval', enabled, vscode.ConfigurationTarget.Global);
+            // Reload settings after update to ensure consistency
+            this._loadSettings();
+            // Update UI to reflect the saved state
+            this._updateSettingsUI();
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating auto answer setting
+     */
+    private async _handleUpdateAutoAnswerSetting(enabled: boolean): Promise<void> {
+        this._autoAnswerEnabled = enabled;
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('autoAnswer', enabled, vscode.ConfigurationTarget.Global);
+            // Reload settings after update to ensure consistency
+            this._loadSettings();
+            // Update UI to reflect the saved state
+            this._updateSettingsUI();
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating auto answer text
+     */
+    private async _handleUpdateAutoAnswerText(text: string): Promise<void> {
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            const normalizedText = this._normalizeAutoAnswerText(text, config);
+            this._autoAnswerText = normalizedText;
+            await config.update('autoAnswerText', normalizedText, vscode.ConfigurationTarget.Global);
             // Reload settings after update to ensure consistency
             this._loadSettings();
             // Update UI to reflect the saved state
@@ -1783,6 +1887,17 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                         <p class="welcome-card-desc">Batch your responses. AI consumes from queue automatically, one by one.</p>
                     </div>
                 </div>
+
+                <div class="welcome-auto-answer" id="welcome-auto-answer">
+                    <div class="welcome-auto-answer-text">
+                        <div class="welcome-auto-answer-label">
+                            <span class="codicon codicon-rocket"></span>
+                            <span class="welcome-auto-answer-title">Auto answer</span>
+                        </div>
+                        <p class="welcome-auto-answer-desc">Useful if you need to temporarily provide autonomy for an agent.</p>
+                    </div>
+                    <div class="toggle-switch" id="auto-answer-main-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>
+                </div>
             </div>
 
             <!-- Tool Call History Area -->
@@ -1851,9 +1966,11 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         <!-- Mode Dropdown - positioned outside input-container to avoid clipping -->
         <div class="mode-dropdown hidden" id="mode-dropdown">
             <div class="mode-option" data-mode="normal">
+                <span class="codicon codicon-comment-discussion"></span>
                 <span>Normal</span>
             </div>
             <div class="mode-option" data-mode="queue">
+                <span class="codicon codicon-layers"></span>
                 <span>Queue</span>
             </div>
         </div>

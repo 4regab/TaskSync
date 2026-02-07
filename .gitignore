@@ -15,6 +15,7 @@ venv.bak/
 .idea/
 *.swp
 *.swo
+.serena/
 
 # OS
 .DS_Store

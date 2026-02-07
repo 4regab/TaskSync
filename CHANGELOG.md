@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.13 (Unreleased)
+- **Auto Answer Mode**: Automatically respond to `ask_user` prompts with configurable text for hands-free agent operation
+- Add auto-answer toggle in mode dropdown and welcome section
+- Customizable auto-answer text via settings (`tasksync.autoAnswer`, `tasksync.autoAnswerText`)
+- Queue priority: queued messages are sent before auto-answer triggers
+- Show tool call name preview in chat (truncated to 40 chars)
+- Fix queue state reporting to accurately reflect whether response came from queue
+- Fix stale settings overwriting user input for auto-answer text
+- Fix redundant settings load in settings modal
+
 ## TaskSync v2.0.12 (01-06-26)
 - Modified card rendering to add 'expanded' class only to the latest tool call
 - Older tool call cards are now collapsed by default

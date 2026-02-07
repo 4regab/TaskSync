@@ -151,6 +151,55 @@ body {
     margin-bottom: 12px;
 }
 
+.welcome-auto-answer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    max-width: 500px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--vscode-panel-border);
+    background-color: var(--vscode-input-background);
+    text-align: left;
+}
+
+.welcome-auto-answer-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.welcome-auto-answer-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--vscode-foreground);
+}
+
+.welcome-auto-answer-label .codicon {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.welcome-auto-answer-desc {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--vscode-descriptionForeground);
+    text-align: left;
+}
+
+.welcome-auto-answer .toggle-switch {
+    align-self: flex-start;
+    margin-top: 2px;
+}
+
 .welcome-card {
     padding: 12px;
     border-radius: 8px;
@@ -222,7 +271,7 @@ body {
 .tool-history-area {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 2px;
     padding: 12px 4px 0 4px;
     /* Added top padding to separate from title bar */
     flex-shrink: 0;
@@ -235,7 +284,7 @@ body {
     border-radius: 6px;
     overflow: hidden;
     transition: all 0.2s ease;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .tool-call-card:last-child {
@@ -1283,7 +1332,7 @@ button#send-btn .codicon {
 /* Mode Dropdown */
 .mode-dropdown {
     position: fixed;
-    min-width: 120px;
+    min-width: 160px;
     background-color: var(--vscode-dropdown-background);
     border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
     border-radius: 6px;
@@ -1312,6 +1361,11 @@ button#send-btn .codicon {
     padding: 8px 12px;
     cursor: pointer;
     transition: background-color 0.1s ease;
+}
+
+.mode-option .codicon {
+    font-size: 12px;
+    opacity: 0.9;
 }
 
 .mode-option:first-child {
@@ -2072,6 +2126,24 @@ button#send-btn:disabled {
     gap: 6px;
 }
 
+/* Info icon tooltip */
+.settings-info-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    cursor: help;
+}
+
+.settings-info-icon .codicon {
+    font-size: 12px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.settings-info-icon:hover .codicon {
+    opacity: 1;
+}
+
 /* Section header with toggle inline */
 .settings-section-header {
     display: flex;
@@ -2082,6 +2154,10 @@ button#send-btn:disabled {
 
 .settings-section-header .settings-section-title {
     margin-bottom: 0;
+}
+
+.settings-section>.form-row {
+    margin-top: 8px;
 }
 
 /* Toggle Switch */

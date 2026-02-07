@@ -57,7 +57,7 @@
     let searchDebounceTimer = null;
 
     // DOM Elements
-    let chatInput, sendBtn, attachBtn, modeBtn, modeDropdown, modeLabel, autoAnswerModeOption, autoAnswerModeToggle;
+    let chatInput, sendBtn, attachBtn, modeBtn, modeDropdown, modeLabel;
     let inputHighlighter; // Overlay for syntax highlighting in input
     let queueSection, queueHeader, queueList, queueCount;
     let chatContainer, chipsContainer, autocompleteDropdown, autocompleteList, autocompleteEmpty;
@@ -129,8 +129,7 @@
         modeBtn = document.getElementById('mode-btn');
         modeDropdown = document.getElementById('mode-dropdown');
         modeLabel = document.getElementById('mode-label');
-        autoAnswerModeOption = document.getElementById('auto-answer-mode-option');
-        autoAnswerModeToggle = document.getElementById('auto-answer-mode-toggle');
+
         queueSection = document.getElementById('queue-section');
         queueHeader = document.getElementById('queue-header');
         queueList = document.getElementById('queue-list');
@@ -368,10 +367,14 @@
         var autoAnswerSection = document.createElement('div');
         autoAnswerSection.className = 'settings-section';
         autoAnswerSection.innerHTML = '<div class="settings-section-header">' +
-            '<div class="settings-section-title"><span class="codicon codicon-rocket"></span> Auto answer</div>' +
+            '<div class="settings-section-title">' +
+            '<span class="codicon codicon-rocket"></span> Auto Answer' +
+            '<span class="settings-info-icon" title="When enabled, the AI will automatically receive this text \n as a response instead of waiting for your input. \n Useful for granting temporary autonomy to agents. \n "auto-answer respects your prompt queue and waits until it is clear" " > ' +
+            '<span class="codicon codicon-info"></span></span>' +
+            '</div>' +
             '<div class="toggle-switch" id="auto-answer-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>' +
             '</div>' +
-            '<div class="form-row">' +
+            '<div class="form-row hidden">' +
             '<textarea class="form-input form-textarea" id="auto-answer-text" placeholder="Enter auto answer text..." maxlength="2000"></textarea>' +
             '</div>';
         modalContent.appendChild(autoAnswerSection);
@@ -434,37 +437,6 @@
                 closeModeDropdown();
             });
         });
-
-        if (autoAnswerModeOption) {
-            autoAnswerModeOption.addEventListener('click', function (e) {
-                if (e.target && e.target.closest('#auto-answer-mode-toggle')) return;
-                toggleAutoAnswerSetting();
-                closeModeDropdown();
-            });
-            autoAnswerModeOption.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleAutoAnswerSetting();
-                    closeModeDropdown();
-                }
-            });
-        }
-
-        if (autoAnswerModeToggle) {
-            autoAnswerModeToggle.addEventListener('click', function (e) {
-                e.stopPropagation();
-                toggleAutoAnswerSetting();
-                closeModeDropdown();
-            });
-            autoAnswerModeToggle.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleAutoAnswerSetting();
-                    closeModeDropdown();
-                }
-            });
-        }
 
         document.addEventListener('click', function (e) {
             if (dropdownOpen && !e.target.closest('.mode-selector') && !e.target.closest('.mode-dropdown')) closeModeDropdown();
@@ -1773,11 +1745,16 @@
     }
 
     function updateAutoAnswerToggleUI() {
-        [autoAnswerToggle, autoAnswerMainToggle, autoAnswerModeToggle].forEach(function (toggle) {
+        [autoAnswerToggle, autoAnswerMainToggle].forEach(function (toggle) {
             if (!toggle) return;
             toggle.classList.toggle('active', autoAnswerEnabled);
             toggle.setAttribute('aria-checked', autoAnswerEnabled ? 'true' : 'false');
         });
+        // Show/hide the auto answer text input based on toggle state
+        var autoAnswerTextRow = autoAnswerTextInput ? autoAnswerTextInput.closest('.form-row') : null;
+        if (autoAnswerTextRow) {
+            autoAnswerTextRow.classList.toggle('hidden', !autoAnswerEnabled);
+        }
     }
 
     function handleAutoAnswerTextInput() {

@@ -271,7 +271,7 @@ body {
 .tool-history-area {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 2px;
     padding: 12px 4px 0 4px;
     /* Added top padding to separate from title bar */
     flex-shrink: 0;
@@ -284,7 +284,7 @@ body {
     border-radius: 6px;
     overflow: hidden;
     transition: all 0.2s ease;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .tool-call-card:last-child {
@@ -1368,21 +1368,6 @@ button#send-btn .codicon {
     opacity: 0.9;
 }
 
-.mode-option-toggle {
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.mode-option-toggle .mode-option-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.mode-option-toggle .toggle-switch {
-    margin-left: auto;
-}
-
 .mode-option:first-child {
     border-radius: 5px 5px 0 0;
 }
@@ -2139,6 +2124,24 @@ button#send-btn:disabled {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+/* Info icon tooltip */
+.settings-info-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    cursor: help;
+}
+
+.settings-info-icon .codicon {
+    font-size: 12px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.settings-info-icon:hover .codicon {
+    opacity: 1;
 }
 
 /* Section header with toggle inline */

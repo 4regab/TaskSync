@@ -1973,13 +1973,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 <span class="codicon codicon-layers"></span>
                 <span>Queue</span>
             </div>
-            <div class="mode-option mode-option-toggle" id="auto-answer-mode-option" data-action="toggle-auto-answer" role="button" tabindex="0" aria-label="Toggle auto answer">
-                <div class="mode-option-label">
-                    <span class="codicon codicon-rocket"></span>
-                    <span>Auto answer</span>
-                </div>
-                <div class="toggle-switch" id="auto-answer-mode-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>
-            </div>
         </div>
         </div><!-- End input-wrapper -->
         </div><!-- End input-area-container -->

@@ -9,11 +9,19 @@ TaskSync lets you batch and queue your prompts to AI agents in VS Code, so they 
 ### Smart Queue Mode
 Queue multiple prompts to be automatically sent when the AI agent requests feedback. Perfect for:
 - Batching instructions for long-running tasks
-- Pre-loading prompts  for predictable workflows  
+- Pre-loading prompts for predictable workflows  
 - Reducing interruptions during focused work
 
 ### Normal Mode
 Direct interaction with AI agents - respond to each request as it comes in with full control over the conversation flow.
+
+### Auto Answer
+Let AI agents work autonomously by automatically responding to `ask_user` prompts. When enabled:
+- Agents receive a configurable auto-response instead of waiting for your input
+- Toggle on/off from the mode dropdown or the welcome section
+- Customize the auto-answer text in Settings to control agent behavior
+- Queue takes priority — queued messages are sent first before auto-answer kicks in
+- Perfect for hands-free operation on well-defined tasks
 
 ### File & Folder References
 Reference files and folders directly in your responses using `#` mentions:
@@ -67,6 +75,13 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 1. Toggle "Queue Mode" OFF
 2. When an AI agent calls `ask_user`, you'll see the prompt in TaskSync
 3. Type your response and press Enter to send
+
+### Auto Answer Mode
+1. Enable "Auto Answer" from the mode dropdown or the welcome section toggle
+2. When an AI agent calls `ask_user`, TaskSync automatically responds with your configured auto-answer text
+3. Customize the response text in Settings (gear icon) → Auto Answer Text
+4. Queued messages still take priority — auto-answer only triggers when the queue is empty
+5. Toggle off anytime to return to manual interaction
 
 ### File References
 1. Type `#` in the input field

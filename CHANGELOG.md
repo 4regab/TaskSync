@@ -2,11 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## TaskSync v2.0.13 (02-07-26)
-- refactor: remove auto answer from mode dropdown, show auto-answer text on toggle, update docs
-
-
-## TaskSync v2.0.13 (Unreleased)
+## TaskSync v2.0.13 
 - **Auto Answer Mode**: Automatically respond to `ask_user` prompts with configurable text for hands-free agent operation
 - Add auto-answer toggle in mode dropdown and welcome section
 - Customizable auto-answer text via settings (`tasksync.autoAnswer`, `tasksync.autoAnswerText`)

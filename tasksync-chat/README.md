@@ -15,12 +15,12 @@ Queue multiple prompts to be automatically sent when the AI agent requests feedb
 ### Normal Mode
 Direct interaction with AI agents - respond to each request as it comes in with full control over the conversation flow.
 
-### Auto Answer
+### Autopilot
 Let AI agents work autonomously by automatically responding to `ask_user` prompts. When enabled:
 - Agents receive a configurable auto-response instead of waiting for your input
-- Toggle on/off from the mode dropdown or the welcome section
-- Customize the auto-answer text in Settings to control agent behavior
-- Queue takes priority — queued messages are sent first before auto-answer kicks in
+- Toggle on/off from the Autopilot switch below the send button, or in Settings
+- Customize the Autopilot response text in Settings to control agent behavior
+- **Queue priority**: queued prompts are ALWAYS sent first — Autopilot only triggers when the queue is empty
 - Perfect for hands-free operation on well-defined tasks
 
 ### File & Folder References
@@ -76,11 +76,11 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 2. When an AI agent calls `ask_user`, you'll see the prompt in TaskSync
 3. Type your response and press Enter to send
 
-### Auto Answer Mode
-1. Enable "Auto Answer" from the mode dropdown or the welcome section toggle
-2. When an AI agent calls `ask_user`, TaskSync automatically responds with your configured auto-answer text
-3. Customize the response text in Settings (gear icon) → Auto Answer Text
-4. Queued messages still take priority — auto-answer only triggers when the queue is empty
+### Autopilot Mode
+1. Enable **Autopilot** from the toggle below the send button, or in Settings
+2. When an AI agent calls `ask_user`, TaskSync automatically responds with your configured Autopilot text
+3. Customize the response text in Settings (gear icon) → Autopilot
+4. **Queue priority**: queued prompts are always sent first — Autopilot only triggers when the queue is empty
 5. Toggle off anytime to return to manual interaction
 
 ### File References

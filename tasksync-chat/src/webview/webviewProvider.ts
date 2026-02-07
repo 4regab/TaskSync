@@ -75,7 +75,7 @@ type ToWebviewMessage =
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
     | { type: 'imageSaved'; attachment: AttachmentInfo }
     | { type: 'openSettingsModal' }
-    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autoAnswerEnabled: boolean; autoAnswerText: string; reusablePrompts: ReusablePrompt[] }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[] }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
     | { type: 'playNotificationSound' }
     | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
@@ -101,8 +101,8 @@ type FromWebviewMessage =
     | { type: 'openSettingsModal' }
     | { type: 'updateSoundSetting'; enabled: boolean }
     | { type: 'updateInteractiveApprovalSetting'; enabled: boolean }
-    | { type: 'updateAutoAnswerSetting'; enabled: boolean }
-    | { type: 'updateAutoAnswerText'; text: string }
+    | { type: 'updateAutopilotSetting'; enabled: boolean }
+    | { type: 'updateAutopilotText'; text: string }
     | { type: 'addReusablePrompt'; name: string; prompt: string }
     | { type: 'editReusablePrompt'; id: string; name: string; prompt: string }
     | { type: 'removeReusablePrompt'; id: string }
@@ -169,13 +169,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Interactive approval buttons enabled (loaded from VS Code settings)
     private _interactiveApprovalEnabled: boolean = true;
 
-    private readonly _AUTO_ANSWER_DEFAULT_TEXT = 'You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.';
+    private readonly _AUTOPILOT_DEFAULT_TEXT = 'You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.';
 
-    // Auto answer enabled (loaded from VS Code settings)
-    private _autoAnswerEnabled: boolean = false;
+    // Autopilot enabled (loaded from VS Code settings)
+    private _autopilotEnabled: boolean = false;
 
-    // Auto answer text (loaded from VS Code settings)
-    private _autoAnswerText: string = '';
+    // Autopilot text (loaded from VS Code settings)
+    private _autopilotText: string = '';
 
     // Flag to prevent config reload during our own updates (avoids race condition)
     private _isUpdatingConfig: boolean = false;
@@ -211,6 +211,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 }
                 if (e.affectsConfiguration('tasksync.notificationSound') ||
                     e.affectsConfiguration('tasksync.interactiveApproval') ||
+                    e.affectsConfiguration('tasksync.autopilot') ||
+                    e.affectsConfiguration('tasksync.autopilotText') ||
                     e.affectsConfiguration('tasksync.autoAnswer') ||
                     e.affectsConfiguration('tasksync.autoAnswerText') ||
                     e.affectsConfiguration('tasksync.reusablePrompts')) {
@@ -332,26 +334,66 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     /**
      * Load settings from VS Code configuration
      */
-    private _getAutoAnswerDefaultText(config?: vscode.WorkspaceConfiguration): string {
+    private _getAutopilotDefaultText(config?: vscode.WorkspaceConfiguration): string {
         const settings = config ?? vscode.workspace.getConfiguration('tasksync');
-        const inspected = settings.inspect<string>('autoAnswerText');
+        const inspected = settings.inspect<string>('autopilotText');
         const defaultValue = typeof inspected?.defaultValue === 'string' ? inspected.defaultValue : '';
-        return defaultValue.trim().length > 0 ? defaultValue : this._AUTO_ANSWER_DEFAULT_TEXT;
+        return defaultValue.trim().length > 0 ? defaultValue : this._AUTOPILOT_DEFAULT_TEXT;
     }
 
-    private _normalizeAutoAnswerText(text: string, config?: vscode.WorkspaceConfiguration): string {
-        const defaultAutoAnswerText = this._getAutoAnswerDefaultText(config);
-        return text.trim().length > 0 ? text : defaultAutoAnswerText;
+    private _normalizeAutopilotText(text: string, config?: vscode.WorkspaceConfiguration): string {
+        const defaultAutopilotText = this._getAutopilotDefaultText(config);
+        return text.trim().length > 0 ? text : defaultAutopilotText;
     }
 
     private _loadSettings(): void {
         const config = vscode.workspace.getConfiguration('tasksync');
         this._soundEnabled = config.get<boolean>('notificationSound', true);
         this._interactiveApprovalEnabled = config.get<boolean>('interactiveApproval', true);
-        this._autoAnswerEnabled = config.get<boolean>('autoAnswer', false);
-        const defaultAutoAnswerText = this._getAutoAnswerDefaultText(config);
-        const configuredAutoAnswerText = config.get<string>('autoAnswerText', defaultAutoAnswerText);
-        this._autoAnswerText = this._normalizeAutoAnswerText(configuredAutoAnswerText, config);
+
+        // Backward-compatible migration: read old 'autoAnswer'/'autoAnswerText' keys
+        // if the new 'autopilot'/'autopilotText' keys have not been explicitly set by the user.
+        const inspectedAutopilot = config.inspect<boolean>('autopilot');
+        const hasNewAutopilotKey = inspectedAutopilot?.globalValue !== undefined
+            || inspectedAutopilot?.workspaceValue !== undefined
+            || inspectedAutopilot?.workspaceFolderValue !== undefined;
+
+        if (!hasNewAutopilotKey) {
+            const oldVal = config.inspect<boolean>('autoAnswer');
+            const hasOldKey = oldVal?.globalValue !== undefined
+                || oldVal?.workspaceValue !== undefined
+                || oldVal?.workspaceFolderValue !== undefined;
+            if (hasOldKey) {
+                this._autopilotEnabled = config.get<boolean>('autoAnswer', false);
+            } else {
+                this._autopilotEnabled = false;
+            }
+        } else {
+            this._autopilotEnabled = config.get<boolean>('autopilot', false);
+        }
+
+        const defaultAutopilotText = this._getAutopilotDefaultText(config);
+
+        const inspectedAutopilotText = config.inspect<string>('autopilotText');
+        const hasNewAutopilotTextKey = inspectedAutopilotText?.globalValue !== undefined
+            || inspectedAutopilotText?.workspaceValue !== undefined
+            || inspectedAutopilotText?.workspaceFolderValue !== undefined;
+
+        if (!hasNewAutopilotTextKey) {
+            const oldTextVal = config.inspect<string>('autoAnswerText');
+            const hasOldTextKey = oldTextVal?.globalValue !== undefined
+                || oldTextVal?.workspaceValue !== undefined
+                || oldTextVal?.workspaceFolderValue !== undefined;
+            if (hasOldTextKey) {
+                const oldText = config.get<string>('autoAnswerText', defaultAutopilotText);
+                this._autopilotText = this._normalizeAutopilotText(oldText, config);
+            } else {
+                this._autopilotText = defaultAutopilotText;
+            }
+        } else {
+            const configuredAutopilotText = config.get<string>('autopilotText', defaultAutopilotText);
+            this._autopilotText = this._normalizeAutopilotText(configuredAutopilotText, config);
+        }
 
         // Load reusable prompts from settings
         const savedPrompts = config.get<Array<{ name: string; prompt: string }>>('reusablePrompts', []);
@@ -387,8 +429,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             type: 'updateSettings',
             soundEnabled: this._soundEnabled,
             interactiveApprovalEnabled: this._interactiveApprovalEnabled,
-            autoAnswerEnabled: this._autoAnswerEnabled,
-            autoAnswerText: this._autoAnswerText,
+            autopilotEnabled: this._autopilotEnabled,
+            autopilotText: this._autopilotText,
             reusablePrompts: this._reusablePrompts
         } as ToWebviewMessage);
     }
@@ -506,7 +548,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     public async waitForUserResponse(question: string): Promise<UserResponseResult> {
-        if (this._autoAnswerEnabled && !(this._queueEnabled && this._promptQueue.length > 0)) {
+        if (this._autopilotEnabled && !(this._queueEnabled && this._promptQueue.length > 0)) {
             // Race condition prevention: If there's already a pending request, cancel it
             // This prevents orphaned promises when waitForUserResponse is called multiple times
             this._cancelSupersededPendingRequest();
@@ -514,7 +556,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             this._currentToolCallId = toolCallId;
 
-            const effectiveText = this._normalizeAutoAnswerText(this._autoAnswerText);
+            const effectiveText = this._normalizeAutopilotText(this._autopilotText);
             const entry: ToolCallEntry = {
                 id: toolCallId,
                 prompt: question,
@@ -710,11 +752,11 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             case 'updateInteractiveApprovalSetting':
                 this._handleUpdateInteractiveApprovalSetting(message.enabled);
                 break;
-            case 'updateAutoAnswerSetting':
-                this._handleUpdateAutoAnswerSetting(message.enabled);
+            case 'updateAutopilotSetting':
+                this._handleUpdateAutopilotSetting(message.enabled);
                 break;
-            case 'updateAutoAnswerText':
-                this._handleUpdateAutoAnswerText(message.text);
+            case 'updateAutopilotText':
+                this._handleUpdateAutopilotText(message.text);
                 break;
             case 'addReusablePrompt':
                 this._handleAddReusablePrompt(message.name, message.prompt);
@@ -1421,14 +1463,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
-     * Handle updating auto answer setting
+     * Handle updating autopilot setting
      */
-    private async _handleUpdateAutoAnswerSetting(enabled: boolean): Promise<void> {
-        this._autoAnswerEnabled = enabled;
+    private async _handleUpdateAutopilotSetting(enabled: boolean): Promise<void> {
+        this._autopilotEnabled = enabled;
         this._isUpdatingConfig = true;
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
-            await config.update('autoAnswer', enabled, vscode.ConfigurationTarget.Global);
+            await config.update('autopilot', enabled, vscode.ConfigurationTarget.Global);
             // Reload settings after update to ensure consistency
             this._loadSettings();
             // Update UI to reflect the saved state
@@ -1439,15 +1481,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
-     * Handle updating auto answer text
+     * Handle updating autopilot text
      */
-    private async _handleUpdateAutoAnswerText(text: string): Promise<void> {
+    private async _handleUpdateAutopilotText(text: string): Promise<void> {
         this._isUpdatingConfig = true;
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
-            const normalizedText = this._normalizeAutoAnswerText(text, config);
-            this._autoAnswerText = normalizedText;
-            await config.update('autoAnswerText', normalizedText, vscode.ConfigurationTarget.Global);
+            const normalizedText = this._normalizeAutopilotText(text, config);
+            this._autopilotText = normalizedText;
+            await config.update('autopilotText', normalizedText, vscode.ConfigurationTarget.Global);
             // Reload settings after update to ensure consistency
             this._loadSettings();
             // Update UI to reflect the saved state
@@ -1888,16 +1930,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     </div>
                 </div>
 
-                <div class="welcome-auto-answer" id="welcome-auto-answer">
-                    <div class="welcome-auto-answer-text">
-                        <div class="welcome-auto-answer-label">
-                            <span class="codicon codicon-rocket"></span>
-                            <span class="welcome-auto-answer-title">Auto answer</span>
-                        </div>
-                        <p class="welcome-auto-answer-desc">Useful if you need to temporarily provide autonomy for an agent.</p>
-                    </div>
-                    <div class="toggle-switch" id="auto-answer-main-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>
-                </div>
+                <p class="welcome-autopilot-info"> Tip: Enable <strong>Autopilot</strong> to automatically respond to ask_user prompts without waiting for your input, using a customizable prompt you can configure in Settings.<br>Queued prompts always take priority over Autopilot responses.</p>
             </div>
 
             <!-- Tool Call History Area -->
@@ -1957,6 +1990,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     </div>
                 </div>
                 <div class="actions-right">
+                    <span class="autopilot-label">Autopilot</span>
+                    <div class="toggle-switch" id="autopilot-toggle" role="switch" aria-checked="false" aria-label="Enable Autopilot mode" tabindex="0"></div>
                     <button id="send-btn" title="Send message" aria-label="Send message">
                         <span class="codicon codicon-arrow-up"></span>
                     </button>

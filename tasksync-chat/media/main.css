@@ -151,53 +151,19 @@ body {
     margin-bottom: 12px;
 }
 
-.welcome-auto-answer {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    width: 100%;
-    max-width: 500px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--vscode-panel-border);
-    background-color: var(--vscode-input-background);
-    text-align: left;
-}
-
-.welcome-auto-answer-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    flex: 1;
-    min-width: 0;
-}
-
-.welcome-auto-answer-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--vscode-foreground);
-}
-
-.welcome-auto-answer-label .codicon {
-    font-size: 14px;
-    opacity: 0.9;
-}
-
-.welcome-auto-answer-desc {
-    margin: 0;
+/* Welcome Autopilot info text - centered below cards */
+.welcome-autopilot-info {
     font-size: 11px;
-    line-height: 1.4;
     color: var(--vscode-descriptionForeground);
-    text-align: left;
+    margin: 0;
+    line-height: 1.5;
+    text-align: center;
+    max-width: 500px;
 }
 
-.welcome-auto-answer .toggle-switch {
-    align-self: flex-start;
-    margin-top: 2px;
+.welcome-autopilot-info strong {
+    color: var(--vscode-foreground);
+    font-weight: 600;
 }
 
 .welcome-card {
@@ -1270,6 +1236,13 @@ button#send-btn .codicon {
     overflow: visible;
 }
 
+.autopilot-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    font-weight: 500;
+    user-select: none;
+}
+
 .actions-left {
     display: flex;
     align-items: center;
@@ -1279,7 +1252,7 @@ button#send-btn .codicon {
 .actions-right {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 .icon-btn {

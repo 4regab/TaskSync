@@ -24,13 +24,13 @@
     // Settings state
     let soundEnabled = true;
     let interactiveApprovalEnabled = true;
-    let autoAnswerEnabled = false;
-    let autoAnswerText = '';
-    let autoAnswerTextDebounceTimer = null;
+    let autopilotEnabled = false;
+    let autopilotText = '';
+    let autopilotTextDebounceTimer = null;
 
     // Tracks local edits to prevent stale settings overwriting user input mid-typing.
-    let autoAnswerTextEditVersion = 0;
-    let autoAnswerTextLastSentVersion = 0;
+    let autopilotTextEditVersion = 0;
+    let autopilotTextLastSentVersion = 0;
     let reusablePrompts = [];
     let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
 
@@ -72,7 +72,7 @@
     let slashDropdown, slashList, slashEmpty;
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
-    let soundToggle, interactiveApprovalToggle, autoAnswerToggle, autoAnswerMainToggle, autoAnswerTextInput, promptsList, addPromptBtn, addPromptForm;
+    let soundToggle, interactiveApprovalToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
 
     function init() {
         try {
@@ -144,7 +144,7 @@
         welcomeSection = document.getElementById('welcome-section');
         cardVibe = document.getElementById('card-vibe');
         cardSpec = document.getElementById('card-spec');
-        autoAnswerMainToggle = document.getElementById('auto-answer-main-toggle');
+        autopilotToggle = document.getElementById('autopilot-toggle');
         toolHistoryArea = document.getElementById('tool-history-area');
         pendingMessage = document.getElementById('pending-message');
         // Slash command dropdown
@@ -363,21 +363,21 @@
             '</div>';
         modalContent.appendChild(approvalSection);
 
-        // Auto answer section
-        var autoAnswerSection = document.createElement('div');
-        autoAnswerSection.className = 'settings-section';
-        autoAnswerSection.innerHTML = '<div class="settings-section-header">' +
+        // Autopilot section
+        var autopilotSection = document.createElement('div');
+        autopilotSection.className = 'settings-section';
+        autopilotSection.innerHTML = '<div class="settings-section-header">' +
             '<div class="settings-section-title">' +
-            '<span class="codicon codicon-rocket"></span> Auto Answer' +
-            '<span class="settings-info-icon" title="When enabled, the AI will automatically receive this text \n as a response instead of waiting for your input. \n Useful for granting temporary autonomy to agents. \n "auto-answer respects your prompt queue and waits until it is clear" " > ' +
+            '<span class="codicon codicon-rocket"></span> Autopilot Prompt' +
+            '<span class="settings-info-icon" title="When enabled, the AI automatically receives your configured text as a response instead of waiting for manual input.\n\nHow it works:\n• The agent calls ask_user → Autopilot instantly replies with your text\n• The agent continues working without waiting for you\n• Disable Autopilot at any time to regain manual control\n\nQueue Priority:\n• Queued prompts are ALWAYS sent first before Autopilot triggers\n• Autopilot only activates when the queue is empty\n• This lets you steer the agent with queued instructions while Autopilot handles routine questions" > ' +
             '<span class="codicon codicon-info"></span></span>' +
             '</div>' +
-            '<div class="toggle-switch" id="auto-answer-toggle" role="switch" aria-checked="false" aria-label="Enable auto answer" tabindex="0"></div>' +
+            '<button class="add-prompt-btn-inline" id="autopilot-edit-btn" title="Edit Autopilot prompt" aria-label="Edit Autopilot prompt"><span class="codicon codicon-edit"></span></button>' +
             '</div>' +
             '<div class="form-row hidden">' +
-            '<textarea class="form-input form-textarea" id="auto-answer-text" placeholder="Enter auto answer text..." maxlength="2000"></textarea>' +
+            '<textarea class="form-input form-textarea" id="autopilot-text" placeholder="Enter Autopilot response text..." maxlength="2000"></textarea>' +
             '</div>';
-        modalContent.appendChild(autoAnswerSection);
+        modalContent.appendChild(autopilotSection);
 
         // Reusable Prompts section - plus button next to title
         var promptsSection = document.createElement('div');
@@ -408,8 +408,8 @@
         // Cache inner elements
         soundToggle = document.getElementById('sound-toggle');
         interactiveApprovalToggle = document.getElementById('interactive-approval-toggle');
-        autoAnswerToggle = document.getElementById('auto-answer-toggle');
-        autoAnswerTextInput = document.getElementById('auto-answer-text');
+        autopilotEditBtn = document.getElementById('autopilot-edit-btn');
+        autopilotTextInput = document.getElementById('autopilot-text');
         promptsList = document.getElementById('prompts-list');
         addPromptBtn = document.getElementById('add-prompt-btn');
         addPromptForm = document.getElementById('add-prompt-form');
@@ -485,27 +485,21 @@
                 }
             });
         }
-        if (autoAnswerToggle) {
-            autoAnswerToggle.addEventListener('click', toggleAutoAnswerSetting);
-            autoAnswerToggle.addEventListener('keydown', function (e) {
+        if (autopilotEditBtn) {
+            autopilotEditBtn.addEventListener('click', toggleAutopilotTextEdit);
+        }
+        if (autopilotToggle) {
+            autopilotToggle.addEventListener('click', toggleAutopilotSetting);
+            autopilotToggle.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    toggleAutoAnswerSetting();
+                    toggleAutopilotSetting();
                 }
             });
         }
-        if (autoAnswerMainToggle) {
-            autoAnswerMainToggle.addEventListener('click', toggleAutoAnswerSetting);
-            autoAnswerMainToggle.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleAutoAnswerSetting();
-                }
-            });
-        }
-        if (autoAnswerTextInput) {
-            autoAnswerTextInput.addEventListener('input', handleAutoAnswerTextInput);
-            autoAnswerTextInput.addEventListener('blur', flushAutoAnswerTextUpdate);
+        if (autopilotTextInput) {
+            autopilotTextInput.addEventListener('input', handleAutopilotTextInput);
+            autopilotTextInput.addEventListener('blur', flushAutopilotTextUpdate);
         }
         if (addPromptBtn) addPromptBtn.addEventListener('click', showAddPromptForm);
         // Add prompt form events (deferred - bind after modal created)
@@ -860,13 +854,13 @@
             case 'updateSettings':
                 soundEnabled = message.soundEnabled !== false;
                 interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
-                autoAnswerEnabled = message.autoAnswerEnabled === true;
-                autoAnswerText = typeof message.autoAnswerText === 'string' ? message.autoAnswerText : '';
+                autopilotEnabled = message.autopilotEnabled === true;
+                autopilotText = typeof message.autopilotText === 'string' ? message.autopilotText : '';
                 reusablePrompts = message.reusablePrompts || [];
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
-                updateAutoAnswerToggleUI();
-                updateAutoAnswerTextUI();
+                updateAutopilotToggleUI();
+                updateAutopilotTextUI();
                 renderPromptsList();
                 break;
             case 'slashCommandResults':
@@ -1709,7 +1703,7 @@
 
     function closeSettingsModal() {
         if (!settingsModalOverlay) return;
-        flushAutoAnswerTextUpdate();
+        flushAutopilotTextUpdate();
         settingsModalOverlay.classList.add('hidden');
         hideAddPromptForm();
     }
@@ -1738,68 +1732,72 @@
         interactiveApprovalToggle.setAttribute('aria-checked', interactiveApprovalEnabled ? 'true' : 'false');
     }
 
-    function toggleAutoAnswerSetting() {
-        autoAnswerEnabled = !autoAnswerEnabled;
-        updateAutoAnswerToggleUI();
-        vscode.postMessage({ type: 'updateAutoAnswerSetting', enabled: autoAnswerEnabled });
+    function toggleAutopilotSetting() {
+        autopilotEnabled = !autopilotEnabled;
+        updateAutopilotToggleUI();
+        vscode.postMessage({ type: 'updateAutopilotSetting', enabled: autopilotEnabled });
     }
 
-    function updateAutoAnswerToggleUI() {
-        [autoAnswerToggle, autoAnswerMainToggle].forEach(function (toggle) {
-            if (!toggle) return;
-            toggle.classList.toggle('active', autoAnswerEnabled);
-            toggle.setAttribute('aria-checked', autoAnswerEnabled ? 'true' : 'false');
-        });
-        // Show/hide the auto answer text input based on toggle state
-        var autoAnswerTextRow = autoAnswerTextInput ? autoAnswerTextInput.closest('.form-row') : null;
-        if (autoAnswerTextRow) {
-            autoAnswerTextRow.classList.toggle('hidden', !autoAnswerEnabled);
+    function updateAutopilotToggleUI() {
+        if (autopilotToggle) {
+            autopilotToggle.classList.toggle('active', autopilotEnabled);
+            autopilotToggle.setAttribute('aria-checked', autopilotEnabled ? 'true' : 'false');
         }
     }
 
-    function handleAutoAnswerTextInput() {
-        if (!autoAnswerTextInput) return;
-        autoAnswerText = autoAnswerTextInput.value;
-        autoAnswerTextEditVersion++;
-        scheduleAutoAnswerTextUpdate();
-    }
-
-    function scheduleAutoAnswerTextUpdate() {
-        if (autoAnswerTextDebounceTimer) clearTimeout(autoAnswerTextDebounceTimer);
-        autoAnswerTextDebounceTimer = setTimeout(flushAutoAnswerTextUpdate, 400);
-    }
-
-    function flushAutoAnswerTextUpdate() {
-        if (autoAnswerTextDebounceTimer) {
-            clearTimeout(autoAnswerTextDebounceTimer);
-            autoAnswerTextDebounceTimer = null;
+    function toggleAutopilotTextEdit() {
+        var autopilotTextRow = autopilotTextInput ? autopilotTextInput.closest('.form-row') : null;
+        if (autopilotTextRow) {
+            var isHidden = autopilotTextRow.classList.toggle('hidden');
+            if (!isHidden && autopilotTextInput) {
+                autopilotTextInput.focus();
+            }
         }
-        if (!autoAnswerTextInput) return;
-        autoAnswerText = autoAnswerTextInput.value;
-        autoAnswerTextLastSentVersion = autoAnswerTextEditVersion;
-        vscode.postMessage({ type: 'updateAutoAnswerText', text: autoAnswerText });
     }
 
-    function updateAutoAnswerTextUI() {
-        if (!autoAnswerTextInput) return;
+    function handleAutopilotTextInput() {
+        if (!autopilotTextInput) return;
+        autopilotText = autopilotTextInput.value;
+        autopilotTextEditVersion++;
+        scheduleAutopilotTextUpdate();
+    }
 
-        var isFocused = document.activeElement === autoAnswerTextInput;
-        var hasUnflushedEdits = autoAnswerTextEditVersion > autoAnswerTextLastSentVersion;
+    function scheduleAutopilotTextUpdate() {
+        if (autopilotTextDebounceTimer) clearTimeout(autopilotTextDebounceTimer);
+        autopilotTextDebounceTimer = setTimeout(flushAutopilotTextUpdate, 400);
+    }
+
+    function flushAutopilotTextUpdate() {
+        if (autopilotTextDebounceTimer) {
+            clearTimeout(autopilotTextDebounceTimer);
+            autopilotTextDebounceTimer = null;
+        }
+        if (!autopilotTextInput) return;
+        autopilotText = autopilotTextInput.value;
+        autopilotTextLastSentVersion = autopilotTextEditVersion;
+        vscode.postMessage({ type: 'updateAutopilotText', text: autopilotText });
+    }
+
+    function updateAutopilotTextUI() {
+        if (!autopilotTextInput) return;
+
+        var isFocused = document.activeElement === autopilotTextInput;
+        var hasUnflushedEdits = autopilotTextEditVersion > autopilotTextLastSentVersion;
 
         // While user is typing, do not apply incoming settings updates that could revert new characters.
         if (isFocused && hasUnflushedEdits) {
             return;
         }
 
-        if (autoAnswerTextInput.value !== autoAnswerText) {
-            var selectionStart = autoAnswerTextInput.selectionStart;
-            var selectionEnd = autoAnswerTextInput.selectionEnd;
+        if (autopilotTextInput.value !== autopilotText) {
+            var selectionStart = autopilotTextInput.selectionStart;
+            var selectionEnd = autopilotTextInput.selectionEnd;
 
-            autoAnswerTextInput.value = autoAnswerText;
+            autopilotTextInput.value = autopilotText;
 
             if (isFocused && selectionStart !== null && selectionEnd !== null) {
-                var maxPos = autoAnswerTextInput.value.length;
-                autoAnswerTextInput.setSelectionRange(
+                var maxPos = autopilotTextInput.value.length;
+                autopilotTextInput.setSelectionRange(
                     Math.min(selectionStart, maxPos),
                     Math.min(selectionEnd, maxPos)
                 );

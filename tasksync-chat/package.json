@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Automate AI conversations. Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "2.0.13",
+  "version": "2.0.15",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -102,15 +102,15 @@
           "default": true,
           "description": "Automatically register MCP server with Kiro and other supported clients."
         },
-        "tasksync.autoAnswer": {
+        "tasksync.autopilot": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically answer ask_user prompts without waiting for user input."
+          "description": "Enable Autopilot to automatically respond to ask_user prompts without waiting for your input, using a customizable prompt you can configure in Settings. Queued prompts always take priority over Autopilot responses."
         },
-        "tasksync.autoAnswerText": {
+        "tasksync.autopilotText": {
           "type": "string",
           "default": "You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.",
-          "description": "Text returned when Auto answer is enabled."
+          "description": "Text returned when Autopilot is enabled. The agent receives this as an automatic response."
         },
         "tasksync.notificationSound": {
           "type": "boolean",

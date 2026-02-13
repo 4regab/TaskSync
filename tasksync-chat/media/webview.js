@@ -1137,6 +1137,97 @@
         return '<table class="markdown-table"><thead>' + headerHtml + '</thead><tbody>' + bodyHtml + '</tbody></table>';
     }
 
+    /**
+     * Converts markdown lists (ordered/unordered) with indentation-based nesting into HTML.
+     * Uses 2-space indentation as one nesting level.
+     * @param {string} text - Escaped markdown text
+     * @returns {string} Text with markdown lists converted to nested HTML lists
+     */
+    function convertMarkdownLists(text) {
+        var listLineRegex = /^\s*(?:[-*]|\d+\.)\s+.+$/;
+        var lines = text.split('\n');
+        var output = [];
+        var listBuffer = [];
+
+        function renderListNode(node) {
+            return '<' + node.type + '>' + node.items.map(function (item) {
+                var childrenHtml = item.children.map(renderListNode).join('');
+                return '<li>' + item.text + childrenHtml + '</li>';
+            }).join('') + '</' + node.type + '>';
+        }
+
+        function processListBuffer(buffer) {
+            var listItemRegex = /^(\s*)([-*]|\d+\.)\s+(.+)$/;
+            var rootLists = [];
+            var stack = []; // [{ type, list, lastItem }]
+
+            buffer.forEach(function (line) {
+                var match = listItemRegex.exec(line);
+                if (!match) return;
+
+                var indent = match[1].replace(/\t/g, '    ').length;
+                var depth = Math.floor(indent / 2);
+                var marker = match[2];
+                var type = (marker === '-' || marker === '*') ? 'ul' : 'ol';
+                var text = match[3];
+
+                while (stack.length > depth + 1) {
+                    stack.pop();
+                }
+
+                var entry = stack[depth];
+                if (!entry || entry.type !== type) {
+                    var listNode = { type: type, items: [] };
+
+                    if (depth === 0) {
+                        rootLists.push(listNode);
+                    } else {
+                        var parentEntry = stack[depth - 1];
+                        if (parentEntry && parentEntry.lastItem) {
+                            parentEntry.lastItem.children.push(listNode);
+                        } else {
+                            // Fallback for malformed indentation without a parent item
+                            rootLists.push(listNode);
+                        }
+                    }
+
+                    stack = stack.slice(0, depth);
+                    entry = { type: type, list: listNode, lastItem: null };
+                    stack.push(entry);
+                } else {
+                    stack = stack.slice(0, depth + 1);
+                }
+
+                var item = { text: text, children: [] };
+                entry.list.items.push(item);
+                entry.lastItem = item;
+                stack[depth] = entry;
+            });
+
+            return rootLists.map(renderListNode).join('');
+        }
+
+        lines.forEach(function (line) {
+            if (listLineRegex.test(line)) {
+                listBuffer.push(line);
+                return;
+            }
+
+            if (listBuffer.length > 0) {
+                output.push(processListBuffer(listBuffer));
+                listBuffer = [];
+            }
+
+            output.push(line);
+        });
+
+        if (listBuffer.length > 0) {
+            output.push(processListBuffer(listBuffer));
+        }
+
+        return output.join('\n');
+    }
+
     function formatMarkdown(text) {
         if (!text) return '';
 
@@ -1189,19 +1280,8 @@
         // Merge consecutive blockquotes
         html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
 
-        // Unordered lists (- item or * item)
-        html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
-        // Wrap consecutive <li> in <ul>
-        html = html.replace(/(<li>.*<\/li>\n?)+/g, function (match) {
-            return '<ul>' + match.replace(/\n/g, '') + '</ul>';
-        });
-
-        // Ordered lists (1. item)
-        html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>');
-        // Wrap consecutive <oli> in <ol> then convert to li
-        html = html.replace(/(<oli>.*<\/oli>\n?)+/g, function (match) {
-            return '<ol>' + match.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>').replace(/\n/g, '') + '</ol>';
-        });
+        // Lists (ordered/unordered, including nested indentation)
+        html = convertMarkdownLists(html);
 
         // Markdown tables - SAFE approach to prevent ReDoS
         // Instead of using nested quantifiers with regex (which can cause exponential backtracking),
@@ -1243,9 +1323,15 @@
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 
+        // Strikethrough (~~text~~)
+        html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
         // Italic (*text* or _text_)
+        // For *text*: standard markdown italic
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+        // For _text_: require non-word boundaries (Unicode-aware) around underscore markers
+        // This keeps punctuation-adjacent emphasis working while avoiding snake_case matches
+        html = html.replace(/(^|[^\p{L}\p{N}_])_([^_\s](?:[^_]*[^_\s])?)_(?=[^\p{L}\p{N}_]|$)/gu, '$1<em>$2</em>');
 
         // Line breaks - but collapse multiple consecutive breaks
         // Don't add <br> after block elements

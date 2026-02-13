@@ -1131,6 +1131,105 @@
         return '<table class="markdown-table"><thead>' + headerHtml + '</thead><tbody>' + bodyHtml + '</tbody></table>';
     }
 
+    /**
+     * Converts markdown lists (ordered/unordered) with indentation-based nesting into HTML.
+     * Uses 2-space indentation as one nesting level.
+    * @param {string} text - Escaped markdown text (must already be HTML-escaped by caller)
+     * @returns {string} Text with markdown lists converted to nested HTML lists
+     */
+    function convertMarkdownLists(text) {
+        // Allow empty list items (e.g. "- ") to stay closer to markdown behavior.
+        var listLineRegex = /^\s*(?:[-*]|\d+\.)\s.*$/;
+        var lines = text.split('\n');
+        var output = [];
+        var listBuffer = [];
+
+        function renderListNode(node) {
+            var startAttr = (node.type === 'ol' && typeof node.start === 'number' && node.start > 1)
+                ? ' start="' + node.start + '"'
+                : '';
+            return '<' + node.type + startAttr + '>' + node.items.map(function (item) {
+                var childrenHtml = item.children.map(renderListNode).join('');
+                return '<li>' + item.text + childrenHtml + '</li>';
+            }).join('') + '</' + node.type + '>';
+        }
+
+        function processListBuffer(buffer) {
+            var listItemRegex = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+            var rootLists = [];
+            var stack = []; // [{ type, list, lastItem }]
+
+            buffer.forEach(function (line) {
+                var match = listItemRegex.exec(line);
+                if (!match) return;
+
+                var indent = match[1].replace(/\t/g, '    ').length;
+                var depth = Math.floor(indent / 2);
+                var marker = match[2];
+                var type = (marker === '-' || marker === '*') ? 'ul' : 'ol';
+                var text = match[3];
+
+                while (stack.length > depth + 1) {
+                    stack.pop();
+                }
+
+                var entry = stack[depth];
+                if (!entry || entry.type !== type) {
+                    var listNode = {
+                        type: type,
+                        items: [],
+                        start: type === 'ol' ? parseInt(marker, 10) : null
+                    };
+
+                    if (depth === 0) {
+                        rootLists.push(listNode);
+                    } else {
+                        var parentEntry = stack[depth - 1];
+                        if (parentEntry && parentEntry.lastItem) {
+                            parentEntry.lastItem.children.push(listNode);
+                        } else {
+                            // Fallback for malformed indentation without a parent item
+                            rootLists.push(listNode);
+                        }
+                    }
+
+                    entry = { type: type, list: listNode, lastItem: null };
+                }
+
+                // Keep one stack entry per depth for predictable parent/child handling.
+                stack = stack.slice(0, depth);
+                stack[depth] = entry;
+
+                var item = { text: text, children: [] };
+                entry.list.items.push(item);
+                entry.lastItem = item;
+                stack[depth] = entry;
+            });
+
+            return rootLists.map(renderListNode).join('');
+        }
+
+        lines.forEach(function (line) {
+            if (listLineRegex.test(line)) {
+                listBuffer.push(line);
+                return;
+            }
+
+            if (listBuffer.length > 0) {
+                output.push(processListBuffer(listBuffer));
+                listBuffer = [];
+            }
+
+            output.push(line);
+        });
+
+        if (listBuffer.length > 0) {
+            output.push(processListBuffer(listBuffer));
+        }
+
+        return output.join('\n');
+    }
+
     function formatMarkdown(text) {
         if (!text) return '';
 
@@ -1146,6 +1245,7 @@
         // Store code blocks BEFORE escaping HTML to preserve backticks
         var codeBlocks = [];
         var mermaidBlocks = [];
+        var inlineCodeSpans = [];
 
         // Extract mermaid blocks first (before HTML escaping)
         // Match ```mermaid followed by newline or just content
@@ -1161,6 +1261,14 @@
             var index = codeBlocks.length;
             codeBlocks.push({ lang: lang || '', code: code.trim() });
             return '%%CODEBLOCK' + index + '%%';
+        });
+
+        // Extract inline code BEFORE escaping and inline emphasis parsing.
+        // This prevents * and _ inside `code` from being interpreted as markdown emphasis.
+        processedText = processedText.replace(/`([^`\n]+)`/g, function (match, code) {
+            var index = inlineCodeSpans.length;
+            inlineCodeSpans.push(code);
+            return '%%INLINECODE' + index + '%%';
         });
 
         // Now escape HTML on the remaining text
@@ -1183,19 +1291,9 @@
         // Merge consecutive blockquotes
         html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
 
-        // Unordered lists (- item or * item)
-        html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
-        // Wrap consecutive <li> in <ul>
-        html = html.replace(/(<li>.*<\/li>\n?)+/g, function (match) {
-            return '<ul>' + match.replace(/\n/g, '') + '</ul>';
-        });
-
-        // Ordered lists (1. item)
-        html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>');
-        // Wrap consecutive <oli> in <ol> then convert to li
-        html = html.replace(/(<oli>.*<\/oli>\n?)+/g, function (match) {
-            return '<ol>' + match.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>').replace(/\n/g, '') + '</ol>';
-        });
+        // Lists (ordered/unordered, including nested indentation)
+        // Security contract: html is already escaped above; list conversion must keep item text as-is.
+        html = convertMarkdownLists(html);
 
         // Markdown tables - SAFE approach to prevent ReDoS
         // Instead of using nested quantifiers with regex (which can cause exponential backtracking),
@@ -1230,19 +1328,27 @@
         }
         html = processedLines.join('\n');
 
-        // Inline code (`code`)
-        html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
         // Bold (**text** or __text__)
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 
+        // Strikethrough (~~text~~)
+        html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
         // Italic (*text* or _text_)
-        // For *text*: standard markdown italic
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        // For _text_: only match when surrounded by whitespace or string boundaries
-        // This prevents matching snake_case identifiers like xxx_yyy_zzz
-        html = html.replace(/(^|\s)_([^_\s][^_]*[^_\s])_(\s|$)/gm, '$1<em>$2</em>$3');
+        // For *text*: require non-word boundaries around delimiters and alnum at content edges.
+        // This avoids false-positive matches in plain prose (e.g. regex snippets, list-marker-like asterisks).
+        html = html.replace(/(^|[^\p{L}\p{N}_*])\*([\p{L}\p{N}](?:[^*\n]*?[\p{L}\p{N}])?)\*(?=[^\p{L}\p{N}_*]|$)/gu, '$1<em>$2</em>');
+        // For _text_: require non-word boundaries (Unicode-aware) around underscore markers
+        // This keeps punctuation-adjacent emphasis working while avoiding snake_case matches
+        html = html.replace(/(^|[^\p{L}\p{N}_])_([^_\s](?:[^_]*[^_\s])?)_(?=[^\p{L}\p{N}_]|$)/gu, '$1<em>$2</em>');
+
+        // Restore inline code after emphasis parsing so markdown markers inside code stay literal.
+        inlineCodeSpans.forEach(function (code, index) {
+            var escapedCode = escapeHtml(code);
+            var replacement = '<code class="inline-code">' + escapedCode + '</code>';
+            html = html.replace('%%INLINECODE' + index + '%%', replacement);
+        });
 
         // Line breaks - but collapse multiple consecutive breaks
         // Don't add <br> after block elements

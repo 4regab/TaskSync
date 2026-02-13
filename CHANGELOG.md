@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.15 (02-13-26)
+- fix: improve markdown parsing for italic text in webview
+
+
 ## TaskSync v2.0.14 (02-07-26)
 - refactor: rename Auto Answer to Autopilot, improve UI and settings
 - - Rename all autoAnswer references to autopilot across codebase

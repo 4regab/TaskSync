@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.16 (02-13-26)
+- fix: enhance markdown list conversion and inline code handling in webview
+
+
 ## TaskSync v2.0.15 (02-13-26)
 - fix: improve markdown parsing for italic text in webview
 

@@ -1134,24 +1134,28 @@
     /**
      * Converts markdown lists (ordered/unordered) with indentation-based nesting into HTML.
      * Uses 2-space indentation as one nesting level.
-     * @param {string} text - Escaped markdown text
+    * @param {string} text - Escaped markdown text (must already be HTML-escaped by caller)
      * @returns {string} Text with markdown lists converted to nested HTML lists
      */
     function convertMarkdownLists(text) {
-        var listLineRegex = /^\s*(?:[-*]|\d+\.)\s+.+$/;
+        // Allow empty list items (e.g. "- ") to stay closer to markdown behavior.
+        var listLineRegex = /^\s*(?:[-*]|\d+\.)\s.*$/;
         var lines = text.split('\n');
         var output = [];
         var listBuffer = [];
 
         function renderListNode(node) {
-            return '<' + node.type + '>' + node.items.map(function (item) {
+            var startAttr = (node.type === 'ol' && typeof node.start === 'number' && node.start > 1)
+                ? ' start="' + node.start + '"'
+                : '';
+            return '<' + node.type + startAttr + '>' + node.items.map(function (item) {
                 var childrenHtml = item.children.map(renderListNode).join('');
                 return '<li>' + item.text + childrenHtml + '</li>';
             }).join('') + '</' + node.type + '>';
         }
 
         function processListBuffer(buffer) {
-            var listItemRegex = /^(\s*)([-*]|\d+\.)\s+(.+)$/;
+            var listItemRegex = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
             var rootLists = [];
             var stack = []; // [{ type, list, lastItem }]
 
@@ -1171,7 +1175,11 @@
 
                 var entry = stack[depth];
                 if (!entry || entry.type !== type) {
-                    var listNode = { type: type, items: [] };
+                    var listNode = {
+                        type: type,
+                        items: [],
+                        start: type === 'ol' ? parseInt(marker, 10) : null
+                    };
 
                     if (depth === 0) {
                         rootLists.push(listNode);
@@ -1185,12 +1193,12 @@
                         }
                     }
 
-                    stack = stack.slice(0, depth);
                     entry = { type: type, list: listNode, lastItem: null };
-                    stack.push(entry);
-                } else {
-                    stack = stack.slice(0, depth + 1);
                 }
+
+                // Keep one stack entry per depth for predictable parent/child handling.
+                stack = stack.slice(0, depth);
+                stack[depth] = entry;
 
                 var item = { text: text, children: [] };
                 entry.list.items.push(item);
@@ -1237,6 +1245,7 @@
         // Store code blocks BEFORE escaping HTML to preserve backticks
         var codeBlocks = [];
         var mermaidBlocks = [];
+        var inlineCodeSpans = [];
 
         // Extract mermaid blocks first (before HTML escaping)
         // Match ```mermaid followed by newline or just content
@@ -1252,6 +1261,14 @@
             var index = codeBlocks.length;
             codeBlocks.push({ lang: lang || '', code: code.trim() });
             return '%%CODEBLOCK' + index + '%%';
+        });
+
+        // Extract inline code BEFORE escaping and inline emphasis parsing.
+        // This prevents * and _ inside `code` from being interpreted as markdown emphasis.
+        processedText = processedText.replace(/`([^`\n]+)`/g, function (match, code) {
+            var index = inlineCodeSpans.length;
+            inlineCodeSpans.push(code);
+            return '%%INLINECODE' + index + '%%';
         });
 
         // Now escape HTML on the remaining text
@@ -1275,6 +1292,7 @@
         html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
 
         // Lists (ordered/unordered, including nested indentation)
+        // Security contract: html is already escaped above; list conversion must keep item text as-is.
         html = convertMarkdownLists(html);
 
         // Markdown tables - SAFE approach to prevent ReDoS
@@ -1310,9 +1328,6 @@
         }
         html = processedLines.join('\n');
 
-        // Inline code (`code`)
-        html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
         // Bold (**text** or __text__)
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
@@ -1321,11 +1336,19 @@
         html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
 
         // Italic (*text* or _text_)
-        // For *text*: standard markdown italic
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        // For *text*: require non-word boundaries around delimiters and alnum at content edges.
+        // This avoids false-positive matches in plain prose (e.g. regex snippets, list-marker-like asterisks).
+        html = html.replace(/(^|[^\p{L}\p{N}_*])\*([\p{L}\p{N}](?:[^*\n]*?[\p{L}\p{N}])?)\*(?=[^\p{L}\p{N}_*]|$)/gu, '$1<em>$2</em>');
         // For _text_: require non-word boundaries (Unicode-aware) around underscore markers
         // This keeps punctuation-adjacent emphasis working while avoiding snake_case matches
         html = html.replace(/(^|[^\p{L}\p{N}_])_([^_\s](?:[^_]*[^_\s])?)_(?=[^\p{L}\p{N}_]|$)/gu, '$1<em>$2</em>');
+
+        // Restore inline code after emphasis parsing so markdown markers inside code stay literal.
+        inlineCodeSpans.forEach(function (code, index) {
+            var escapedCode = escapeHtml(code);
+            var replacement = '<code class="inline-code">' + escapedCode + '</code>';
+            html = html.replace('%%INLINECODE' + index + '%%', replacement);
+        });
 
         // Line breaks - but collapse multiple consecutive breaks
         // Don't add <br> after block elements

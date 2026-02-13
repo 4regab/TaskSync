@@ -1238,8 +1238,11 @@
         html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 
         // Italic (*text* or _text_)
+        // For *text*: standard markdown italic
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+        // For _text_: only match when surrounded by whitespace or string boundaries
+        // This prevents matching snake_case identifiers like xxx_yyy_zzz
+        html = html.replace(/(^|\s)_([^_\s][^_]*[^_\s])_(\s|$)/gm, '$1<em>$2</em>$3');
 
         // Line breaks - but collapse multiple consecutive breaks
         // Don't add <br> after block elements

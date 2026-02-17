@@ -361,7 +361,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         return `${seconds}s`;
     }
 
-    private static readonly _TIMER_TOOLTIP = 'It is advisable to start a new session after 4h or 50 tool calls to lessen the risks';
+    private static readonly _TIMER_TOOLTIP = 'It is advisable to start a new session and use another premium request prompt after 2-4h or 50 tool calls';
 
     /**
      * Update the view title and webview with current session timer state
@@ -2295,8 +2295,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     </div>
                 </div>
 
-                <p class="welcome-autopilot-info"> Tip: Enable <strong>Autopilot</strong> to automatically respond to ask_user prompts without waiting for your input, using a customizable prompt you can configure in Settings.<br>Queued prompts always take priority over Autopilot responses.</p>
-                <p class="welcome-autopilot-info">The session timer tracks how long you've been using one premium request. It is advisable to start a new session after <strong>4 hours</strong> or <strong>50 tool calls</strong> to lessen the risks.</p>
+                <p class="welcome-autopilot-info"> Tip: Enable <strong>Autopilot</strong> to automatically respond to ask_user prompts without waiting for your input, using a customizable prompt you can configure in Settings. Queued prompts always take priority over Autopilot responses. Configure the session timeout in settings to avoid keeping copilot session alive when you're away.</p>
+                <p class="welcome-autopilot-info">The session timer tracks how long you've been using one premium request. It is advisable to start a new session and use another premium request prompt after <strong>2-4 hours</strong> or <strong>50 tool calls</strong>.</p>
             </div>
 
             <!-- Tool Call History Area -->

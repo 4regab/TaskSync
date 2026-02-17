@@ -155,9 +155,9 @@ body {
 .welcome-autopilot-info {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
-    margin: 0;
+    margin: 8px 0 0 0;
     line-height: 1.5;
-    text-align: center;
+    text-align: justify;
     max-width: 500px;
 }
 

@@ -2,8 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## TaskSync v2.0.17 (02-17-26)
-- feat: update welcome autopilot info and tooltip for session management
+## TaskSync v2.0.17 (02-18-26)
+- **Response Timeout**: Auto-respond to pending tool calls if user doesn't respond within a configurable time window (5–120 min); sends Autopilot text when Autopilot is enabled, or a session termination message when disabled
+- **Max Consecutive Auto-responses** (`tasksync.maxConsecutiveAutoResponses`): Limit the number of consecutive timeout auto-responses (default 5) before the session is automatically terminated, preventing infinite loops
+- **Per-workspace Isolation**: Queue, history, and settings are now stored per-workspace using workspace-scoped storage with fallback to global; no more cross-project contamination
+- **New Session replaces Clear Session**: "Clear Current Session" command replaced with "New Session" — properly cancels pending requests, resets the timeout timer, and clears the auto-response counter before starting fresh
+- **Session Timer in Title Bar**: Elapsed session time now displayed in the view title bar; timer freezes on session termination with a visual indicator
+- **Session Health Tip**: Welcome section now shows "It is advisable to start a new session after 4 hours or 50 tool calls to lessen the risks"; badge tooltip echoes this recommendation
+- **Structured Session Termination**: Session termination now uses a boolean `sessionTerminated` flag (replacing string matching) for reliable state tracking in both provider and webview
+- fix: `startNewSession()` now correctly cancels pending requests, timeout timer, and resets the auto-response counter
+- fix: `onDidChangeConfiguration` now handles live updates to `responseTimeout` and `maxConsecutiveAutoResponses` settings
+- fix: History persistence updated to use workspace-aware storage path (`_getStorageUri()`)
+- fix: Removed noisy `console.log` statements from timeout timer
+- fix: Webview properly receives and uses the `sessionTerminated` parameter
+- Update settings UI: timeout dropdown and max auto-response controls added to Settings modal
+- Update welcome section Autopilot info and tooltip for session management context
+- update welcome autopilot info and tooltip for session management
 
 
 ## TaskSync v2.0.16 (02-13-26)

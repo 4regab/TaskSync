@@ -27,6 +27,8 @@
     let autopilotEnabled = false;
     let autopilotText = '';
     let autopilotTextDebounceTimer = null;
+    let responseTimeout = 60;
+    let maxConsecutiveAutoResponses = 5;
 
     // Tracks local edits to prevent stale settings overwriting user input mid-typing.
     let autopilotTextEditVersion = 0;
@@ -73,6 +75,7 @@
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
     let soundToggle, interactiveApprovalToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
+    let responseTimeoutSelect, maxAutoResponsesInput;
 
     function init() {
         try {
@@ -379,6 +382,51 @@
             '</div>';
         modalContent.appendChild(autopilotSection);
 
+        // Response Timeout section - dropdown for 10-120 minutes
+        var timeoutSection = document.createElement('div');
+        timeoutSection.className = 'settings-section';
+        timeoutSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title">' +
+            '<span class="codicon codicon-clock"></span> Response Timeout' +
+            '<span class="settings-info-icon" title="If no response is received within this time, it will automatically send the session termination message.">' +
+            '<span class="codicon codicon-info"></span></span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="form-row">' +
+            '<select class="form-input form-select" id="response-timeout-select">' +
+            '<option value="0">Disabled</option>' +
+            '<option value="5">5 minutes</option>' +
+            '<option value="10">10 minutes</option>' +
+            '<option value="20">20 minutes</option>' +
+            '<option value="30">30 minutes</option>' +
+            '<option value="40">40 minutes</option>' +
+            '<option value="50">50 minutes</option>' +
+            '<option value="60">60 minutes (default)</option>' +
+            '<option value="70">70 minutes</option>' +
+            '<option value="80">80 minutes</option>' +
+            '<option value="90">90 minutes</option>' +
+            '<option value="100">100 minutes</option>' +
+            '<option value="110">110 minutes</option>' +
+            '<option value="120">120 minutes</option>' +
+            '</select>' +
+            '</div>';
+        modalContent.appendChild(timeoutSection);
+
+        // Max Consecutive Auto-Responses section - number input
+        var maxAutoSection = document.createElement('div');
+        maxAutoSection.className = 'settings-section';
+        maxAutoSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title">' +
+            '<span class="codicon codicon-stop-circle"></span> Max Auto-Responses' +
+            '<span class="settings-info-icon" title="Maximum consecutive auto-responses using Autopilot before pausing and requiring manual input. Prevents infinite loops.">' +
+            '<span class="codicon codicon-info"></span></span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="form-row">' +
+            '<input type="number" class="form-input" id="max-auto-responses-input" min="1" max="50" value="5" />' +
+            '</div>';
+        modalContent.appendChild(maxAutoSection);
+
         // Reusable Prompts section - plus button next to title
         var promptsSection = document.createElement('div');
         promptsSection.className = 'settings-section';
@@ -410,6 +458,8 @@
         interactiveApprovalToggle = document.getElementById('interactive-approval-toggle');
         autopilotEditBtn = document.getElementById('autopilot-edit-btn');
         autopilotTextInput = document.getElementById('autopilot-text');
+        responseTimeoutSelect = document.getElementById('response-timeout-select');
+        maxAutoResponsesInput = document.getElementById('max-auto-responses-input');
         promptsList = document.getElementById('prompts-list');
         addPromptBtn = document.getElementById('add-prompt-btn');
         addPromptForm = document.getElementById('add-prompt-form');
@@ -500,6 +550,13 @@
         if (autopilotTextInput) {
             autopilotTextInput.addEventListener('input', handleAutopilotTextInput);
             autopilotTextInput.addEventListener('blur', flushAutopilotTextUpdate);
+        }
+        if (responseTimeoutSelect) {
+            responseTimeoutSelect.addEventListener('change', handleResponseTimeoutChange);
+        }
+        if (maxAutoResponsesInput) {
+            maxAutoResponsesInput.addEventListener('change', handleMaxAutoResponsesChange);
+            maxAutoResponsesInput.addEventListener('blur', handleMaxAutoResponsesChange);
         }
         if (addPromptBtn) addPromptBtn.addEventListener('click', showAddPromptForm);
         // Add prompt form events (deferred - bind after modal created)
@@ -831,7 +888,7 @@
                 showPendingToolCall(message.id, message.prompt, message.isApprovalQuestion, message.choices);
                 break;
             case 'toolCallCompleted':
-                addToolCallToCurrentSession(message.entry);
+                addToolCallToCurrentSession(message.entry, message.sessionTerminated);
                 break;
             case 'updateCurrentSession':
                 currentSessionCalls = message.history || [];
@@ -857,10 +914,14 @@
                 autopilotEnabled = message.autopilotEnabled === true;
                 autopilotText = typeof message.autopilotText === 'string' ? message.autopilotText : '';
                 reusablePrompts = message.reusablePrompts || [];
+                responseTimeout = typeof message.responseTimeout === 'number' ? message.responseTimeout : 60;
+                maxConsecutiveAutoResponses = typeof message.maxConsecutiveAutoResponses === 'number' ? message.maxConsecutiveAutoResponses : 5;
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
                 updateAutopilotToggleUI();
                 updateAutopilotTextUI();
+                updateResponseTimeoutUI();
+                updateMaxAutoResponsesUI();
                 renderPromptsList();
                 break;
             case 'slashCommandResults':
@@ -885,8 +946,19 @@
             case 'clear':
                 promptQueue = [];
                 currentSessionCalls = [];
+                pendingToolCall = null;
+                isProcessingResponse = false;
                 renderQueue();
                 renderCurrentSession();
+                if (pendingMessage) {
+                    pendingMessage.classList.add('hidden');
+                    pendingMessage.innerHTML = '';
+                }
+                updateWelcomeSectionVisibility();
+                break;
+            case 'updateSessionTimer':
+                // Timer is displayed in the view title bar by the extension host
+                // No webview UI to update
                 break;
         }
     }
@@ -943,7 +1015,7 @@
         }
     }
 
-    function addToolCallToCurrentSession(entry) {
+    function addToolCallToCurrentSession(entry, sessionTerminated) {
         pendingToolCall = null;
 
         // Remove pending class to re-enable session switching UI
@@ -966,7 +1038,23 @@
         isProcessingResponse = true;
         if (pendingMessage) {
             pendingMessage.classList.remove('hidden');
-            pendingMessage.innerHTML = '<div class="working-indicator">Processing your response</div>';
+            // Check if the extension host signaled session termination
+            if (sessionTerminated) {
+                isProcessingResponse = false;
+                pendingMessage.innerHTML = '<div class="new-session-prompt">' +
+                    '<span>Session terminated</span>' +
+                    '<button class="new-session-btn" id="new-session-btn">' +
+                    '<span class="codicon codicon-add"></span> Start new session' +
+                    '</button></div>';
+                var newSessionBtn = document.getElementById('new-session-btn');
+                if (newSessionBtn) {
+                    newSessionBtn.addEventListener('click', function () {
+                        vscode.postMessage({ type: 'newSession' });
+                    });
+                }
+            } else {
+                pendingMessage.innerHTML = '<div class="working-indicator">Processing your response</div>';
+            }
         }
 
         // Auto-scroll to show the working indicator
@@ -1912,6 +2000,38 @@
                 );
             }
         }
+    }
+
+    function handleResponseTimeoutChange() {
+        if (!responseTimeoutSelect) return;
+        var value = parseInt(responseTimeoutSelect.value, 10);
+        console.log('[TaskSync] Response timeout changed to:', value);
+        if (!isNaN(value)) {
+            responseTimeout = value;
+            vscode.postMessage({ type: 'updateResponseTimeout', value: value });
+        }
+    }
+
+    function updateResponseTimeoutUI() {
+        if (!responseTimeoutSelect) return;
+        responseTimeoutSelect.value = String(responseTimeout);
+    }
+
+    function handleMaxAutoResponsesChange() {
+        if (!maxAutoResponsesInput) return;
+        var value = parseInt(maxAutoResponsesInput.value, 10);
+        if (!isNaN(value) && value >= 1 && value <= 50) {
+            maxConsecutiveAutoResponses = value;
+            vscode.postMessage({ type: 'updateMaxConsecutiveAutoResponses', value: value });
+        } else {
+            // Reset to valid value
+            maxAutoResponsesInput.value = maxConsecutiveAutoResponses;
+        }
+    }
+
+    function updateMaxAutoResponsesUI() {
+        if (!maxAutoResponsesInput) return;
+        maxAutoResponsesInput.value = maxConsecutiveAutoResponses;
     }
 
     function showAddPromptForm() {

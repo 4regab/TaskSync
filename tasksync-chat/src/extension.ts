@@ -149,16 +149,9 @@ export function activate(context: vscode.ExtensionContext) {
         provider.openHistoryModal();
     });
 
-    // Clear current session command (triggered from view title bar)
-    const clearSessionCmd = vscode.commands.registerCommand('tasksync.clearCurrentSession', async () => {
-        const result = await vscode.window.showWarningMessage(
-            'Clear all tool calls from current session?',
-            { modal: true },
-            'Clear'
-        );
-        if (result === 'Clear') {
-            provider.clearCurrentSession();
-        }
+    // New session command (triggered from view title bar)
+    const newSessionCmd = vscode.commands.registerCommand('tasksync.newSession', () => {
+        provider.startNewSession();
     });
 
     // Open settings modal command (triggered from view title bar)
@@ -166,7 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
         provider.openSettingsModal();
     });
 
-    context.subscriptions.push(startMcpCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, clearSessionCmd, openSettingsCmd);
+    context.subscriptions.push(startMcpCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, newSessionCmd, openSettingsCmd);
 }
 
 export async function deactivate() {

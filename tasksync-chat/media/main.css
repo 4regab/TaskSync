@@ -155,9 +155,9 @@ body {
 .welcome-autopilot-info {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
-    margin: 0;
+    margin: 8px 0 0 0;
     line-height: 1.5;
-    text-align: center;
+    text-align: justify;
     max-width: 500px;
 }
 
@@ -614,6 +614,34 @@ body {
         opacity: 1;
         transform: scale(1);
     }
+}
+
+/* New Session Prompt - shown after session terminated */
+.new-session-prompt {
+    padding: 12px 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.new-session-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border: none;
+    border-radius: 4px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.new-session-btn:hover {
+    background: var(--vscode-button-hoverBackground);
 }
 
 /* Mermaid diagram container */
@@ -2331,6 +2359,30 @@ button#send-btn:disabled {
     resize: vertical;
     min-height: 60px;
     max-height: 150px;
+}
+
+/* Select dropdown styling */
+.form-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M4.5 5.5L8 9l3.5-3.5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px;
+    padding-right: 28px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+}
+
+/* Number input styling */
+.form-input[type="number"] {
+    width: 100%;
 }
 
 .form-actions {

@@ -105,12 +105,60 @@
         "tasksync.autopilot": {
           "type": "boolean",
           "default": false,
+          "scope": "window",
           "description": "Enable Autopilot to automatically respond to ask_user prompts without waiting for your input, using a customizable prompt you can configure in Settings. Queued prompts always take priority over Autopilot responses."
         },
         "tasksync.autopilotText": {
           "type": "string",
           "default": "You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.",
+          "scope": "window",
           "description": "Text returned when Autopilot is enabled. The agent receives this as an automatic response."
+        },
+        "tasksync.responseTimeout": {
+          "type": "string",
+          "default": "60",
+          "scope": "window",
+          "enum": [
+            "0",
+            "5",
+            "10",
+            "20",
+            "30",
+            "40",
+            "50",
+            "60",
+            "70",
+            "80",
+            "90",
+            "100",
+            "110",
+            "120"
+          ],
+          "enumDescriptions": [
+            "Disabled (no auto-response)",
+            "5 minutes",
+            "10 minutes",
+            "20 minutes",
+            "30 minutes",
+            "40 minutes",
+            "50 minutes",
+            "60 minutes",
+            "70 minutes",
+            "80 minutes",
+            "90 minutes (1.5 hours)",
+            "100 minutes",
+            "110 minutes",
+            "120 minutes (2 hours)"
+          ],
+          "description": "Auto-respond to pending tool calls if user doesn't respond within this time. When Autopilot is enabled, the Autopilot text is sent. When disabled, a session termination message is sent."
+        },
+        "tasksync.maxConsecutiveAutoResponses": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 50,
+          "scope": "window",
+          "description": "Maximum consecutive auto-responses (from timeout) before terminating session. Prevents infinite loops."
         },
         "tasksync.notificationSound": {
           "type": "boolean",
@@ -165,9 +213,9 @@
         "icon": "$(history)"
       },
       {
-        "command": "tasksync.clearCurrentSession",
-        "title": "Clear Current Session",
-        "icon": "$(trash)"
+        "command": "tasksync.newSession",
+        "title": "New Session",
+        "icon": "$(add)"
       },
       {
         "command": "tasksync.openSettings",
@@ -178,12 +226,12 @@
     "menus": {
       "view/title": [
         {
-          "command": "tasksync.openHistory",
+          "command": "tasksync.newSession",
           "when": "view == taskSyncView",
           "group": "navigation@1"
         },
         {
-          "command": "tasksync.clearCurrentSession",
+          "command": "tasksync.openHistory",
           "when": "view == taskSyncView",
           "group": "navigation@2"
         },

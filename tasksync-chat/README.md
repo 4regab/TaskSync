@@ -1,6 +1,6 @@
 # TaskSync
 
-**Automate AI conversations. Queue your prompts. Work uninterrupted.**
+**Queue your prompts. Human in the loop workflow**
 
 TaskSync lets you batch and queue your prompts to AI agents in VS Code, so they can keep working while you stay focused. Perfect for long-running tasks, repetitive workflows, or hands-free automation—saving you time and reducing premium requests.
 
@@ -22,6 +22,22 @@ Let AI agents work autonomously by automatically responding to `ask_user` prompt
 - Customize the Autopilot response text in Settings to control agent behavior
 - **Queue priority**: queued prompts are ALWAYS sent first — Autopilot only triggers when the queue is empty
 - Perfect for hands-free operation on well-defined tasks
+
+### Response Timeout (Auto-respond when idle)
+Prevent tool calls from waiting indefinitely when you're away:
+- Configure timeout duration in VS Code Settings, including disabled (`0` minutes), `5` minutes, and options up to `120` minutes
+- When timeout elapses, TaskSync auto-responds with Autopilot text
+- **Consecutive limit**: After N consecutive immediate Autopilot responses (configurable, default 5), Autopilot is automatically disabled to prevent infinite loops
+- Timeout-based auto-responses do **not** count toward this consecutive limit
+- Counter resets when you manually respond
+
+### Per-Workspace Isolation
+TaskSync settings and data are now isolated per VS Code workspace:
+- **Queue**: Each workspace has its own prompt queue
+- **History**: Tool call history is stored per-workspace
+- **Autopilot settings**: Autopilot toggle and text are workspace-specific
+- **Fallback**: When no workspace is open, global storage is used
+- Reusable prompts (slash commands) remain global for cross-project use
 
 ### File & Folder References
 Reference files and folders directly in your responses using `#` mentions:

@@ -75,11 +75,13 @@ type ToWebviewMessage =
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
     | { type: 'imageSaved'; attachment: AttachmentInfo }
     | { type: 'openSettingsModal' }
-    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[] }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; maxConsecutiveAutoResponses: number }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
     | { type: 'playNotificationSound' }
     | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
-    | { type: 'contextReferenceAdded'; reference: { id: string; type: string; label: string; content: string } };
+    | { type: 'contextReferenceAdded'; reference: { id: string; type: string; label: string; content: string } }
+    | { type: 'clear' }
+    | { type: 'updateSessionTimer'; startTime: number | null; frozenElapsed: number | null };
 
 type FromWebviewMessage =
     | { type: 'submit'; value: string; attachments: AttachmentInfo[] }
@@ -94,6 +96,7 @@ type FromWebviewMessage =
     | { type: 'removeHistoryItem'; callId: string }
     | { type: 'clearPersistedHistory' }
     | { type: 'openHistoryModal' }
+    | { type: 'newSession' }
     | { type: 'searchFiles'; query: string }
     | { type: 'saveImage'; data: string; mimeType: string }
     | { type: 'addFileReference'; file: FileSearchResult }
@@ -108,6 +111,8 @@ type FromWebviewMessage =
     | { type: 'removeReusablePrompt'; id: string }
     | { type: 'searchSlashCommands'; query: string }
     | { type: 'openExternal'; url: string }
+    | { type: 'updateResponseTimeout'; value: number }
+    | { type: 'updateMaxConsecutiveAutoResponses'; value: number }
     | { type: 'searchContext'; query: string }
     | { type: 'selectContextReference'; contextType: string; options?: Record<string, unknown> };
 
@@ -170,6 +175,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private _interactiveApprovalEnabled: boolean = true;
 
     private readonly _AUTOPILOT_DEFAULT_TEXT = 'You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.';
+    private readonly _SESSION_TERMINATION_TEXT = 'Session terminated. Do not use askUser tool again.';
 
     // Autopilot enabled (loaded from VS Code settings)
     private _autopilotEnabled: boolean = false;
@@ -185,6 +191,17 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
     // Context manager for #terminal, #problems references
     private readonly _contextManager: ContextManager;
+
+    // Response timeout tracking
+    private _responseTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+    private _consecutiveAutoResponses: number = 0;
+
+    // Session timer (resets on new session)
+    private _sessionStartTime: number | null = null;  // timestamp when first tool call occurred
+    private _sessionFrozenElapsed: number | null = null;  // frozen elapsed ms when session terminated
+    private _sessionTimerInterval: ReturnType<typeof setInterval> | null = null;
+    // Flag indicating the session was terminated (next tool call auto-starts new session)
+    private _sessionTerminated: boolean = false;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -263,34 +280,32 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
-     * Clear current session tool calls (called from view title bar button)
-     * Preserves any pending tool call entry so responses don't lose their prompt
-     * Cleans up temporary images associated with cleared entries
+     * Start a new session: save current session to history, then clear
+     * Called from view title bar button or webview "Start new session" button
      */
-    public clearCurrentSession(): void {
-        // Preserve pending entry if there is one
-        let pendingEntry: ToolCallEntry | undefined;
-        if (this._currentToolCallId) {
-            pendingEntry = this._currentSessionCallsMap.get(this._currentToolCallId);
-        }
+    public startNewSession(): void {
+        // Save current completed entries to persisted history
+        this.saveCurrentSessionToHistory();
 
-        // Clean up temp images from entries being cleared (except pending)
-        const entriesToClear = pendingEntry
-            ? this._currentSessionCalls.filter(e => e.id !== pendingEntry!.id)
-            : this._currentSessionCalls;
-        this._cleanupTempImagesFromEntries(entriesToClear);
+        // Clean up temp images from current session
+        this._cleanupTempImagesFromEntries(this._currentSessionCalls);
 
         // Clear all entries
         this._currentSessionCalls = [];
         this._currentSessionCallsMap.clear();
 
-        // Restore pending entry if we had one
-        if (pendingEntry) {
-            this._currentSessionCalls.push(pendingEntry);
-            this._currentSessionCallsMap.set(pendingEntry.id, pendingEntry);
-        }
+        // Reset session timer and termination flag
+        this._sessionStartTime = null;
+        this._sessionFrozenElapsed = null;
+        this._stopSessionTimerInterval();
+        this._sessionTerminated = false;
+        this._updateViewTitle();
 
         this._updateCurrentSessionUI();
+        this._updatePersistedHistoryUI();
+
+        // Show welcome section again
+        this._view?.webview.postMessage({ type: 'clear' } as ToWebviewMessage);
     }
 
     /**
@@ -311,6 +326,72 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Play system sound using OS-native methods
      * Works even when webview is minimized or hidden
      */
+
+    /**
+     * Format elapsed milliseconds as human-readable (e.g., 5m 32s, 1h 5m 32s)
+     */
+    private _formatElapsed(ms: number): string {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return `${hours}h ${minutes}m ${seconds}s`;
+        }
+        if (minutes > 0) {
+            return `${minutes}m ${seconds}s`;
+        }
+        return `${seconds}s`;
+    }
+
+    private static readonly _TIMER_TOOLTIP = 'This timer helps you track how long you have been using one premium request prompt. It is advisable to start a new session when this hits more than 4hrs, or when you have made at least 50 tool calls.';
+
+    /**
+     * Update the view title and webview with current session timer state
+     */
+    private _updateViewTitle(): void {
+        if (this._view) {
+            if (this._sessionFrozenElapsed !== null) {
+                this._view.title = this._formatElapsed(this._sessionFrozenElapsed);
+                this._view.description = TaskSyncWebviewProvider._TIMER_TOOLTIP;
+            } else if (this._sessionStartTime !== null) {
+                this._view.title = this._formatElapsed(Date.now() - this._sessionStartTime);
+                this._view.description = TaskSyncWebviewProvider._TIMER_TOOLTIP;
+            } else {
+                this._view.title = undefined;
+                this._view.description = undefined;
+            }
+            this._view.webview.postMessage({
+                type: 'updateSessionTimer',
+                startTime: this._sessionStartTime,
+                frozenElapsed: this._sessionFrozenElapsed
+            } as ToWebviewMessage);
+        }
+    }
+
+    /**
+     * Start the session timer interval that updates the view description every second
+     */
+    private _startSessionTimerInterval(): void {
+        if (this._sessionTimerInterval) return; // Already running
+        this._sessionTimerInterval = setInterval(() => {
+            if (this._sessionStartTime !== null && this._sessionFrozenElapsed === null) {
+                if (this._view) {
+                    this._view.title = this._formatElapsed(Date.now() - this._sessionStartTime);
+                }
+            }
+        }, 1000);
+    }
+
+    /**
+     * Stop the session timer interval
+     */
+    private _stopSessionTimerInterval(): void {
+        if (this._sessionTimerInterval) {
+            clearInterval(this._sessionTimerInterval);
+            this._sessionTimerInterval = null;
+        }
+    }
     private _playSystemSound(): void {
         const { exec } = require('child_process');
         const platform = process.platform;
@@ -425,13 +506,19 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Update settings UI in webview
      */
     private _updateSettingsUI(): void {
+        const config = vscode.workspace.getConfiguration('tasksync');
+        const responseTimeout = parseInt(config.get<string>('responseTimeout', '60'), 10);
+        const maxConsecutiveAutoResponses = config.get<number>('maxConsecutiveAutoResponses', 5);
+
         this._view?.webview.postMessage({
             type: 'updateSettings',
             soundEnabled: this._soundEnabled,
             interactiveApprovalEnabled: this._interactiveApprovalEnabled,
             autopilotEnabled: this._autopilotEnabled,
             autopilotText: this._autopilotText,
-            reusablePrompts: this._reusablePrompts
+            reusablePrompts: this._reusablePrompts,
+            responseTimeout: responseTimeout,
+            maxConsecutiveAutoResponses: maxConsecutiveAutoResponses
         } as ToWebviewMessage);
     }
 
@@ -457,6 +544,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
         // Clear pending requests (reject any waiting promises)
         this._pendingRequests.clear();
+
+        // Clear response timeout timer
+        if (this._responseTimeoutTimer) {
+            clearTimeout(this._responseTimeoutTimer);
+            this._responseTimeoutTimer = null;
+        }
+
+        // Clear session timer interval
+        this._stopSessionTimerInterval();
 
         // Clean up temp images from current session before clearing
         this._cleanupTempImagesFromEntries(this._currentSessionCalls);
@@ -486,6 +582,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         };
 
         webviewView.webview.html = this._getHtmlContent(webviewView.webview);
+
+        // Restore session timer display if timer is already running
+        if (this._sessionStartTime !== null || this._sessionFrozenElapsed !== null) {
+            this._updateViewTitle();
+            if (this._sessionStartTime !== null && this._sessionFrozenElapsed === null) {
+                this._startSessionTimerInterval();
+            }
+        }
 
         // Register message handler (disposable is tracked via this._disposables)
         webviewView.webview.onDidReceiveMessage(
@@ -524,6 +628,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             return;
         }
 
+        // Cancel response timeout timer for superseded request
+        if (this._responseTimeoutTimer) {
+            clearTimeout(this._responseTimeoutTimer);
+            this._responseTimeoutTimer = null;
+        }
+
         const oldToolCallId = this._currentToolCallId;
         const oldResolve = this._pendingRequests.get(oldToolCallId);
         if (oldResolve) {
@@ -548,33 +658,67 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     public async waitForUserResponse(question: string): Promise<UserResponseResult> {
+        // Auto-start new session if previous session was terminated
+        if (this._sessionTerminated) {
+            this.startNewSession();
+        }
+
+        // Start session timer on first tool call
+        if (this._sessionStartTime === null) {
+            this._sessionStartTime = Date.now();
+            this._sessionFrozenElapsed = null;
+            this._startSessionTimerInterval();
+            this._updateViewTitle();
+        }
+
         if (this._autopilotEnabled && !(this._queueEnabled && this._promptQueue.length > 0)) {
             // Race condition prevention: If there's already a pending request, cancel it
             // This prevents orphaned promises when waitForUserResponse is called multiple times
             this._cancelSupersededPendingRequest();
 
-            const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            this._currentToolCallId = toolCallId;
+            // Increment consecutive auto-response counter
+            this._consecutiveAutoResponses++;
 
-            const effectiveText = this._normalizeAutopilotText(this._autopilotText);
-            const entry: ToolCallEntry = {
-                id: toolCallId,
-                prompt: question,
-                response: effectiveText,
-                timestamp: Date.now(),
-                isFromQueue: false,
-                status: 'completed'
-            };
-            this._currentSessionCalls.unshift(entry);
-            this._currentSessionCallsMap.set(entry.id, entry);
-            this._updateCurrentSessionUI();
-            this._currentToolCallId = null;
+            // Get max consecutive limit from config
+            const config = vscode.workspace.getConfiguration('tasksync');
+            const maxConsecutive = config.get<number>('maxConsecutiveAutoResponses', 5);
 
-            return {
-                value: effectiveText,
-                queue: this._queueEnabled && this._promptQueue.length > 0,
-                attachments: []
-            };
+            // Check if limit reached BEFORE auto-responding
+            if (this._consecutiveAutoResponses > maxConsecutive) {
+                // Limit exceeded - disable autopilot and wait for timeout or user response
+                this._autopilotEnabled = false;
+                await config.update('autopilot', false, vscode.ConfigurationTarget.Workspace);
+                this._updateSettingsUI();
+                vscode.window.showWarningMessage(`TaskSync: Auto-response limit (${maxConsecutive}) reached. Waiting for response or timeout.`);
+                // Fall through to pending request flow with timeout timer
+            } else {
+                // Still under limit - auto-respond with autopilot text
+                const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                this._currentToolCallId = toolCallId;
+
+                const effectiveText = this._normalizeAutopilotText(this._autopilotText);
+                vscode.window.showInformationMessage(`TaskSync: Autopilot auto-responded. (${this._consecutiveAutoResponses}/${maxConsecutive})`);
+
+                const entry: ToolCallEntry = {
+                    id: toolCallId,
+                    prompt: question,
+                    response: effectiveText,
+                    timestamp: Date.now(),
+                    isFromQueue: false,
+                    status: 'completed'
+                };
+                this._currentSessionCalls.unshift(entry);
+                this._currentSessionCallsMap.set(entry.id, entry);
+                this._updateViewTitle();
+                this._updateCurrentSessionUI();
+                this._currentToolCallId = null;
+
+                return {
+                    value: effectiveText,
+                    queue: this._queueEnabled && this._promptQueue.length > 0,
+                    attachments: []
+                };
+            }
         }
 
         // If view is not available, open the sidebar first
@@ -620,6 +764,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 };
                 this._currentSessionCalls.unshift(entry);
                 this._currentSessionCallsMap.set(entry.id, entry); // Maintain O(1) lookup map
+                this._updateViewTitle();
                 this._updateCurrentSessionUI();
                 this._currentToolCallId = null;
 
@@ -644,6 +789,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         };
         this._currentSessionCalls.unshift(pendingEntry);
         this._currentSessionCallsMap.set(toolCallId, pendingEntry); // O(1) lookup
+        this._updateViewTitle();
 
         // Parse choices from question and determine if it's an approval question
         const choices = this._parseChoices(question);
@@ -680,7 +826,99 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
         return new Promise<UserResponseResult>((resolve) => {
             this._pendingRequests.set(toolCallId, resolve);
+            // Start response timeout timer
+            this._startResponseTimeoutTimer(toolCallId);
         });
+    }
+
+    /**
+     * Start response timeout timer for a pending tool call.
+     * When timer fires, auto-responds with autopilot text.
+     */
+    private _startResponseTimeoutTimer(toolCallId: string): void {
+        // Clear any existing timer
+        if (this._responseTimeoutTimer) {
+            clearTimeout(this._responseTimeoutTimer);
+            this._responseTimeoutTimer = null;
+        }
+
+        // Get timeout from config (in minutes)
+        const config = vscode.workspace.getConfiguration('tasksync');
+        const rawValue = config.get<string>('responseTimeout', '60');
+        const timeoutMinutes = parseInt(rawValue, 10);
+        console.log(`[TaskSync] Starting response timeout timer. Raw config value: "${rawValue}", Parsed minutes: ${timeoutMinutes}`);
+
+        // If timeout is 0 or disabled, don't start a timer
+        if (timeoutMinutes <= 0 || isNaN(timeoutMinutes)) {
+            console.log('[TaskSync] Response timeout disabled (0 or invalid), not starting timer');
+            return;
+        }
+
+        const timeoutMs = timeoutMinutes * 60 * 1000;
+        console.log(`[TaskSync] Response timeout timer started for ${timeoutMinutes} minutes (${timeoutMs}ms)`);
+
+        this._responseTimeoutTimer = setTimeout(() => {
+            console.log(`[TaskSync] Response timeout timer FIRED after ${timeoutMinutes} minutes for toolCallId: ${toolCallId}`);
+            this._handleResponseTimeout(toolCallId);
+        }, timeoutMs);
+    }
+
+    /**
+     * Handle response timeout - auto-respond after user idle.
+     * When autopilot is enabled, uses the autopilot text.
+     * When autopilot is disabled, uses a neutral timeout message that won't
+     * instruct the AI to enter autonomous mode.
+     */
+    private async _handleResponseTimeout(toolCallId: string): Promise<void> {
+        this._responseTimeoutTimer = null;
+
+        // Check if this tool call is still pending
+        if (this._currentToolCallId !== toolCallId || !this._pendingRequests.has(toolCallId)) {
+            return; // Tool call was already handled
+        }
+
+        // Use autopilot text only if autopilot is enabled; otherwise use session termination message
+        const config = vscode.workspace.getConfiguration('tasksync');
+        const timeoutMinutes = config.get<string>('responseTimeout', '60');
+        const responseText = this._autopilotEnabled
+            ? this._normalizeAutopilotText(this._autopilotText)
+            : this._SESSION_TERMINATION_TEXT;
+        vscode.window.showInformationMessage(`TaskSync: Auto-responded after ${timeoutMinutes} min idle.`);
+
+        // Resolve the pending request
+        const resolve = this._pendingRequests.get(toolCallId);
+        if (resolve) {
+            // Update pending entry to completed
+            const pendingEntry = this._currentSessionCallsMap.get(toolCallId);
+            if (pendingEntry && pendingEntry.status === 'pending') {
+                pendingEntry.response = responseText;
+                pendingEntry.status = 'completed';
+                pendingEntry.timestamp = Date.now();
+                pendingEntry.isFromQueue = false;
+
+                // Send toolCallCompleted to webview
+                this._view?.webview.postMessage({
+                    type: 'toolCallCompleted',
+                    entry: pendingEntry
+                } as ToWebviewMessage);
+            }
+
+            this._updateCurrentSessionUI();
+            resolve({ value: responseText, queue: this._queueEnabled && this._promptQueue.length > 0, attachments: [] });
+            this._pendingRequests.delete(toolCallId);
+            this._currentToolCallId = null;
+
+            // Mark session as terminated if termination text was sent
+            if (responseText === this._SESSION_TERMINATION_TEXT) {
+                this._sessionTerminated = true;
+                // Freeze the session timer
+                if (this._sessionStartTime !== null) {
+                    this._sessionFrozenElapsed = Date.now() - this._sessionStartTime;
+                    this._stopSessionTimerInterval();
+                    this._updateViewTitle();
+                }
+            }
+        }
     }
 
     /**
@@ -731,6 +969,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             case 'openHistoryModal':
                 this._handleOpenHistoryModal();
                 break;
+            case 'newSession':
+                this.startNewSession();
+                break;
             case 'searchFiles':
                 this._handleSearchFiles(message.query);
                 break;
@@ -774,6 +1015,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 if (message.url) {
                     vscode.env.openExternal(vscode.Uri.parse(message.url));
                 }
+                break;
+            case 'updateResponseTimeout':
+                this._handleUpdateResponseTimeout(message.value);
+                break;
+            case 'updateMaxConsecutiveAutoResponses':
+                this._handleUpdateMaxConsecutiveAutoResponses(message.value);
                 break;
             case 'searchContext':
                 this._handleSearchContext(message.query);
@@ -834,6 +1081,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Handle submit from webview
      */
     private _handleSubmit(value: string, attachments: AttachmentInfo[]): void {
+        // Cancel response timeout timer (user responded)
+        if (this._responseTimeoutTimer) {
+            clearTimeout(this._responseTimeoutTimer);
+            this._responseTimeoutTimer = null;
+        }
+        // Reset consecutive auto-responses counter on manual response
+        this._consecutiveAutoResponses = 0;
+
         if (this._pendingRequests.size > 0 && this._currentToolCallId) {
             const resolve = this._pendingRequests.get(this._currentToolCallId);
             if (resolve) {
@@ -873,6 +1128,17 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 resolve({ value, queue: this._queueEnabled && this._promptQueue.length > 0, attachments });
                 this._pendingRequests.delete(this._currentToolCallId);
                 this._currentToolCallId = null;
+
+                // Mark session as terminated if termination text was submitted
+                if (value === this._SESSION_TERMINATION_TEXT) {
+                    this._sessionTerminated = true;
+                    // Freeze the session timer
+                    if (this._sessionStartTime !== null) {
+                        this._sessionFrozenElapsed = Date.now() - this._sessionStartTime;
+                        this._stopSessionTimerInterval();
+                        this._updateViewTitle();
+                    }
+                }
             } else {
                 // No pending tool call - add message to queue for later use
                 if (value && value.trim()) {
@@ -1435,10 +1701,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
             await config.update('notificationSound', enabled, vscode.ConfigurationTarget.Global);
-            // Reload settings after update to ensure consistency
-            this._loadSettings();
-            // Update UI to reflect the saved state
-            this._updateSettingsUI();
         } finally {
             this._isUpdatingConfig = false;
         }
@@ -1453,10 +1715,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
             await config.update('interactiveApproval', enabled, vscode.ConfigurationTarget.Global);
-            // Reload settings after update to ensure consistency
-            this._loadSettings();
-            // Update UI to reflect the saved state
-            this._updateSettingsUI();
         } finally {
             this._isUpdatingConfig = false;
         }
@@ -1467,14 +1725,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private async _handleUpdateAutopilotSetting(enabled: boolean): Promise<void> {
         this._autopilotEnabled = enabled;
+        // Reset consecutive auto-responses when autopilot is toggled
+        this._consecutiveAutoResponses = 0;
         this._isUpdatingConfig = true;
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
-            await config.update('autopilot', enabled, vscode.ConfigurationTarget.Global);
-            // Reload settings after update to ensure consistency
-            this._loadSettings();
-            // Update UI to reflect the saved state
-            this._updateSettingsUI();
+            await config.update('autopilot', enabled, vscode.ConfigurationTarget.Workspace);
         } finally {
             this._isUpdatingConfig = false;
         }
@@ -1489,11 +1745,33 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             const config = vscode.workspace.getConfiguration('tasksync');
             const normalizedText = this._normalizeAutopilotText(text, config);
             this._autopilotText = normalizedText;
-            await config.update('autopilotText', normalizedText, vscode.ConfigurationTarget.Global);
-            // Reload settings after update to ensure consistency
-            this._loadSettings();
-            // Update UI to reflect the saved state
-            this._updateSettingsUI();
+            await config.update('autopilotText', normalizedText, vscode.ConfigurationTarget.Workspace);
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating response timeout setting
+     */
+    private async _handleUpdateResponseTimeout(value: number): Promise<void> {
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('responseTimeout', String(value), vscode.ConfigurationTarget.Workspace);
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating max consecutive auto-responses setting
+     */
+    private async _handleUpdateMaxConsecutiveAutoResponses(value: number): Promise<void> {
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('maxConsecutiveAutoResponses', value, vscode.ConfigurationTarget.Workspace);
         } finally {
             this._isUpdatingConfig = false;
         }
@@ -1697,12 +1975,25 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
     /**
      * Update persisted history UI in webview (for modal)
+     * Includes completed calls from the current session so they're visible
+     * without waiting for session end / extension deactivation.
      */
     private _updatePersistedHistoryUI(): void {
+        const currentCompleted = this._currentSessionCalls.filter(tc => tc.status === 'completed');
+        const combined = [...currentCompleted, ...this._persistedHistory].slice(0, this._MAX_HISTORY_ENTRIES);
         this._view?.webview.postMessage({
             type: 'updatePersistedHistory',
-            history: this._persistedHistory
+            history: combined
         } as ToWebviewMessage);
+    }
+
+    /**
+     * Get workspace-aware storage URI.
+     * Uses storageUri (workspace-specific) if available, otherwise falls back to globalStorageUri.
+     * This ensures data is isolated per-workspace when a workspace is open.
+     */
+    private _getStorageUri(): vscode.Uri {
+        return this._context.storageUri || this._context.globalStorageUri;
     }
 
     /**
@@ -1710,7 +2001,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private async _loadQueueFromDiskAsync(): Promise<void> {
         try {
-            const storagePath = this._context.globalStorageUri.fsPath;
+            const storagePath = this._getStorageUri().fsPath;
             const queuePath = path.join(storagePath, 'queue.json');
 
             // Check if file exists using async
@@ -1751,7 +2042,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private async _saveQueueToDiskAsync(): Promise<void> {
         try {
-            const storagePath = this._context.globalStorageUri.fsPath;
+            const storagePath = this._getStorageUri().fsPath;
             const queuePath = path.join(storagePath, 'queue.json');
 
             if (!fs.existsSync(storagePath)) {
@@ -1835,11 +2126,30 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 await fsPromises.mkdir(storagePath, { recursive: true });
             }
 
-            // Only save completed entries
+            // Only save completed entries from our in-memory history
             const completedHistory = this._persistedHistory.filter(entry => entry.status === 'completed');
 
+            // Merge with existing on-disk history to preserve entries from other windows
+            let merged = completedHistory;
+            try {
+                const existing = await fsPromises.readFile(historyPath, 'utf8');
+                const parsed = JSON.parse(existing);
+                if (Array.isArray(parsed.history)) {
+                    const knownIds = new Set(completedHistory.map(e => e.id));
+                    const diskOnly = parsed.history.filter((e: ToolCallEntry) => !knownIds.has(e.id));
+                    merged = [...completedHistory, ...diskOnly]
+                        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                        .slice(0, this._MAX_HISTORY_ENTRIES);
+                }
+            } catch {
+                // File doesn't exist or is invalid — just use our entries
+            }
+
+            // Update in-memory history with the merged result
+            this._persistedHistory = merged;
+
             const data = JSON.stringify({
-                history: completedHistory
+                history: merged
             }, null, 2);
 
             await fsPromises.writeFile(historyPath, data, 'utf8');
@@ -1865,11 +2175,30 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 fs.mkdirSync(storagePath, { recursive: true });
             }
 
-            // Only save completed entries
+            // Only save completed entries from our in-memory history
             const completedHistory = this._persistedHistory.filter(entry => entry.status === 'completed');
 
+            // Merge with existing on-disk history to preserve entries from other windows
+            let merged = completedHistory;
+            try {
+                const existing = fs.readFileSync(historyPath, 'utf8');
+                const parsed = JSON.parse(existing);
+                if (Array.isArray(parsed.history)) {
+                    const knownIds = new Set(completedHistory.map(e => e.id));
+                    const diskOnly = parsed.history.filter((e: ToolCallEntry) => !knownIds.has(e.id));
+                    merged = [...completedHistory, ...diskOnly]
+                        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                        .slice(0, this._MAX_HISTORY_ENTRIES);
+                }
+            } catch {
+                // File doesn't exist or is invalid — just use our entries
+            }
+
+            // Update in-memory history with the merged result
+            this._persistedHistory = merged;
+
             const data = JSON.stringify({
-                history: completedHistory
+                history: merged
             }, null, 2);
 
             fs.writeFileSync(historyPath, data, 'utf8');

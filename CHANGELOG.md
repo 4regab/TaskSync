@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.17 (02-17-26)
+- feat: update welcome autopilot info and tooltip for session management
+
+
 ## TaskSync v2.0.16 (02-13-26)
 - fix: enhance markdown list conversion and inline code handling in webview
 

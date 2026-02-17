@@ -150,7 +150,7 @@
             "110 minutes",
             "120 minutes (2 hours)"
           ],
-          "description": "Auto-respond to pending tool calls if user doesn't respond within this time. The autopilot text will be sent automatically."
+          "description": "Auto-respond to pending tool calls if user doesn't respond within this time. When Autopilot is enabled, the Autopilot text is sent. When disabled, a session termination message is sent."
         },
         "tasksync.maxConsecutiveAutoResponses": {
           "type": "number",

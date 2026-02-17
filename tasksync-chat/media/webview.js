@@ -888,7 +888,7 @@
                 showPendingToolCall(message.id, message.prompt, message.isApprovalQuestion, message.choices);
                 break;
             case 'toolCallCompleted':
-                addToolCallToCurrentSession(message.entry);
+                addToolCallToCurrentSession(message.entry, message.sessionTerminated);
                 break;
             case 'updateCurrentSession':
                 currentSessionCalls = message.history || [];
@@ -1015,7 +1015,7 @@
         }
     }
 
-    function addToolCallToCurrentSession(entry) {
+    function addToolCallToCurrentSession(entry, sessionTerminated) {
         pendingToolCall = null;
 
         // Remove pending class to re-enable session switching UI
@@ -1038,8 +1038,8 @@
         isProcessingResponse = true;
         if (pendingMessage) {
             pendingMessage.classList.remove('hidden');
-            // Check if the response indicates session terminated
-            if (entry.response && entry.response.indexOf('Session terminated') !== -1) {
+            // Check if the extension host signaled session termination
+            if (sessionTerminated) {
                 isProcessingResponse = false;
                 pendingMessage.innerHTML = '<div class="new-session-prompt">' +
                     '<span>Session terminated</span>' +

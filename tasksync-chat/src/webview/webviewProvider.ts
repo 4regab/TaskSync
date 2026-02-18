@@ -802,6 +802,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 // Random delay (jitter) simulates human reading/response time
                 await this._applyHumanLikeDelay('Autopilot');
 
+                // Re-check after delay: user may have disabled autopilot or responded manually
+                if (!this._autopilotEnabled || this._currentToolCallId !== toolCallId) {
+                    // State changed during delay — fall through to normal pending request flow
+                } else {
                 const effectiveText = this._normalizeAutopilotText(this._autopilotText);
                 vscode.window.showInformationMessage(`TaskSync: Autopilot auto-responded. (${this._consecutiveAutoResponses}/${maxConsecutive})`);
 
@@ -824,6 +828,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     queue: this._queueEnabled && this._promptQueue.length > 0,
                     attachments: []
                 };
+                }
             }
         }
 
@@ -862,6 +867,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 // Random delay (jitter) simulates human reading/response time
                 await this._applyHumanLikeDelay('Queue');
 
+                // Re-check after delay: user may have disabled queue or responded manually
+                if (!this._queueEnabled || this._currentToolCallId !== toolCallId) {
+                    // State changed during delay — restore prompt to queue and fall through
+                    this._promptQueue.unshift(queuedPrompt);
+                    this._saveQueueToDisk();
+                    this._updateQueueUI();
+                } else {
                 // Create completed tool call entry for queue response
                 const entry: ToolCallEntry = {
                     id: toolCallId,
@@ -882,6 +894,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     queue: this._queueEnabled && this._promptQueue.length > 0,
                     attachments: queuedPrompt.attachments || []  // Return stored attachments
                 };
+                }
             }
         }
 

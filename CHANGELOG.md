@@ -3,7 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## TaskSync v2.0.19 (02-18-26)
-- Update tasksync-chat/media/webview.js
+feat: extend response timeout to 4 hours and add 2-hour session warning
+- Extended response timeout configuration with new options at 150, 180, 210, and 240 minutes
+- Added a one-time warning notification after 2 hours of continuous session activity
+- Updated documentation to reflect the new 4-hour maximum timeout and session quality guidance
 
 
 ## TaskSync v2.0.18 (02-18-26)

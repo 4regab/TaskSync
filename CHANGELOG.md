@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.18 (02-18-26)
+- feat: add markdown link handling and styling in webview
+
+
 ## TaskSync v2.0.17 (02-18-26)
 - **Response Timeout**: Auto-respond to pending tool calls if user doesn't respond within a configurable time window (5–120 min); sends Autopilot text when Autopilot is enabled, or a session termination message when disabled
 - **Max Consecutive Auto-responses** (`tasksync.maxConsecutiveAutoResponses`): Limit the number of consecutive timeout auto-responses (default 5) before the session is automatically terminated, preventing infinite loops

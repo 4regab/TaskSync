@@ -132,7 +132,11 @@
             "90",
             "100",
             "110",
-            "120"
+            "120",
+            "150",
+            "180",
+            "210",
+            "240"
           ],
           "enumDescriptions": [
             "Disabled (no auto-response)",
@@ -148,7 +152,11 @@
             "90 minutes (1.5 hours)",
             "100 minutes",
             "110 minutes",
-            "120 minutes (2 hours)"
+            "120 minutes (2 hours)",
+            "150 minutes (2.5 hours)",
+            "180 minutes (3 hours)",
+            "210 minutes (3.5 hours)",
+            "240 minutes (4 hours)"
           ],
           "description": "Auto-respond to pending tool calls if user doesn't respond within this time. When Autopilot is enabled, the Autopilot text is sent. When disabled, a session termination message is sent."
         },

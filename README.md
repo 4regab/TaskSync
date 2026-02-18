@@ -73,7 +73,7 @@ Recommended settings for agent mode:
 "chat.agent.maxRequests": 999
 ```
 
-**Enable "Auto Approve" in settings for uninterrupted agent operation. Keep sessions to 1-2 hours max to avoid hallucinations.**
+**Enable "Auto Approve" in settings for uninterrupted agent operation. Sessions beyond 2 hours may produce lower-quality results — TaskSync will warn you when it's time to consider starting a fresh session.**
 
 ## Discussions
 

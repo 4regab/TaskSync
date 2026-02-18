@@ -407,7 +407,11 @@
             '<option value="90">90 minutes</option>' +
             '<option value="100">100 minutes</option>' +
             '<option value="110">110 minutes</option>' +
-            '<option value="120">120 minutes</option>' +
+            '<option value="120">120 minutes (2h)</option>' +
+            '<option value="150">150 minutes (2.5h)</option>' +
+            '<option value="180">180 minutes (3h)</option>' +
+            '<option value="210">210 minutes (3.5h)</option>' +
+            '<option value="240">240 minutes (4h)</option>' +
             '</select>' +
             '</div>';
         modalContent.appendChild(timeoutSection);

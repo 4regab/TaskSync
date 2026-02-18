@@ -205,6 +205,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private _sessionTimerInterval: ReturnType<typeof setInterval> | null = null;
     // Flag indicating the session was terminated (next tool call auto-starts new session)
     private _sessionTerminated: boolean = false;
+    // Flag to ensure the 2-hour session warning is only shown once per session
+    private _sessionWarningShown: boolean = false;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -319,6 +321,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         this._sessionFrozenElapsed = null;
         this._stopSessionTimerInterval();
         this._sessionTerminated = false;
+        this._sessionWarningShown = false;
         this._updateViewTitle();
 
         this._updateCurrentSessionUI();
@@ -398,8 +401,23 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         if (this._sessionTimerInterval) return; // Already running
         this._sessionTimerInterval = setInterval(() => {
             if (this._sessionStartTime !== null && this._sessionFrozenElapsed === null) {
+                const elapsed = Date.now() - this._sessionStartTime;
                 if (this._view) {
-                    this._view.title = this._formatElapsed(Date.now() - this._sessionStartTime);
+                    this._view.title = this._formatElapsed(elapsed);
+                }
+                // Show a one-time warning after 2 hours of session activity
+                if (!this._sessionWarningShown && elapsed >= 2 * 60 * 60 * 1000) {
+                    this._sessionWarningShown = true;
+                    const callCount = this._currentSessionCalls.length;
+                    vscode.window.showWarningMessage(
+                        `Your session has been running for over 2 hours (${callCount} tool calls). Consider starting a new session to maintain quality.`,
+                        'New Session',
+                        'Dismiss'
+                    ).then(action => {
+                        if (action === 'New Session') {
+                            this.startNewSession();
+                        }
+                    });
                 }
             }
         }, 1000);

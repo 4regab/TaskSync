@@ -111,6 +111,7 @@ type FromWebviewMessage =
     | { type: 'removeReusablePrompt'; id: string }
     | { type: 'searchSlashCommands'; query: string }
     | { type: 'openExternal'; url: string }
+    | { type: 'openFileLink'; target: string }
     | { type: 'updateResponseTimeout'; value: number }
     | { type: 'updateMaxConsecutiveAutoResponses'; value: number }
     | { type: 'searchContext'; query: string }
@@ -132,6 +133,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
     // Current session tool calls (memory only - not persisted during session)
     private _currentSessionCalls: ToolCallEntry[] = [];
+
     // Persisted history from past sessions (loaded from disk)
     private _persistedHistory: ToolCallEntry[] = [];
     private _currentToolCallId: string | null = null;
@@ -142,6 +144,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
     // Debounce timer for queue persistence
     private _queueSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
     private readonly _QUEUE_SAVE_DEBOUNCE_MS = 300;
 
     // Debounce timer for history persistence (async background saves)
@@ -1044,9 +1047,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 this._handleSearchSlashCommands(message.query);
                 break;
             case 'openExternal':
-                if (message.url) {
-                    vscode.env.openExternal(vscode.Uri.parse(message.url));
-                }
+                this._handleOpenExternalLink(message.url);
+                break;
+            case 'openFileLink':
+                void this._handleOpenFileLink(message.target);
                 break;
             case 'updateResponseTimeout':
                 this._handleUpdateResponseTimeout(message.value);
@@ -1890,6 +1894,136 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     }
 
     /**
+     * Open an external URL from webview using a strict protocol allowlist.
+     */
+    private _handleOpenExternalLink(url: string): void {
+        if (!url) {
+            return;
+        }
+
+        try {
+            const parsed = vscode.Uri.parse(url);
+            const allowedSchemes = ['http', 'https', 'mailto'];
+            if (!allowedSchemes.includes(parsed.scheme)) {
+                vscode.window.showWarningMessage(`Unsupported link protocol: ${parsed.scheme}`);
+                return;
+            }
+
+            void vscode.env.openExternal(parsed);
+        } catch (error) {
+            console.error('[TaskSync] Failed to open external link:', error);
+            vscode.window.showWarningMessage('Unable to open external link');
+        }
+    }
+
+    /**
+     * Open a file link from webview and reveal requested line or line range when provided.
+     */
+    private async _handleOpenFileLink(target: string): Promise<void> {
+        if (!target) {
+            return;
+        }
+
+        const parsedTarget = this._parseFileLinkTarget(target);
+        if (!parsedTarget.filePath) {
+            vscode.window.showWarningMessage('File link does not contain a valid path');
+            return;
+        }
+
+        const fileUri = this._resolveFileLinkUri(parsedTarget.filePath);
+        if (!fileUri) {
+            vscode.window.showWarningMessage(`File not found: ${parsedTarget.filePath}`);
+            return;
+        }
+
+        try {
+            const document = await vscode.workspace.openTextDocument(fileUri);
+            const editor = await vscode.window.showTextDocument(document, { preview: false });
+
+            if (parsedTarget.startLine !== null) {
+                const maxLine = Math.max(document.lineCount - 1, 0);
+                const startLine = Math.min(Math.max(parsedTarget.startLine - 1, 0), maxLine);
+                const requestedEnd = parsedTarget.endLine ?? parsedTarget.startLine;
+                const endLine = Math.min(Math.max(requestedEnd - 1, startLine), maxLine);
+                const endCharacter = document.lineAt(endLine).range.end.character;
+                const range = new vscode.Range(startLine, 0, endLine, endCharacter);
+
+                editor.selection = new vscode.Selection(startLine, 0, endLine, endCharacter);
+                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            }
+        } catch (error) {
+            console.error('[TaskSync] Failed to open file link:', error);
+            vscode.window.showWarningMessage(`Unable to open file: ${parsedTarget.filePath}`);
+        }
+    }
+
+    /**
+     * Parse file link target in format "path#Lx" or "path#Lx-Ly".
+     */
+    private _parseFileLinkTarget(target: string): { filePath: string; startLine: number | null; endLine: number | null } {
+        const trimmedTarget = target.trim();
+        const match = /^(.*?)(?:#L(\d+)(?:-L(\d+))?)?$/.exec(trimmedTarget);
+        const parseLine = (value: string | undefined): number | null => {
+            if (!value) {
+                return null;
+            }
+
+            const parsedValue = Number.parseInt(value, 10);
+            return Number.isFinite(parsedValue) ? parsedValue : null;
+        };
+
+        const filePath = (match?.[1] ?? trimmedTarget).trim();
+        const startLine = parseLine(match?.[2]);
+        const endLine = parseLine(match?.[3]);
+
+        return {
+            filePath,
+            startLine,
+            endLine
+        };
+    }
+
+    /**
+     * Resolve a file link path to an existing file URI.
+     */
+    private _resolveFileLinkUri(rawPath: string): vscode.Uri | null {
+        const normalizedPath = rawPath.trim().replace(/^\.\//, '').trim();
+        if (!normalizedPath) {
+            return null;
+        }
+
+        try {
+            const parsedUri = vscode.Uri.parse(normalizedPath);
+            if (parsedUri.scheme === 'file' && fs.existsSync(parsedUri.fsPath) && fs.statSync(parsedUri.fsPath).isFile()) {
+                return parsedUri;
+            }
+        } catch (error) {
+            // Treat as path when parsing as URI fails.
+        }
+
+        if (path.isAbsolute(normalizedPath)) {
+            if (fs.existsSync(normalizedPath) && fs.statSync(normalizedPath).isFile()) {
+                return vscode.Uri.file(path.resolve(normalizedPath));
+            }
+            return null;
+        }
+
+        const workspaceFolders = vscode.workspace.workspaceFolders || [];
+        if (workspaceFolders.length === 0) {
+            return null;
+        }
+
+        for (const folder of workspaceFolders) {
+            const candidatePath = path.resolve(folder.uri.fsPath, normalizedPath);
+            if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+                return vscode.Uri.file(candidatePath);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Handle searching context references (#terminal, #problems) - deprecated, now handled via file search
      */
     private async _handleSearchContext(query: string): Promise<void> {
@@ -2249,6 +2383,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private _getHtmlContent(webview: vscode.Webview): string {
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
+        const markdownLinksScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'markdownLinks.js'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'webview.js'));
         const codiconsUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'));
         const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'TS-logo.svg'));
@@ -2378,6 +2513,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         </div><!-- End input-wrapper -->
         </div><!-- End input-area-container -->
     </div>
+    <script nonce="${nonce}" src="${markdownLinksScriptUri}"></script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

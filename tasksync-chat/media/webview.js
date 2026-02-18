@@ -489,6 +489,20 @@
         });
 
         document.addEventListener('click', function (e) {
+            var markdownLink = e.target && e.target.closest ? e.target.closest('a.markdown-link[data-link-target]') : null;
+            if (markdownLink) {
+                e.preventDefault();
+                var markdownLinksApi = window.TaskSyncMarkdownLinks;
+                var encodedTarget = markdownLink.getAttribute('data-link-target');
+                if (encodedTarget && markdownLinksApi && typeof markdownLinksApi.toWebviewMessage === 'function') {
+                    var linkMessage = markdownLinksApi.toWebviewMessage(encodedTarget);
+                    if (linkMessage) {
+                        vscode.postMessage(linkMessage);
+                    }
+                }
+                return;
+            }
+
             if (dropdownOpen && !e.target.closest('.mode-selector') && !e.target.closest('.mode-dropdown')) closeModeDropdown();
             if (autocompleteVisible && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('#chat-input')) hideAutocomplete();
             if (slashDropdownVisible && !e.target.closest('.slash-dropdown') && !e.target.closest('#chat-input')) hideSlashDropdown();
@@ -1416,6 +1430,14 @@
         }
         html = processedLines.join('\n');
 
+        // Tokenize markdown links before emphasis parsing so link targets are not mutated by markdown transforms.
+        var markdownLinksApi = window.TaskSyncMarkdownLinks;
+        var tokenizedLinks = null;
+        if (markdownLinksApi && typeof markdownLinksApi.tokenizeMarkdownLinks === 'function') {
+            tokenizedLinks = markdownLinksApi.tokenizeMarkdownLinks(html);
+            html = tokenizedLinks.text;
+        }
+
         // Bold (**text** or __text__)
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
@@ -1430,6 +1452,13 @@
         // For _text_: require non-word boundaries (Unicode-aware) around underscore markers
         // This keeps punctuation-adjacent emphasis working while avoiding snake_case matches
         html = html.replace(/(^|[^\p{L}\p{N}_])_([^_\s](?:[^_]*[^_\s])?)_(?=[^\p{L}\p{N}_]|$)/gu, '$1<em>$2</em>');
+
+        // Restore tokenized markdown links after emphasis parsing.
+        if (tokenizedLinks && markdownLinksApi && typeof markdownLinksApi.restoreTokenizedLinks === 'function') {
+            html = markdownLinksApi.restoreTokenizedLinks(html, tokenizedLinks.links);
+        } else if (markdownLinksApi && typeof markdownLinksApi.convertMarkdownLinks === 'function') {
+            html = markdownLinksApi.convertMarkdownLinks(html);
+        }
 
         // Restore inline code after emphasis parsing so markdown markers inside code stay literal.
         inlineCodeSpans.forEach(function (code, index) {

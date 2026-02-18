@@ -25,7 +25,7 @@ Let AI agents work autonomously by automatically responding to `ask_user` prompt
 
 ### Response Timeout (Auto-respond when idle)
 Prevent tool calls from waiting indefinitely when you're away:
-- Configure timeout duration in VS Code Settings, including disabled (`0` minutes), `5` minutes, and options up to `120` minutes
+- Configure timeout duration in VS Code Settings, including disabled (`0` minutes), `5` minutes, and options up to `240` minutes (4 hours)
 - When timeout elapses, TaskSync auto-responds with Autopilot text
 - **Consecutive limit**: After N consecutive immediate Autopilot responses (configurable, default 5), Autopilot is automatically disabled to prevent infinite loops
 - Timeout-based auto-responses do **not** count toward this consecutive limit

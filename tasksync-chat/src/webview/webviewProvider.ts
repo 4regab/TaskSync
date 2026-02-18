@@ -1,8 +1,8 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { FILE_EXCLUSION_PATTERNS, FILE_SEARCH_EXCLUSION_PATTERNS, formatExcludePattern } from '../constants/fileExclusions';
-import { ContextManager, ContextReferenceType, ContextReference } from '../context';
+import { ContextManager, ContextReferenceType } from '../context';
 
 // Queued prompt interface
 export interface QueuedPrompt {
@@ -75,7 +75,7 @@ type ToWebviewMessage =
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
     | { type: 'imageSaved'; attachment: AttachmentInfo }
     | { type: 'openSettingsModal' }
-    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; maxConsecutiveAutoResponses: number }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; maxConsecutiveAutoResponses: number; humanLikeDelayEnabled: boolean; humanLikeDelayMin: number; humanLikeDelayMax: number }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
     | { type: 'playNotificationSound' }
     | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
@@ -114,6 +114,9 @@ type FromWebviewMessage =
     | { type: 'openFileLink'; target: string }
     | { type: 'updateResponseTimeout'; value: number }
     | { type: 'updateMaxConsecutiveAutoResponses'; value: number }
+    | { type: 'updateHumanDelaySetting'; enabled: boolean }
+    | { type: 'updateHumanDelayMin'; value: number }
+    | { type: 'updateHumanDelayMax'; value: number }
     | { type: 'searchContext'; query: string }
     | { type: 'selectContextReference'; contextType: string; options?: Record<string, unknown> };
 
@@ -186,6 +189,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Autopilot text (loaded from VS Code settings)
     private _autopilotText: string = '';
 
+    // Human-like delay settings: adds random jitter before auto-responses.
+    // Simulates natural human reading/typing time for a more realistic workflow.
+    private _humanLikeDelayEnabled: boolean = true;
+    private _humanLikeDelayMin: number = 1;  // seconds
+    private _humanLikeDelayMax: number = 3;  // seconds
+
     // Flag to prevent config reload during our own updates (avoids race condition)
     private _isUpdatingConfig: boolean = false;
 
@@ -239,7 +248,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     e.affectsConfiguration('tasksync.autoAnswerText') ||
                     e.affectsConfiguration('tasksync.reusablePrompts') ||
                     e.affectsConfiguration('tasksync.responseTimeout') ||
-                    e.affectsConfiguration('tasksync.maxConsecutiveAutoResponses')) {
+                    e.affectsConfiguration('tasksync.maxConsecutiveAutoResponses') ||
+                    e.affectsConfiguration('tasksync.humanLikeDelay') ||
+                    e.affectsConfiguration('tasksync.humanLikeDelayMin') ||
+                    e.affectsConfiguration('tasksync.humanLikeDelayMax')) {
                     this._loadSettings();
                     this._updateSettingsUI();
                 }
@@ -365,6 +377,45 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             return `${minutes}m ${seconds}s`;
         }
         return `${seconds}s`;
+    }
+
+    /**
+     * Generate a random delay (jitter) between min and max seconds.
+     * 
+     * Random delays simulate natural human pacing — the time it takes
+     * to read a message and type a response. Fixed delays create
+     * unnatural patterns; jitter produces realistic timing variation.
+     * 
+     * @returns Random delay in milliseconds, or 0 if disabled
+     */
+    private _getHumanLikeDelayMs(): number {
+        if (!this._humanLikeDelayEnabled) {
+            return 0;
+        }
+        const minMs = this._humanLikeDelayMin * 1000;
+        const maxMs = this._humanLikeDelayMax * 1000;
+        // Uniform random distribution across the range
+        return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+    }
+
+    /**
+     * Wait a random duration before sending an automated response.
+     * 
+     * Called before Autopilot, Queue, and Timeout auto-responses. The delay
+     * varies randomly each time (jitter), simulating natural human pacing
+     * rather than instant machine-speed responses.
+     * 
+     * @param label Shown in status bar during wait (e.g., "Autopilot")
+     */
+    private async _applyHumanLikeDelay(label?: string): Promise<void> {
+        const delayMs = this._getHumanLikeDelayMs();
+        if (delayMs > 0) {
+            const delaySec = (delayMs / 1000).toFixed(1);
+            if (label) {
+                vscode.window.setStatusBarMessage(`TaskSync: ${label} responding in ${delaySec}s...`, delayMs);
+            }
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
     }
 
     private static readonly _TIMER_TOOLTIP = 'It is advisable to start a new session and use another premium request prompt after 2-4h or 50 tool calls';
@@ -523,6 +574,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             name: p.name,
             prompt: p.prompt
         }));
+
+        // Load human-like delay settings
+        this._humanLikeDelayEnabled = config.get<boolean>('humanLikeDelay', true);
+        this._humanLikeDelayMin = config.get<number>('humanLikeDelayMin', 1);
+        this._humanLikeDelayMax = config.get<number>('humanLikeDelayMax', 3);
+        // Ensure min <= max
+        if (this._humanLikeDelayMin > this._humanLikeDelayMax) {
+            this._humanLikeDelayMin = this._humanLikeDelayMax;
+        }
     }
 
     /**
@@ -558,7 +618,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             autopilotText: this._autopilotText,
             reusablePrompts: this._reusablePrompts,
             responseTimeout: responseTimeout,
-            maxConsecutiveAutoResponses: maxConsecutiveAutoResponses
+            maxConsecutiveAutoResponses: maxConsecutiveAutoResponses,
+            humanLikeDelayEnabled: this._humanLikeDelayEnabled,
+            humanLikeDelayMin: this._humanLikeDelayMin,
+            humanLikeDelayMax: this._humanLikeDelayMax
         } as ToWebviewMessage);
     }
 
@@ -736,6 +799,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
                 this._currentToolCallId = toolCallId;
 
+                // Random delay (jitter) simulates human reading/response time
+                await this._applyHumanLikeDelay('Autopilot');
+
                 const effectiveText = this._normalizeAutopilotText(this._autopilotText);
                 vscode.window.showInformationMessage(`TaskSync: Autopilot auto-responded. (${this._consecutiveAutoResponses}/${maxConsecutive})`);
 
@@ -792,6 +858,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             if (queuedPrompt) {
                 this._saveQueueToDisk();
                 this._updateQueueUI();
+
+                // Random delay (jitter) simulates human reading/response time
+                await this._applyHumanLikeDelay('Queue');
 
                 // Create completed tool call entry for queue response
                 const entry: ToolCallEntry = {
@@ -911,6 +980,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         // Check if this tool call is still pending
         if (this._currentToolCallId !== toolCallId || !this._pendingRequests.has(toolCallId)) {
             return; // Tool call was already handled
+        }
+
+        // Random delay (jitter) simulates human reading/response time
+        await this._applyHumanLikeDelay('Timeout');
+
+        // Re-check after delay in case request was handled during wait
+        if (this._currentToolCallId !== toolCallId || !this._pendingRequests.has(toolCallId)) {
+            return;
         }
 
         // Use autopilot text only if autopilot is enabled; otherwise use session termination message
@@ -1075,6 +1152,15 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 break;
             case 'updateMaxConsecutiveAutoResponses':
                 this._handleUpdateMaxConsecutiveAutoResponses(message.value);
+                break;
+            case 'updateHumanDelaySetting':
+                this._handleUpdateHumanDelaySetting(message.enabled);
+                break;
+            case 'updateHumanDelayMin':
+                this._handleUpdateHumanDelayMin(message.value);
+                break;
+            case 'updateHumanDelayMax':
+                this._handleUpdateHumanDelayMax(message.value);
                 break;
             case 'searchContext':
                 this._handleSearchContext(message.query);
@@ -1832,6 +1918,60 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             await config.update('maxConsecutiveAutoResponses', value, vscode.ConfigurationTarget.Workspace);
         } finally {
             this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle toggling human-like delay setting
+     */
+    private async _handleUpdateHumanDelaySetting(enabled: boolean): Promise<void> {
+        this._humanLikeDelayEnabled = enabled;
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('humanLikeDelay', enabled, vscode.ConfigurationTarget.Workspace);
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating human-like delay minimum setting
+     */
+    private async _handleUpdateHumanDelayMin(value: number): Promise<void> {
+        if (value >= 1 && value <= 30) {
+            this._humanLikeDelayMin = value;
+            // Ensure min <= max
+            if (this._humanLikeDelayMin > this._humanLikeDelayMax) {
+                this._humanLikeDelayMax = this._humanLikeDelayMin;
+            }
+            this._isUpdatingConfig = true;
+            try {
+                const config = vscode.workspace.getConfiguration('tasksync');
+                await config.update('humanLikeDelayMin', value, vscode.ConfigurationTarget.Workspace);
+            } finally {
+                this._isUpdatingConfig = false;
+            }
+        }
+    }
+
+    /**
+     * Handle updating human-like delay maximum setting
+     */
+    private async _handleUpdateHumanDelayMax(value: number): Promise<void> {
+        if (value >= 2 && value <= 60) {
+            this._humanLikeDelayMax = value;
+            // Ensure max >= min
+            if (this._humanLikeDelayMax < this._humanLikeDelayMin) {
+                this._humanLikeDelayMin = this._humanLikeDelayMax;
+            }
+            this._isUpdatingConfig = true;
+            try {
+                const config = vscode.workspace.getConfiguration('tasksync');
+                await config.update('humanLikeDelayMax', value, vscode.ConfigurationTarget.Workspace);
+            } finally {
+                this._isUpdatingConfig = false;
+            }
         }
     }
 

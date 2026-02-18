@@ -31,6 +31,13 @@ Prevent tool calls from waiting indefinitely when you're away:
 - Timeout-based auto-responses do **not** count toward this consecutive limit
 - Counter resets when you manually respond
 
+### Human-Like Delay
+Simulate natural human pacing by adding random delays before automated responses:
+- **Enabled by default** with 1-3 second random delays (jitter)
+- Applies to: Autopilot responses, Queue responses, Timeout responses
+- Random variation mimics natural reading and typing time
+- Configurable min/max delay range in Settings
+
 ### Per-Workspace Isolation
 TaskSync settings and data are now isolated per VS Code workspace:
 - **Queue**: Each workspace has its own prompt queue

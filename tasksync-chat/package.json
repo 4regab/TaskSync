@@ -168,6 +168,28 @@
           "scope": "window",
           "description": "Maximum consecutive auto-responses (from timeout) before terminating session. Prevents infinite loops."
         },
+        "tasksync.humanLikeDelay": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Add random human-like delays before auto-responses (Autopilot, Queue, Timeout). Simulates natural reading and typing time for a more realistic workflow."
+        },
+        "tasksync.humanLikeDelayMin": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 30,
+          "scope": "window",
+          "description": "Minimum delay in seconds before auto-responses when human-like delay is enabled."
+        },
+        "tasksync.humanLikeDelayMax": {
+          "type": "number",
+          "default": 3,
+          "minimum": 2,
+          "maximum": 60,
+          "scope": "window",
+          "description": "Maximum delay in seconds before auto-responses when human-like delay is enabled."
+        },
         "tasksync.notificationSound": {
           "type": "boolean",
           "default": true,

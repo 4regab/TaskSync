@@ -29,6 +29,10 @@
     let autopilotTextDebounceTimer = null;
     let responseTimeout = 60;
     let maxConsecutiveAutoResponses = 5;
+    // Human-like delay: random jitter simulates natural reading/typing time
+    let humanLikeDelayEnabled = true;
+    let humanLikeDelayMin = 1;  // minimum seconds
+    let humanLikeDelayMax = 3;  // maximum seconds
 
     // Tracks local edits to prevent stale settings overwriting user input mid-typing.
     let autopilotTextEditVersion = 0;
@@ -76,6 +80,7 @@
     let settingsModal, settingsModalOverlay, settingsModalClose;
     let soundToggle, interactiveApprovalToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
     let responseTimeoutSelect, maxAutoResponsesInput;
+    let humanDelayToggle, humanDelayRangeContainer, humanDelayMinInput, humanDelayMaxInput;
 
     function init() {
         try {
@@ -431,6 +436,26 @@
             '</div>';
         modalContent.appendChild(maxAutoSection);
 
+        // Human-Like Delay section - toggle + min/max inputs
+        var humanDelaySection = document.createElement('div');
+        humanDelaySection.className = 'settings-section';
+        humanDelaySection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title">' +
+            '<span class="codicon codicon-pulse"></span> Human-Like Delay' +
+            '<span class="settings-info-icon" title="Add random delays (1-3s by default) before auto-responses. Simulates natural pacing for automated workflows.">' +
+            '<span class="codicon codicon-info"></span></span>' +
+            '</div>' +
+            '<button class="toggle-btn active" id="human-delay-toggle" role="switch" aria-checked="true" title="Toggle Human-Like Delay">' +
+            '<span class="toggle-slider"></span></button>' +
+            '</div>' +
+            '<div class="form-row human-delay-range" id="human-delay-range">' +
+            '<label class="form-label-inline">Min (s):</label>' +
+            '<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="1" max="30" value="1" />' +
+            '<label class="form-label-inline">Max (s):</label>' +
+            '<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="2" max="60" value="3" />' +
+            '</div>';
+        modalContent.appendChild(humanDelaySection);
+
         // Reusable Prompts section - plus button next to title
         var promptsSection = document.createElement('div');
         promptsSection.className = 'settings-section';
@@ -464,6 +489,10 @@
         autopilotTextInput = document.getElementById('autopilot-text');
         responseTimeoutSelect = document.getElementById('response-timeout-select');
         maxAutoResponsesInput = document.getElementById('max-auto-responses-input');
+        humanDelayToggle = document.getElementById('human-delay-toggle');
+        humanDelayRangeContainer = document.getElementById('human-delay-range');
+        humanDelayMinInput = document.getElementById('human-delay-min-input');
+        humanDelayMaxInput = document.getElementById('human-delay-max-input');
         promptsList = document.getElementById('prompts-list');
         addPromptBtn = document.getElementById('add-prompt-btn');
         addPromptForm = document.getElementById('add-prompt-form');
@@ -575,6 +604,23 @@
         if (maxAutoResponsesInput) {
             maxAutoResponsesInput.addEventListener('change', handleMaxAutoResponsesChange);
             maxAutoResponsesInput.addEventListener('blur', handleMaxAutoResponsesChange);
+        }
+        if (humanDelayToggle) {
+            humanDelayToggle.addEventListener('click', toggleHumanDelaySetting);
+            humanDelayToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleHumanDelaySetting();
+                }
+            });
+        }
+        if (humanDelayMinInput) {
+            humanDelayMinInput.addEventListener('change', handleHumanDelayMinChange);
+            humanDelayMinInput.addEventListener('blur', handleHumanDelayMinChange);
+        }
+        if (humanDelayMaxInput) {
+            humanDelayMaxInput.addEventListener('change', handleHumanDelayMaxChange);
+            humanDelayMaxInput.addEventListener('blur', handleHumanDelayMaxChange);
         }
         if (addPromptBtn) addPromptBtn.addEventListener('click', showAddPromptForm);
         // Add prompt form events (deferred - bind after modal created)
@@ -934,12 +980,16 @@
                 reusablePrompts = message.reusablePrompts || [];
                 responseTimeout = typeof message.responseTimeout === 'number' ? message.responseTimeout : 60;
                 maxConsecutiveAutoResponses = typeof message.maxConsecutiveAutoResponses === 'number' ? message.maxConsecutiveAutoResponses : 5;
+                humanLikeDelayEnabled = message.humanLikeDelayEnabled !== false;
+                humanLikeDelayMin = typeof message.humanLikeDelayMin === 'number' ? message.humanLikeDelayMin : 1;
+                humanLikeDelayMax = typeof message.humanLikeDelayMax === 'number' ? message.humanLikeDelayMax : 3;
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
                 updateAutopilotToggleUI();
                 updateAutopilotTextUI();
                 updateResponseTimeoutUI();
                 updateMaxAutoResponsesUI();
+                updateHumanDelayUI();
                 renderPromptsList();
                 break;
             case 'slashCommandResults':
@@ -2065,6 +2115,69 @@
     function updateMaxAutoResponsesUI() {
         if (!maxAutoResponsesInput) return;
         maxAutoResponsesInput.value = maxConsecutiveAutoResponses;
+    }
+
+    /**
+     * Toggle human-like delay. When enabled, a random delay (jitter)
+     * between min and max seconds is applied before each auto-response,
+     * simulating natural human reading and typing time.
+     */
+    function toggleHumanDelaySetting() {
+        humanLikeDelayEnabled = !humanLikeDelayEnabled;
+        vscode.postMessage({ type: 'updateHumanDelaySetting', enabled: humanLikeDelayEnabled });
+        updateHumanDelayUI();
+    }
+
+    /**
+     * Update minimum delay (seconds). Clamps to valid range [1, max].
+     * Sends new value to extension for persistence in VS Code settings.
+     */
+    function handleHumanDelayMinChange() {
+        if (!humanDelayMinInput) return;
+        var value = parseInt(humanDelayMinInput.value, 10);
+        if (!isNaN(value) && value >= 1 && value <= 30) {
+            // Ensure min <= max
+            if (value > humanLikeDelayMax) {
+                value = humanLikeDelayMax;
+            }
+            humanLikeDelayMin = value;
+            vscode.postMessage({ type: 'updateHumanDelayMin', value: value });
+        }
+        humanDelayMinInput.value = humanLikeDelayMin;
+    }
+
+    /**
+     * Update maximum delay (seconds). Clamps to valid range [min, 60].
+     * Sends new value to extension for persistence in VS Code settings.
+     */
+    function handleHumanDelayMaxChange() {
+        if (!humanDelayMaxInput) return;
+        var value = parseInt(humanDelayMaxInput.value, 10);
+        if (!isNaN(value) && value >= 2 && value <= 60) {
+            // Ensure max >= min
+            if (value < humanLikeDelayMin) {
+                value = humanLikeDelayMin;
+            }
+            humanLikeDelayMax = value;
+            vscode.postMessage({ type: 'updateHumanDelayMax', value: value });
+        }
+        humanDelayMaxInput.value = humanLikeDelayMax;
+    }
+
+    function updateHumanDelayUI() {
+        if (humanDelayToggle) {
+            humanDelayToggle.classList.toggle('active', humanLikeDelayEnabled);
+            humanDelayToggle.setAttribute('aria-checked', humanLikeDelayEnabled ? 'true' : 'false');
+        }
+        if (humanDelayRangeContainer) {
+            humanDelayRangeContainer.style.display = humanLikeDelayEnabled ? 'flex' : 'none';
+        }
+        if (humanDelayMinInput) {
+            humanDelayMinInput.value = humanLikeDelayMin;
+        }
+        if (humanDelayMaxInput) {
+            humanDelayMaxInput.value = humanLikeDelayMax;
+        }
     }
 
     function showAddPromptForm() {

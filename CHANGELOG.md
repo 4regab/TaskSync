@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.19 (02-18-26)
+- Update tasksync-chat/media/webview.js
+
+
 ## TaskSync v2.0.18 (02-18-26)
 - feat: add markdown link handling and styling in webview
 

@@ -806,28 +806,28 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 if (!this._autopilotEnabled || this._currentToolCallId !== toolCallId) {
                     // State changed during delay — fall through to normal pending request flow
                 } else {
-                const effectiveText = this._normalizeAutopilotText(this._autopilotText);
-                vscode.window.showInformationMessage(`TaskSync: Autopilot auto-responded. (${this._consecutiveAutoResponses}/${maxConsecutive})`);
+                    const effectiveText = this._normalizeAutopilotText(this._autopilotText);
+                    vscode.window.showInformationMessage(`TaskSync: Autopilot auto-responded. (${this._consecutiveAutoResponses}/${maxConsecutive})`);
 
-                const entry: ToolCallEntry = {
-                    id: toolCallId,
-                    prompt: question,
-                    response: effectiveText,
-                    timestamp: Date.now(),
-                    isFromQueue: false,
-                    status: 'completed'
-                };
-                this._currentSessionCalls.unshift(entry);
-                this._currentSessionCallsMap.set(entry.id, entry);
-                this._updateViewTitle();
-                this._updateCurrentSessionUI();
-                this._currentToolCallId = null;
+                    const entry: ToolCallEntry = {
+                        id: toolCallId,
+                        prompt: question,
+                        response: effectiveText,
+                        timestamp: Date.now(),
+                        isFromQueue: false,
+                        status: 'completed'
+                    };
+                    this._currentSessionCalls.unshift(entry);
+                    this._currentSessionCallsMap.set(entry.id, entry);
+                    this._updateViewTitle();
+                    this._updateCurrentSessionUI();
+                    this._currentToolCallId = null;
 
-                return {
-                    value: effectiveText,
-                    queue: this._queueEnabled && this._promptQueue.length > 0,
-                    attachments: []
-                };
+                    return {
+                        value: effectiveText,
+                        queue: this._queueEnabled && this._promptQueue.length > 0,
+                        attachments: []
+                    };
                 }
             }
         }
@@ -874,26 +874,26 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     this._saveQueueToDisk();
                     this._updateQueueUI();
                 } else {
-                // Create completed tool call entry for queue response
-                const entry: ToolCallEntry = {
-                    id: toolCallId,
-                    prompt: question,
-                    response: queuedPrompt.prompt,
-                    timestamp: Date.now(),
-                    isFromQueue: true,
-                    status: 'completed'
-                };
-                this._currentSessionCalls.unshift(entry);
-                this._currentSessionCallsMap.set(entry.id, entry); // Maintain O(1) lookup map
-                this._updateViewTitle();
-                this._updateCurrentSessionUI();
-                this._currentToolCallId = null;
+                    // Create completed tool call entry for queue response
+                    const entry: ToolCallEntry = {
+                        id: toolCallId,
+                        prompt: question,
+                        response: queuedPrompt.prompt,
+                        timestamp: Date.now(),
+                        isFromQueue: true,
+                        status: 'completed'
+                    };
+                    this._currentSessionCalls.unshift(entry);
+                    this._currentSessionCallsMap.set(entry.id, entry); // Maintain O(1) lookup map
+                    this._updateViewTitle();
+                    this._updateCurrentSessionUI();
+                    this._currentToolCallId = null;
 
-                return {
-                    value: queuedPrompt.prompt,
-                    queue: this._queueEnabled && this._promptQueue.length > 0,
-                    attachments: queuedPrompt.attachments || []  // Return stored attachments
-                };
+                    return {
+                        value: queuedPrompt.prompt,
+                        queue: this._queueEnabled && this._promptQueue.length > 0,
+                        attachments: queuedPrompt.attachments || []  // Return stored attachments
+                    };
                 }
             }
         }
@@ -1954,14 +1954,19 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private async _handleUpdateHumanDelayMin(value: number): Promise<void> {
         if (value >= 1 && value <= 30) {
             this._humanLikeDelayMin = value;
-            // Ensure min <= max
+            // Ensure min <= max; persist both if adjusted
+            let adjustedMax = false;
             if (this._humanLikeDelayMin > this._humanLikeDelayMax) {
                 this._humanLikeDelayMax = this._humanLikeDelayMin;
+                adjustedMax = true;
             }
             this._isUpdatingConfig = true;
             try {
                 const config = vscode.workspace.getConfiguration('tasksync');
                 await config.update('humanLikeDelayMin', value, vscode.ConfigurationTarget.Workspace);
+                if (adjustedMax) {
+                    await config.update('humanLikeDelayMax', this._humanLikeDelayMax, vscode.ConfigurationTarget.Workspace);
+                }
             } finally {
                 this._isUpdatingConfig = false;
             }
@@ -1974,14 +1979,19 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private async _handleUpdateHumanDelayMax(value: number): Promise<void> {
         if (value >= 2 && value <= 60) {
             this._humanLikeDelayMax = value;
-            // Ensure max >= min
+            // Ensure max >= min; persist both if adjusted
+            let adjustedMin = false;
             if (this._humanLikeDelayMax < this._humanLikeDelayMin) {
                 this._humanLikeDelayMin = this._humanLikeDelayMax;
+                adjustedMin = true;
             }
             this._isUpdatingConfig = true;
             try {
                 const config = vscode.workspace.getConfiguration('tasksync');
                 await config.update('humanLikeDelayMax', value, vscode.ConfigurationTarget.Workspace);
+                if (adjustedMin) {
+                    await config.update('humanLikeDelayMin', this._humanLikeDelayMin, vscode.ConfigurationTarget.Workspace);
+                }
             } finally {
                 this._isUpdatingConfig = false;
             }

@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.20 (02-19-26)
+- feat: improve the switch button for human like delay, update linting configuration and add biome.json
+
+
 ## TaskSync v2.0.19 (02-18-26)
 feat: extend response timeout to 4 hours and add 2-hour session warning
 - Extended response timeout configuration with new options at 150, 180, 210, and 240 minutes

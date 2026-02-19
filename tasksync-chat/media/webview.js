@@ -31,8 +31,8 @@
     let maxConsecutiveAutoResponses = 5;
     // Human-like delay: random jitter simulates natural reading/typing time
     let humanLikeDelayEnabled = true;
-    let humanLikeDelayMin = 1;  // minimum seconds
-    let humanLikeDelayMax = 3;  // maximum seconds
+    let humanLikeDelayMin = 2;  // minimum seconds
+    let humanLikeDelayMax = 6;  // maximum seconds
 
     // Tracks local edits to prevent stale settings overwriting user input mid-typing.
     let autopilotTextEditVersion = 0;
@@ -442,7 +442,7 @@
         humanDelaySection.innerHTML = '<div class="settings-section-header">' +
             '<div class="settings-section-title">' +
             '<span class="codicon codicon-pulse"></span> Human-Like Delay' +
-            '<span class="settings-info-icon" title="Add random delays (1-3s by default) before auto-responses. Simulates natural pacing for automated workflows.">' +
+            '<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated workflows.">' +
             '<span class="codicon codicon-info"></span></span>' +
             '</div>' +
             '<button class="toggle-btn active" id="human-delay-toggle" role="switch" aria-checked="true" title="Toggle Human-Like Delay">' +
@@ -450,9 +450,9 @@
             '</div>' +
             '<div class="form-row human-delay-range" id="human-delay-range">' +
             '<label class="form-label-inline">Min (s):</label>' +
-            '<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="1" max="30" value="1" />' +
+            '<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="1" max="30" value="2" />' +
             '<label class="form-label-inline">Max (s):</label>' +
-            '<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="2" max="60" value="3" />' +
+            '<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="2" max="60" value="6" />' +
             '</div>';
         modalContent.appendChild(humanDelaySection);
 
@@ -981,8 +981,8 @@
                 responseTimeout = typeof message.responseTimeout === 'number' ? message.responseTimeout : 60;
                 maxConsecutiveAutoResponses = typeof message.maxConsecutiveAutoResponses === 'number' ? message.maxConsecutiveAutoResponses : 5;
                 humanLikeDelayEnabled = message.humanLikeDelayEnabled !== false;
-                humanLikeDelayMin = typeof message.humanLikeDelayMin === 'number' ? message.humanLikeDelayMin : 1;
-                humanLikeDelayMax = typeof message.humanLikeDelayMax === 'number' ? message.humanLikeDelayMax : 3;
+                humanLikeDelayMin = typeof message.humanLikeDelayMin === 'number' ? message.humanLikeDelayMin : 2;
+                humanLikeDelayMax = typeof message.humanLikeDelayMax === 'number' ? message.humanLikeDelayMax : 6;
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
                 updateAutopilotToggleUI();

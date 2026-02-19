@@ -192,8 +192,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Human-like delay settings: adds random jitter before auto-responses.
     // Simulates natural human reading/typing time for a more realistic workflow.
     private _humanLikeDelayEnabled: boolean = true;
-    private _humanLikeDelayMin: number = 1;  // seconds
-    private _humanLikeDelayMax: number = 3;  // seconds
+    private _humanLikeDelayMin: number = 2;  // seconds
+    private _humanLikeDelayMax: number = 6;  // seconds
 
     // Flag to prevent config reload during our own updates (avoids race condition)
     private _isUpdatingConfig: boolean = false;
@@ -577,8 +577,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
         // Load human-like delay settings
         this._humanLikeDelayEnabled = config.get<boolean>('humanLikeDelay', true);
-        this._humanLikeDelayMin = config.get<number>('humanLikeDelayMin', 1);
-        this._humanLikeDelayMax = config.get<number>('humanLikeDelayMax', 3);
+        this._humanLikeDelayMin = config.get<number>('humanLikeDelayMin', 2);
+        this._humanLikeDelayMax = config.get<number>('humanLikeDelayMax', 6);
         // Ensure min <= max
         if (this._humanLikeDelayMin > this._humanLikeDelayMax) {
             this._humanLikeDelayMin = this._humanLikeDelayMax;

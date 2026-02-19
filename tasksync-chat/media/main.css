@@ -2399,6 +2399,28 @@ button#send-btn:disabled {
     width: 100%;
 }
 
+/* Small inline inputs for human-like delay settings */
+.human-delay-range {
+    display: flex;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 0;
+}
+
+.form-label-inline {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+}
+
+.form-input-small {
+    width: 60px !important;
+    min-width: 60px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
 .form-actions {
     display: flex;
     justify-content: flex-end;

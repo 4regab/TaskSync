@@ -278,7 +278,7 @@
     "build": "node esbuild.js",
     "compile": "tsc -p ./",
     "watch": "node esbuild.js --watch",
-    "lint": "eslint src --ext ts"
+    "lint": "biome lint src"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",
@@ -286,10 +286,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.2",
     "@types/node": "20.x",
     "@types/vscode": "^1.90.0",
     "esbuild": "^0.27.2",
-    "eslint": "^8.56.0",
     "typescript": "^5.3.3"
   }
 }

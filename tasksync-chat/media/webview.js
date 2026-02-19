@@ -442,11 +442,10 @@
         humanDelaySection.innerHTML = '<div class="settings-section-header">' +
             '<div class="settings-section-title">' +
             '<span class="codicon codicon-pulse"></span> Human-Like Delay' +
-            '<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated workflows.">' +
+            '<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated responses.">' +
             '<span class="codicon codicon-info"></span></span>' +
             '</div>' +
-            '<button class="toggle-btn active" id="human-delay-toggle" role="switch" aria-checked="true" title="Toggle Human-Like Delay">' +
-            '<span class="toggle-slider"></span></button>' +
+            '<div class="toggle-switch active" id="human-delay-toggle" role="switch" aria-checked="true" aria-label="Toggle Human-Like Delay" tabindex="0"></div>' +
             '</div>' +
             '<div class="form-row human-delay-range" id="human-delay-range">' +
             '<label class="form-label-inline">Min (s):</label>' +

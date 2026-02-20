@@ -75,8 +75,7 @@
         {
           "type": "webview",
           "id": "taskSyncView",
-          "name": "TaskSync",
-          "icon": "media/TS-logo.svg"
+          "name": "TaskSync"
         }
       ]
     },

@@ -31,6 +31,9 @@
     let responseTimeout = 60;
     let sessionWarningHours = 2;
     let maxConsecutiveAutoResponses = 5;
+    // Keep timeout options aligned with select values to avoid invalid UI state.
+    var RESPONSE_TIMEOUT_ALLOWED_VALUES = new Set([0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210, 240]);
+    var RESPONSE_TIMEOUT_DEFAULT = 60;
     // Human-like delay: random jitter simulates natural reading/typing time
     let humanLikeDelayEnabled = true;
     let humanLikeDelayMin = 2;  // minimum seconds
@@ -1022,6 +1025,16 @@
         if (queueSection) queueSection.classList.toggle('collapsed');
     }
 
+    function normalizeResponseTimeout(value) {
+        if (!Number.isFinite(value)) {
+            return RESPONSE_TIMEOUT_DEFAULT;
+        }
+        if (!RESPONSE_TIMEOUT_ALLOWED_VALUES.has(value)) {
+            return RESPONSE_TIMEOUT_DEFAULT;
+        }
+        return value;
+    }
+
     function handleExtensionMessage(event) {
         var message = event.data;
         console.log('[TaskSync Webview] Received message:', message.type, message);
@@ -1068,7 +1081,7 @@
                 autopilotEnabled = message.autopilotEnabled === true;
                 autopilotText = typeof message.autopilotText === 'string' ? message.autopilotText : '';
                 reusablePrompts = message.reusablePrompts || [];
-                responseTimeout = typeof message.responseTimeout === 'number' ? message.responseTimeout : 60;
+                responseTimeout = normalizeResponseTimeout(message.responseTimeout);
                 sessionWarningHours = typeof message.sessionWarningHours === 'number' ? message.sessionWarningHours : 2;
                 maxConsecutiveAutoResponses = typeof message.maxConsecutiveAutoResponses === 'number' ? message.maxConsecutiveAutoResponses : 5;
                 humanLikeDelayEnabled = message.humanLikeDelayEnabled !== false;

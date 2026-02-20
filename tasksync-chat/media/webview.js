@@ -84,7 +84,7 @@
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
     let soundToggle, interactiveApprovalToggle, sendShortcutToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
-    let responseTimeoutSelect, sessionWarningHoursInput, maxAutoResponsesInput;
+    let responseTimeoutSelect, sessionWarningHoursSelect, maxAutoResponsesInput;
     let humanDelayToggle, humanDelayRangeContainer, humanDelayMinInput, humanDelayMaxInput;
 
     function init() {
@@ -446,7 +446,17 @@
             '</div>' +
             '</div>' +
             '<div class="form-row">' +
-            '<input type="number" class="form-input" id="session-warning-hours-input" min="0" max="8" value="2" />' +
+            '<select class="form-input form-select" id="session-warning-hours-select">' +
+            '<option value="0">Disabled</option>' +
+            '<option value="1">1 hour</option>' +
+            '<option value="2">2 hours</option>' +
+            '<option value="3">3 hours</option>' +
+            '<option value="4">4 hours</option>' +
+            '<option value="5">5 hours</option>' +
+            '<option value="6">6 hours</option>' +
+            '<option value="7">7 hours</option>' +
+            '<option value="8">8 hours</option>' +
+            '</select>' +
             '</div>';
         modalContent.appendChild(sessionWarningSection);
 
@@ -517,7 +527,7 @@
         autopilotEditBtn = document.getElementById('autopilot-edit-btn');
         autopilotTextInput = document.getElementById('autopilot-text');
         responseTimeoutSelect = document.getElementById('response-timeout-select');
-        sessionWarningHoursInput = document.getElementById('session-warning-hours-input');
+        sessionWarningHoursSelect = document.getElementById('session-warning-hours-select');
         maxAutoResponsesInput = document.getElementById('max-auto-responses-input');
         humanDelayToggle = document.getElementById('human-delay-toggle');
         humanDelayRangeContainer = document.getElementById('human-delay-range');
@@ -640,9 +650,8 @@
         if (responseTimeoutSelect) {
             responseTimeoutSelect.addEventListener('change', handleResponseTimeoutChange);
         }
-        if (sessionWarningHoursInput) {
-            sessionWarningHoursInput.addEventListener('change', handleSessionWarningHoursChange);
-            sessionWarningHoursInput.addEventListener('blur', handleSessionWarningHoursChange);
+        if (sessionWarningHoursSelect) {
+            sessionWarningHoursSelect.addEventListener('change', handleSessionWarningHoursChange);
         }
         if (maxAutoResponsesInput) {
             maxAutoResponsesInput.addEventListener('change', handleMaxAutoResponsesChange);
@@ -2222,20 +2231,20 @@
     }
 
     function handleSessionWarningHoursChange() {
-        if (!sessionWarningHoursInput) return;
+        if (!sessionWarningHoursSelect) return;
 
-        var value = parseInt(sessionWarningHoursInput.value, 10);
+        var value = parseInt(sessionWarningHoursSelect.value, 10);
         if (!isNaN(value) && value >= 0 && value <= 8) {
             sessionWarningHours = value;
             vscode.postMessage({ type: 'updateSessionWarningHours', value: value });
         }
 
-        sessionWarningHoursInput.value = String(sessionWarningHours);
+        sessionWarningHoursSelect.value = String(sessionWarningHours);
     }
 
     function updateSessionWarningHoursUI() {
-        if (!sessionWarningHoursInput) return;
-        sessionWarningHoursInput.value = String(sessionWarningHours);
+        if (!sessionWarningHoursSelect) return;
+        sessionWarningHoursSelect.value = String(sessionWarningHours);
     }
 
     function handleMaxAutoResponsesChange() {

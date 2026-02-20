@@ -201,6 +201,12 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Session warning threshold (hours). 0 disables the warning.
     private _sessionWarningHours: number = 2;
 
+    // Allowed timeout values (minutes) shared across config reads/writes and UI sync.
+    private readonly _RESPONSE_TIMEOUT_ALLOWED_MINUTES = new Set<number>([
+        0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210, 240
+    ]);
+    private readonly _RESPONSE_TIMEOUT_DEFAULT_MINUTES = 60;
+
     // Send behavior: false => Enter, true => Ctrl/Cmd+Enter
     private _sendWithCtrlEnter: boolean = false;
 
@@ -538,6 +544,36 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         return text.trim().length > 0 ? text : defaultAutopilotText;
     }
 
+    private _normalizeResponseTimeout(value: unknown): number {
+        let parsedValue: number;
+
+        if (typeof value === 'number') {
+            parsedValue = value;
+        } else if (typeof value === 'string') {
+            const normalizedValue = value.trim();
+            if (normalizedValue.length === 0) {
+                return this._RESPONSE_TIMEOUT_DEFAULT_MINUTES;
+            }
+            parsedValue = Number(normalizedValue);
+        } else {
+            return this._RESPONSE_TIMEOUT_DEFAULT_MINUTES;
+        }
+
+        if (!Number.isFinite(parsedValue) || !Number.isInteger(parsedValue)) {
+            return this._RESPONSE_TIMEOUT_DEFAULT_MINUTES;
+        }
+        if (!this._RESPONSE_TIMEOUT_ALLOWED_MINUTES.has(parsedValue)) {
+            return this._RESPONSE_TIMEOUT_DEFAULT_MINUTES;
+        }
+        return parsedValue;
+    }
+
+    private _readResponseTimeoutMinutes(config?: vscode.WorkspaceConfiguration): number {
+        const settings = config ?? vscode.workspace.getConfiguration('tasksync');
+        const configuredTimeout = settings.get<string>('responseTimeout', String(this._RESPONSE_TIMEOUT_DEFAULT_MINUTES));
+        return this._normalizeResponseTimeout(configuredTimeout);
+    }
+
     private _loadSettings(): void {
         const config = vscode.workspace.getConfiguration('tasksync');
         this._soundEnabled = config.get<boolean>('notificationSound', true);
@@ -632,7 +668,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     private _updateSettingsUI(): void {
         const config = vscode.workspace.getConfiguration('tasksync');
-        const responseTimeout = parseInt(config.get<string>('responseTimeout', '60'), 10);
+        const responseTimeout = this._readResponseTimeoutMinutes(config);
         const maxConsecutiveAutoResponses = config.get<number>('maxConsecutiveAutoResponses', 5);
 
         this._view?.webview.postMessage({
@@ -992,12 +1028,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         }
 
         // Get timeout from config (in minutes)
-        const config = vscode.workspace.getConfiguration('tasksync');
-        const rawValue = config.get<string>('responseTimeout', '60');
-        const timeoutMinutes = parseInt(rawValue, 10);
+        const timeoutMinutes = this._readResponseTimeoutMinutes();
 
         // If timeout is 0 or disabled, don't start a timer
-        if (timeoutMinutes <= 0 || isNaN(timeoutMinutes)) {
+        if (timeoutMinutes <= 0) {
             return;
         }
 
@@ -1032,7 +1066,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
 
         // Use autopilot text only if autopilot is enabled; otherwise use session termination message
         const config = vscode.workspace.getConfiguration('tasksync');
-        const timeoutMinutes = config.get<string>('responseTimeout', '60');
+        const timeoutMinutes = this._readResponseTimeoutMinutes(config);
         const maxConsecutive = config.get<number>('maxConsecutiveAutoResponses', 5);
 
         // Increment and enforce consecutive auto-response limit
@@ -1948,7 +1982,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         this._isUpdatingConfig = true;
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
-            await config.update('responseTimeout', String(value), vscode.ConfigurationTarget.Workspace);
+            const normalizedValue = this._normalizeResponseTimeout(value);
+            await config.update('responseTimeout', String(normalizedValue), vscode.ConfigurationTarget.Workspace);
         } finally {
             this._isUpdatingConfig = false;
         }

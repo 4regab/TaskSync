@@ -2094,7 +2094,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         this._isUpdatingConfig = true;
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
-            await config.update('sendWithCtrlEnter', enabled, vscode.ConfigurationTarget.Workspace);
+            await config.update('sendWithCtrlEnter', enabled, vscode.ConfigurationTarget.Global);
         } finally {
             this._isUpdatingConfig = false;
         }

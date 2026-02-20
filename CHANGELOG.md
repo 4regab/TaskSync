@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.21 (02-20-26)
+- feat: add Ctrl/Cmd+Enter shortcut for sending messages
+- - Added sendWithCtrlEnter boolean setting (default: false) to switch between Enter and Ctrl/Cmd+Enter send behavior
+- - Improved keyboard event handling to properly detect and respect Ctrl/Meta modifier keys
+- - Added tasksync.sendMessage command for programmatic send triggering (useful for custom keybindings)
+
+
 ## TaskSync v2.0.20 (02-19-26)
 - feat: improve the switch button for human like delay, update linting configuration and add biome.json
 

@@ -75,7 +75,7 @@ type ToWebviewMessage =
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
     | { type: 'imageSaved'; attachment: AttachmentInfo }
     | { type: 'openSettingsModal' }
-    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; maxConsecutiveAutoResponses: number; humanLikeDelayEnabled: boolean; humanLikeDelayMin: number; humanLikeDelayMax: number; sendWithCtrlEnter: boolean }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; sessionWarningHours: number; maxConsecutiveAutoResponses: number; humanLikeDelayEnabled: boolean; humanLikeDelayMin: number; humanLikeDelayMax: number; sendWithCtrlEnter: boolean }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
     | { type: 'playNotificationSound' }
     | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
@@ -114,6 +114,7 @@ type FromWebviewMessage =
     | { type: 'openExternal'; url: string }
     | { type: 'openFileLink'; target: string }
     | { type: 'updateResponseTimeout'; value: number }
+    | { type: 'updateSessionWarningHours'; value: number }
     | { type: 'updateMaxConsecutiveAutoResponses'; value: number }
     | { type: 'updateHumanDelaySetting'; enabled: boolean }
     | { type: 'updateHumanDelayMin'; value: number }
@@ -197,6 +198,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private _humanLikeDelayMin: number = 2;  // seconds
     private _humanLikeDelayMax: number = 6;  // seconds
 
+    // Session warning threshold (hours). 0 disables the warning.
+    private _sessionWarningHours: number = 2;
+
     // Send behavior: false => Enter, true => Ctrl/Cmd+Enter
     private _sendWithCtrlEnter: boolean = false;
 
@@ -253,6 +257,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     e.affectsConfiguration('tasksync.autoAnswerText') ||
                     e.affectsConfiguration('tasksync.reusablePrompts') ||
                     e.affectsConfiguration('tasksync.responseTimeout') ||
+                    e.affectsConfiguration('tasksync.sessionWarningHours') ||
                     e.affectsConfiguration('tasksync.maxConsecutiveAutoResponses') ||
                     e.affectsConfiguration('tasksync.humanLikeDelay') ||
                     e.affectsConfiguration('tasksync.humanLikeDelayMin') ||
@@ -469,12 +474,14 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 if (this._view) {
                     this._view.title = this._formatElapsed(elapsed);
                 }
-                // Show a one-time warning after 2 hours of session activity
-                if (!this._sessionWarningShown && elapsed >= 2 * 60 * 60 * 1000) {
+                // Warn once when a long-running session crosses the configured threshold.
+                const warningThresholdMs = this._sessionWarningHours * 60 * 60 * 1000;
+                if (this._sessionWarningHours > 0 && !this._sessionWarningShown && elapsed >= warningThresholdMs) {
                     this._sessionWarningShown = true;
                     const callCount = this._currentSessionCalls.length;
+                    const hoursLabel = this._sessionWarningHours === 1 ? 'hour' : 'hours';
                     vscode.window.showWarningMessage(
-                        `Your session has been running for over 2 hours (${callCount} tool calls). Consider starting a new session to maintain quality.`,
+                        `Your session has been running for over ${this._sessionWarningHours} ${hoursLabel} (${callCount} tool calls). Consider starting a new session to maintain quality.`,
                         'New Session',
                         'Dismiss'
                     ).then(action => {
@@ -592,6 +599,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         this._humanLikeDelayEnabled = config.get<boolean>('humanLikeDelay', true);
         this._humanLikeDelayMin = config.get<number>('humanLikeDelayMin', 2);
         this._humanLikeDelayMax = config.get<number>('humanLikeDelayMax', 6);
+        const configuredWarningHours = config.get<number>('sessionWarningHours', 2);
+        this._sessionWarningHours = Number.isFinite(configuredWarningHours)
+            ? Math.min(8, Math.max(0, Math.floor(configuredWarningHours)))
+            : 2;
         this._sendWithCtrlEnter = config.get<boolean>('sendWithCtrlEnter', false);
         // Ensure min <= max
         if (this._humanLikeDelayMin > this._humanLikeDelayMax) {
@@ -632,6 +643,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             autopilotText: this._autopilotText,
             reusablePrompts: this._reusablePrompts,
             responseTimeout: responseTimeout,
+            sessionWarningHours: this._sessionWarningHours,
             maxConsecutiveAutoResponses: maxConsecutiveAutoResponses,
             humanLikeDelayEnabled: this._humanLikeDelayEnabled,
             humanLikeDelayMin: this._humanLikeDelayMin,
@@ -1177,6 +1189,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 break;
             case 'updateResponseTimeout':
                 this._handleUpdateResponseTimeout(message.value);
+                break;
+            case 'updateSessionWarningHours':
+                this._handleUpdateSessionWarningHours(message.value);
                 break;
             case 'updateMaxConsecutiveAutoResponses':
                 this._handleUpdateMaxConsecutiveAutoResponses(message.value);
@@ -1934,6 +1949,26 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         try {
             const config = vscode.workspace.getConfiguration('tasksync');
             await config.update('responseTimeout', String(value), vscode.ConfigurationTarget.Workspace);
+        } finally {
+            this._isUpdatingConfig = false;
+        }
+    }
+
+    /**
+     * Handle updating session warning threshold in hours.
+     */
+    private async _handleUpdateSessionWarningHours(value: number): Promise<void> {
+        if (!Number.isFinite(value)) {
+            return;
+        }
+
+        const normalizedValue = Math.min(8, Math.max(0, Math.floor(value)));
+        this._sessionWarningHours = normalizedValue;
+
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('sessionWarningHours', normalizedValue, vscode.ConfigurationTarget.Workspace);
         } finally {
             this._isUpdatingConfig = false;
         }

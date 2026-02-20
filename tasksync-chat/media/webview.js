@@ -29,6 +29,7 @@
     let autopilotText = '';
     let autopilotTextDebounceTimer = null;
     let responseTimeout = 60;
+    let sessionWarningHours = 2;
     let maxConsecutiveAutoResponses = 5;
     // Human-like delay: random jitter simulates natural reading/typing time
     let humanLikeDelayEnabled = true;
@@ -80,7 +81,7 @@
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
     let soundToggle, interactiveApprovalToggle, sendShortcutToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
-    let responseTimeoutSelect, maxAutoResponsesInput;
+    let responseTimeoutSelect, sessionWarningHoursInput, maxAutoResponsesInput;
     let humanDelayToggle, humanDelayRangeContainer, humanDelayMinInput, humanDelayMaxInput;
 
     function init() {
@@ -431,6 +432,21 @@
             '</div>';
         modalContent.appendChild(timeoutSection);
 
+        // Session Warning section - warning threshold in hours
+        var sessionWarningSection = document.createElement('div');
+        sessionWarningSection.className = 'settings-section';
+        sessionWarningSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title">' +
+            '<span class="codicon codicon-watch"></span> Session Warning (hours)' +
+            '<span class="settings-info-icon" title="Show a one-time warning after this many hours in the same session. Set to 0 to disable.">' +
+            '<span class="codicon codicon-info"></span></span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="form-row">' +
+            '<input type="number" class="form-input" id="session-warning-hours-input" min="0" max="8" value="2" />' +
+            '</div>';
+        modalContent.appendChild(sessionWarningSection);
+
         // Max Consecutive Auto-Responses section - number input
         var maxAutoSection = document.createElement('div');
         maxAutoSection.className = 'settings-section';
@@ -498,6 +514,7 @@
         autopilotEditBtn = document.getElementById('autopilot-edit-btn');
         autopilotTextInput = document.getElementById('autopilot-text');
         responseTimeoutSelect = document.getElementById('response-timeout-select');
+        sessionWarningHoursInput = document.getElementById('session-warning-hours-input');
         maxAutoResponsesInput = document.getElementById('max-auto-responses-input');
         humanDelayToggle = document.getElementById('human-delay-toggle');
         humanDelayRangeContainer = document.getElementById('human-delay-range');
@@ -619,6 +636,10 @@
         }
         if (responseTimeoutSelect) {
             responseTimeoutSelect.addEventListener('change', handleResponseTimeoutChange);
+        }
+        if (sessionWarningHoursInput) {
+            sessionWarningHoursInput.addEventListener('change', handleSessionWarningHoursChange);
+            sessionWarningHoursInput.addEventListener('blur', handleSessionWarningHoursChange);
         }
         if (maxAutoResponsesInput) {
             maxAutoResponsesInput.addEventListener('change', handleMaxAutoResponsesChange);
@@ -1048,6 +1069,7 @@
                 autopilotText = typeof message.autopilotText === 'string' ? message.autopilotText : '';
                 reusablePrompts = message.reusablePrompts || [];
                 responseTimeout = typeof message.responseTimeout === 'number' ? message.responseTimeout : 60;
+                sessionWarningHours = typeof message.sessionWarningHours === 'number' ? message.sessionWarningHours : 2;
                 maxConsecutiveAutoResponses = typeof message.maxConsecutiveAutoResponses === 'number' ? message.maxConsecutiveAutoResponses : 5;
                 humanLikeDelayEnabled = message.humanLikeDelayEnabled !== false;
                 humanLikeDelayMin = typeof message.humanLikeDelayMin === 'number' ? message.humanLikeDelayMin : 2;
@@ -1058,6 +1080,7 @@
                 updateAutopilotToggleUI();
                 updateAutopilotTextUI();
                 updateResponseTimeoutUI();
+                updateSessionWarningHoursUI();
                 updateMaxAutoResponsesUI();
                 updateHumanDelayUI();
                 renderPromptsList();
@@ -2183,6 +2206,23 @@
     function updateResponseTimeoutUI() {
         if (!responseTimeoutSelect) return;
         responseTimeoutSelect.value = String(responseTimeout);
+    }
+
+    function handleSessionWarningHoursChange() {
+        if (!sessionWarningHoursInput) return;
+
+        var value = parseInt(sessionWarningHoursInput.value, 10);
+        if (!isNaN(value) && value >= 0 && value <= 8) {
+            sessionWarningHours = value;
+            vscode.postMessage({ type: 'updateSessionWarningHours', value: value });
+        }
+
+        sessionWarningHoursInput.value = String(sessionWarningHours);
+    }
+
+    function updateSessionWarningHoursUI() {
+        if (!sessionWarningHoursInput) return;
+        sessionWarningHoursInput.value = String(sessionWarningHours);
     }
 
     function handleMaxAutoResponsesChange() {

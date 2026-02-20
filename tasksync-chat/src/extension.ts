@@ -103,6 +103,11 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Send current TaskSync input command (for Keyboard Shortcuts)
+    const sendMessageCmd = vscode.commands.registerCommand('tasksync.sendMessage', () => {
+        provider.triggerSendFromShortcut();
+    });
+
     // Restart MCP server command
     const restartMcpCmd = vscode.commands.registerCommand('tasksync.restartMcp', async () => {
         if (mcpServer) {
@@ -159,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
         provider.openSettingsModal();
     });
 
-    context.subscriptions.push(startMcpCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, newSessionCmd, openSettingsCmd);
+    context.subscriptions.push(startMcpCmd, sendMessageCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, newSessionCmd, openSettingsCmd);
 }
 
 export async function deactivate() {

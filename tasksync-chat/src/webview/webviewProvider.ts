@@ -75,13 +75,14 @@ type ToWebviewMessage =
     | { type: 'updateAttachments'; attachments: AttachmentInfo[] }
     | { type: 'imageSaved'; attachment: AttachmentInfo }
     | { type: 'openSettingsModal' }
-    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; maxConsecutiveAutoResponses: number; humanLikeDelayEnabled: boolean; humanLikeDelayMin: number; humanLikeDelayMax: number }
+    | { type: 'updateSettings'; soundEnabled: boolean; interactiveApprovalEnabled: boolean; autopilotEnabled: boolean; autopilotText: string; reusablePrompts: ReusablePrompt[]; responseTimeout: number; maxConsecutiveAutoResponses: number; humanLikeDelayEnabled: boolean; humanLikeDelayMin: number; humanLikeDelayMax: number; sendWithCtrlEnter: boolean }
     | { type: 'slashCommandResults'; prompts: ReusablePrompt[] }
     | { type: 'playNotificationSound' }
     | { type: 'contextSearchResults'; suggestions: Array<{ type: string; label: string; description: string; detail: string }> }
     | { type: 'contextReferenceAdded'; reference: { id: string; type: string; label: string; content: string } }
     | { type: 'clear' }
-    | { type: 'updateSessionTimer'; startTime: number | null; frozenElapsed: number | null };
+    | { type: 'updateSessionTimer'; startTime: number | null; frozenElapsed: number | null }
+    | { type: 'triggerSendFromShortcut' };
 
 type FromWebviewMessage =
     | { type: 'submit'; value: string; attachments: AttachmentInfo[] }
@@ -117,6 +118,7 @@ type FromWebviewMessage =
     | { type: 'updateHumanDelaySetting'; enabled: boolean }
     | { type: 'updateHumanDelayMin'; value: number }
     | { type: 'updateHumanDelayMax'; value: number }
+    | { type: 'updateSendWithCtrlEnterSetting'; enabled: boolean }
     | { type: 'searchContext'; query: string }
     | { type: 'selectContextReference'; contextType: string; options?: Record<string, unknown> };
 
@@ -195,6 +197,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     private _humanLikeDelayMin: number = 2;  // seconds
     private _humanLikeDelayMax: number = 6;  // seconds
 
+    // Send behavior: false => Enter, true => Ctrl/Cmd+Enter
+    private _sendWithCtrlEnter: boolean = false;
+
     // Flag to prevent config reload during our own updates (avoids race condition)
     private _isUpdatingConfig: boolean = false;
 
@@ -251,7 +256,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     e.affectsConfiguration('tasksync.maxConsecutiveAutoResponses') ||
                     e.affectsConfiguration('tasksync.humanLikeDelay') ||
                     e.affectsConfiguration('tasksync.humanLikeDelayMin') ||
-                    e.affectsConfiguration('tasksync.humanLikeDelayMax')) {
+                    e.affectsConfiguration('tasksync.humanLikeDelayMax') ||
+                    e.affectsConfiguration('tasksync.sendWithCtrlEnter')) {
                     this._loadSettings();
                     this._updateSettingsUI();
                 }
@@ -296,6 +302,13 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     public openSettingsModal(): void {
         this._view?.webview.postMessage({ type: 'openSettingsModal' } as ToWebviewMessage);
         this._updateSettingsUI();
+    }
+
+    /**
+     * Trigger send action in webview from a VS Code command/keybinding.
+     */
+    public triggerSendFromShortcut(): void {
+        this._view?.webview.postMessage({ type: 'triggerSendFromShortcut' } as ToWebviewMessage);
     }
 
     /**
@@ -579,6 +592,7 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         this._humanLikeDelayEnabled = config.get<boolean>('humanLikeDelay', true);
         this._humanLikeDelayMin = config.get<number>('humanLikeDelayMin', 2);
         this._humanLikeDelayMax = config.get<number>('humanLikeDelayMax', 6);
+        this._sendWithCtrlEnter = config.get<boolean>('sendWithCtrlEnter', false);
         // Ensure min <= max
         if (this._humanLikeDelayMin > this._humanLikeDelayMax) {
             this._humanLikeDelayMin = this._humanLikeDelayMax;
@@ -621,7 +635,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             maxConsecutiveAutoResponses: maxConsecutiveAutoResponses,
             humanLikeDelayEnabled: this._humanLikeDelayEnabled,
             humanLikeDelayMin: this._humanLikeDelayMin,
-            humanLikeDelayMax: this._humanLikeDelayMax
+            humanLikeDelayMax: this._humanLikeDelayMax,
+            sendWithCtrlEnter: this._sendWithCtrlEnter
         } as ToWebviewMessage);
     }
 
@@ -1174,6 +1189,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 break;
             case 'updateHumanDelayMax':
                 this._handleUpdateHumanDelayMax(message.value);
+                break;
+            case 'updateSendWithCtrlEnterSetting':
+                this._handleUpdateSendWithCtrlEnterSetting(message.enabled);
                 break;
             case 'searchContext':
                 this._handleSearchContext(message.query);
@@ -1995,6 +2013,20 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             } finally {
                 this._isUpdatingConfig = false;
             }
+        }
+    }
+
+    /**
+     * Handle updating send behavior setting.
+     */
+    private async _handleUpdateSendWithCtrlEnterSetting(enabled: boolean): Promise<void> {
+        this._sendWithCtrlEnter = enabled;
+        this._isUpdatingConfig = true;
+        try {
+            const config = vscode.workspace.getConfiguration('tasksync');
+            await config.update('sendWithCtrlEnter', enabled, vscode.ConfigurationTarget.Workspace);
+        } finally {
+            this._isUpdatingConfig = false;
         }
     }
 

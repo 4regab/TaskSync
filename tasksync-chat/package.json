@@ -200,6 +200,12 @@
           "default": true,
           "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
         },
+        "tasksync.sendWithCtrlEnter": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Use Ctrl+Enter (Cmd+Enter on macOS) to send messages instead of Enter."
+        },
         "tasksync.reusablePrompts": {
           "type": "array",
           "default": [],
@@ -228,6 +234,10 @@
       {
         "command": "tasksync.startMcp",
         "title": "TaskSync: Start MCP Server"
+      },
+      {
+        "command": "tasksync.sendMessage",
+        "title": "TaskSync: Send Message"
       },
       {
         "command": "tasksync.restartMcp",

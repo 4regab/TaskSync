@@ -24,6 +24,7 @@
     // Settings state
     let soundEnabled = true;
     let interactiveApprovalEnabled = true;
+    let sendWithCtrlEnter = false;
     let autopilotEnabled = false;
     let autopilotText = '';
     let autopilotTextDebounceTimer = null;
@@ -78,7 +79,7 @@
     let slashDropdown, slashList, slashEmpty;
     // Settings modal elements
     let settingsModal, settingsModalOverlay, settingsModalClose;
-    let soundToggle, interactiveApprovalToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
+    let soundToggle, interactiveApprovalToggle, sendShortcutToggle, autopilotEditBtn, autopilotToggle, autopilotTextInput, promptsList, addPromptBtn, addPromptForm;
     let responseTimeoutSelect, maxAutoResponsesInput;
     let humanDelayToggle, humanDelayRangeContainer, humanDelayMinInput, humanDelayMaxInput;
 
@@ -371,6 +372,15 @@
             '</div>';
         modalContent.appendChild(approvalSection);
 
+        // Send shortcut section - switch between Enter and Ctrl/Cmd+Enter send
+        var sendShortcutSection = document.createElement('div');
+        sendShortcutSection.className = 'settings-section';
+        sendShortcutSection.innerHTML = '<div class="settings-section-header">' +
+            '<div class="settings-section-title"><span class="codicon codicon-keyboard"></span> Ctrl/Cmd+Enter to Send</div>' +
+            '<div class="toggle-switch" id="send-shortcut-toggle" role="switch" aria-checked="false" aria-label="Use Ctrl/Cmd+Enter to send messages" tabindex="0"></div>' +
+            '</div>';
+        modalContent.appendChild(sendShortcutSection);
+
         // Autopilot section
         var autopilotSection = document.createElement('div');
         autopilotSection.className = 'settings-section';
@@ -484,6 +494,7 @@
         // Cache inner elements
         soundToggle = document.getElementById('sound-toggle');
         interactiveApprovalToggle = document.getElementById('interactive-approval-toggle');
+        sendShortcutToggle = document.getElementById('send-shortcut-toggle');
         autopilotEditBtn = document.getElementById('autopilot-edit-btn');
         autopilotTextInput = document.getElementById('autopilot-text');
         responseTimeoutSelect = document.getElementById('response-timeout-select');
@@ -578,6 +589,15 @@
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     toggleInteractiveApprovalSetting();
+                }
+            });
+        }
+        if (sendShortcutToggle) {
+            sendShortcutToggle.addEventListener('click', toggleSendWithCtrlEnterSetting);
+            sendShortcutToggle.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleSendWithCtrlEnterSetting();
                 }
             });
         }
@@ -767,7 +787,7 @@
         // Handle approval modal keyboard shortcuts when visible
         if (isApprovalQuestion && approvalModal && !approvalModal.classList.contains('hidden')) {
             // Enter sends "Continue" when approval modal is visible and input is empty
-            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 var inputText = chatInput ? chatInput.value.trim() : '';
                 if (!inputText) {
                     e.preventDefault();
@@ -791,7 +811,7 @@
                 cancelEditMode();
                 return;
             }
-            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 e.preventDefault();
                 confirmEditMode();
                 return;
@@ -817,7 +837,56 @@
 
         // Context dropdown navigation removed - context now uses # via file autocomplete
 
-        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); handleSend(); }
+        var isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+        var isCtrlOrCmdEnter = e.key === 'Enter' && !e.shiftKey && (e.ctrlKey || e.metaKey);
+
+        if (!sendWithCtrlEnter && isPlainEnter) {
+            e.preventDefault();
+            handleSend();
+            return;
+        }
+
+        if (sendWithCtrlEnter && isCtrlOrCmdEnter) {
+            e.preventDefault();
+            handleSend();
+            return;
+        }
+
+    }
+
+    /**
+     * Handle send action triggered by VS Code command/keybinding.
+     * Mirrors Enter behavior while avoiding sends when input is not focused.
+     */
+    function handleSendFromShortcut() {
+        if (!chatInput || document.activeElement !== chatInput) {
+            return;
+        }
+
+        if (isApprovalQuestion && approvalModal && !approvalModal.classList.contains('hidden')) {
+            var inputText = chatInput.value.trim();
+            if (!inputText) {
+                handleApprovalContinue();
+                return;
+            }
+        }
+
+        if (editingPromptId) {
+            confirmEditMode();
+            return;
+        }
+
+        if (slashDropdownVisible && selectedSlashIndex >= 0) {
+            selectSlashItem(selectedSlashIndex);
+            return;
+        }
+
+        if (autocompleteVisible && selectedAutocompleteIndex >= 0) {
+            selectAutocompleteItem(selectedAutocompleteIndex);
+            return;
+        }
+
+        handleSend();
     }
 
     function handleSend() {
@@ -974,6 +1043,7 @@
             case 'updateSettings':
                 soundEnabled = message.soundEnabled !== false;
                 interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+                sendWithCtrlEnter = message.sendWithCtrlEnter === true;
                 autopilotEnabled = message.autopilotEnabled === true;
                 autopilotText = typeof message.autopilotText === 'string' ? message.autopilotText : '';
                 reusablePrompts = message.reusablePrompts || [];
@@ -984,6 +1054,7 @@
                 humanLikeDelayMax = typeof message.humanLikeDelayMax === 'number' ? message.humanLikeDelayMax : 6;
                 updateSoundToggleUI();
                 updateInteractiveApprovalToggleUI();
+                updateSendWithCtrlEnterToggleUI();
                 updateAutopilotToggleUI();
                 updateAutopilotTextUI();
                 updateResponseTimeoutUI();
@@ -1026,6 +1097,9 @@
             case 'updateSessionTimer':
                 // Timer is displayed in the view title bar by the extension host
                 // No webview UI to update
+                break;
+            case 'triggerSendFromShortcut':
+                handleSendFromShortcut();
                 break;
         }
     }
@@ -2009,6 +2083,18 @@
         if (!interactiveApprovalToggle) return;
         interactiveApprovalToggle.classList.toggle('active', interactiveApprovalEnabled);
         interactiveApprovalToggle.setAttribute('aria-checked', interactiveApprovalEnabled ? 'true' : 'false');
+    }
+
+    function toggleSendWithCtrlEnterSetting() {
+        sendWithCtrlEnter = !sendWithCtrlEnter;
+        updateSendWithCtrlEnterToggleUI();
+        vscode.postMessage({ type: 'updateSendWithCtrlEnterSetting', enabled: sendWithCtrlEnter });
+    }
+
+    function updateSendWithCtrlEnterToggleUI() {
+        if (!sendShortcutToggle) return;
+        sendShortcutToggle.classList.toggle('active', sendWithCtrlEnter);
+        sendShortcutToggle.setAttribute('aria-checked', sendWithCtrlEnter ? 'true' : 'false');
     }
 
     function toggleAutopilotSetting() {

@@ -440,7 +440,7 @@
         sessionWarningSection.className = 'settings-section';
         sessionWarningSection.innerHTML = '<div class="settings-section-header">' +
             '<div class="settings-section-title">' +
-            '<span class="codicon codicon-watch"></span> Session Warning (hours)' +
+            '<span class="codicon codicon-watch"></span> Session Warning' +
             '<span class="settings-info-icon" title="Show a one-time warning after this many hours in the same session. Set to 0 to disable.">' +
             '<span class="codicon codicon-info"></span></span>' +
             '</div>' +

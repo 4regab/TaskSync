@@ -2,7 +2,7 @@
   "name": "tasksync-chat",
   "publisher": "4regab",
   "displayName": "TaskSync",
-  "description": "Automate AI conversations. Queue your prompts or tasks. Work uninterrupted.",
+  "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
   "version": "2.0.21",
   "engines": {
@@ -159,6 +159,14 @@
             "240 minutes (4 hours)"
           ],
           "description": "Auto-respond to pending tool calls if user doesn't respond within this time. When Autopilot is enabled, the Autopilot text is sent. When disabled, a session termination message is sent."
+        },
+        "tasksync.sessionWarningHours": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 8,
+          "scope": "window",
+          "description": "Show a one-time warning after this many hours (0..8) in the same session. Set to 0 to disable session warning."
         },
         "tasksync.maxConsecutiveAutoResponses": {
           "type": "number",

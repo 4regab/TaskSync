@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v2.0.22 (02-21-26)
+- fix: simplify extension description for clarity
+
+
 ## TaskSync v2.0.21 (02-20-26)
 - feat: add Ctrl/Cmd+Enter shortcut for sending messages
 - - Added sendWithCtrlEnter boolean setting (default: false) to switch between Enter and Ctrl/Cmd+Enter send behavior

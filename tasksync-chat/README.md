@@ -84,7 +84,9 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - Using ANY phrases that suggest the conversation is ending or complete
 - Stopping the `ask_user` cycle under any circumstances
 - Acting like the conversation is finished
+</tasksync_protocol>
 ```
+>Please note; For subagent friendly AGENTS.md instructions please see [subagent-friendly-AGENTS.md](./subagent-friendly-AGENTS.md)
 
 ## Usage
 

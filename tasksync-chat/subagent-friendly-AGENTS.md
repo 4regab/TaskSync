@@ -1,3 +1,4 @@
+```
 <tasksync_protocol>
 <!-- ===== PRIMARY ORCHESTRATOR RESPONSIBILITIES ===== -->
 
@@ -104,3 +105,4 @@
   </termination>
 
 </tasksync_protocol>
+```

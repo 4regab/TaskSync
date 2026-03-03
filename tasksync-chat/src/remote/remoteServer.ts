@@ -299,7 +299,6 @@ export class RemoteServer {
         try {
             const qrTerminal = await qrcode.toString(url, { type: 'terminal', small: true });
             console.log(`[TaskSync Remote] Scan QR code to connect:\n${qrTerminal}`);
-            console.log(`[TaskSync Remote] OTP: ${this._otp}`);
         } catch { /* non-critical */ }
 
         const action = await vscode.window.showInformationMessage(

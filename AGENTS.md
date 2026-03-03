@@ -98,15 +98,11 @@ npm install
 ## Changelog & Versioning
 
 - Update `CHANGELOG.md` with every user-facing change using the existing format: `## TaskSync vX.Y.Z (MM-DD-YY)` (two-digit year, e.g. `02-25-26`).
-- The extension version in `tasksync-chat/package.json` must be bumped to match.
 
 ---
 
 ## Security & Responsible Use
 
-> [!WARNING]
-> GitHub prohibits excessive automated bulk activity. Review the [GitHub Acceptable Use Policies](https://docs.github.com/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github) and [GitHub Copilot Terms](https://docs.github.com/site-policy/github-terms/github-terms-for-additional-products-and-features#github-copilot) before using TaskSync at scale.
-
 - Do not commit secrets or credentials.
 - Do not introduce synchronous blocking calls on the VS Code extension host.
-- Remove all `console.log`/`console.warn` statements before shipping; use `console.error` for genuine errors only.
+- Remove all `console.log`/`console.warn` statements once all issues are fixed; use `console.error` for genuine errors only.

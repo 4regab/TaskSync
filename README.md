@@ -29,6 +29,7 @@ A dedicated VS Code sidebar extension with smart prompt queue system. _Setup ins
 
 **Installation:** Install from VS Code Marketplace or build from source with `npx vsce package`.
 
+> Note: Turn off `askQuestion` tool to avoid conflicts with Tasksync's `AskUser` tool.
 ---
 
 ### Option 2: TaskSync Prompt

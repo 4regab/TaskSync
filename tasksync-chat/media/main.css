@@ -2583,3 +2583,59 @@ button#send-btn:disabled {
     font-size: 11px;
     font-style: italic;
 }
+
+/* ── Remote Mode ─────────────────────────────────────────────────── */
+body.remote-mode #attach-btn {
+    display: none !important;
+}
+
+/* Default dark theme fallbacks for remote (not inside VS Code) */
+body.remote-mode {
+    --vscode-editor-background: #1e1e1e;
+    --vscode-foreground: #cccccc;
+    --vscode-input-background: #3c3c3c;
+    --vscode-input-foreground: #cccccc;
+    --vscode-input-border: #3c3c3c;
+    --vscode-button-background: #0e639c;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-hoverBackground: #1177bb;
+    --vscode-descriptionForeground: #999999;
+    --vscode-sideBar-background: #252526;
+    --vscode-focusBorder: #007fd4;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+}
+
+body.remote-mode.vscode-light {
+    --vscode-editor-background: #ffffff;
+    --vscode-foreground: #333333;
+    --vscode-input-background: #ffffff;
+    --vscode-input-foreground: #333333;
+    --vscode-input-border: #cecece;
+    --vscode-button-background: #007acc;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-hoverBackground: #0062a3;
+    --vscode-descriptionForeground: #717171;
+    --vscode-sideBar-background: #f3f3f3;
+    --vscode-focusBorder: #0090f1;
+}
+
+.remote-toast {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    background: var(--vscode-inputValidation-infoBackground, #063b49);
+    color: var(--vscode-inputValidation-infoForeground, #ffffff);
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 14px;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+    cursor: pointer;
+}
+
+.remote-toast.visible {
+    transform: translateY(0);
+}

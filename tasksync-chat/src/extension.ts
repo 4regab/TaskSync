@@ -5,9 +5,11 @@ import * as os from 'os';
 import { TaskSyncWebviewProvider } from './webview/webviewProvider';
 import { registerTools } from './tools';
 import { McpServerManager } from './mcp/mcpServer';
+import { RemoteServer } from './remote/remoteServer';
 import { ContextManager } from './context';
 
 let mcpServer: McpServerManager | undefined;
+let remoteServer: RemoteServer | undefined;
 let webviewProvider: TaskSyncWebviewProvider | undefined;
 let contextManager: ContextManager | undefined;
 
@@ -164,7 +166,42 @@ export function activate(context: vscode.ExtensionContext) {
         provider.openSettingsModal();
     });
 
-    context.subscriptions.push(startMcpCmd, sendMessageCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, newSessionCmd, openSettingsCmd);
+    // ── Remote Access Server ───────────────────────────────────────────
+    remoteServer = new RemoteServer(provider, context.extensionUri);
+    provider._remoteServer = remoteServer;
+
+    // Auto-start remote server if configured
+    const remoteEnabled = config.get<boolean>('remoteEnabled', false);
+    if (remoteEnabled) {
+        remoteServer.start().then(() => {
+            vscode.commands.executeCommand('setContext', 'tasksync.remoteRunning', true);
+        }).catch(err => {
+            console.error('[TaskSync] Failed to auto-start remote server:', err);
+        });
+    }
+
+    // Toggle remote server command (start/stop)
+    const startRemoteCmd = vscode.commands.registerCommand('tasksync.startRemote', async () => {
+        if (remoteServer?.isRunning()) {
+            await remoteServer.stop();
+            await vscode.commands.executeCommand('setContext', 'tasksync.remoteRunning', false);
+            vscode.window.showInformationMessage('TaskSync Remote server stopped');
+        } else if (remoteServer) {
+            await remoteServer.start();
+            await vscode.commands.executeCommand('setContext', 'tasksync.remoteRunning', true);
+        }
+    });
+
+    // Stop remote server command (kept for command palette)
+    const stopRemoteCmd = vscode.commands.registerCommand('tasksync.stopRemote', async () => {
+        if (remoteServer?.isRunning()) {
+            await remoteServer.stop();
+            await vscode.commands.executeCommand('setContext', 'tasksync.remoteRunning', false);
+            vscode.window.showInformationMessage('TaskSync Remote server stopped');
+        }
+    });
+
+    context.subscriptions.push(startMcpCmd, sendMessageCmd, restartMcpCmd, showMcpConfigCmd, openHistoryCmd, newSessionCmd, openSettingsCmd, startRemoteCmd, stopRemoteCmd);
 }
 
 export async function deactivate() {
@@ -172,6 +209,11 @@ export async function deactivate() {
     if (webviewProvider) {
         webviewProvider.saveCurrentSessionToHistory();
         webviewProvider = undefined;
+    }
+
+    if (remoteServer) {
+        await remoteServer.stop();
+        remoteServer = undefined;
     }
 
     if (mcpServer) {

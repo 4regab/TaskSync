@@ -1,7 +1,6 @@
 .vscode/**
 .vscode-test/**
 src/**
-node_modules/**
 .gitignore
 *.map
 *.ts
@@ -19,9 +18,6 @@ esbuild.js
 vsc-extension-quickstart.md
 **/*.map
 **/*.ts
-node_modules/**
-!node_modules/@vscode/codicons/dist/codicon.css
-!node_modules/@vscode/codicons/dist/codicon.ttf
 **/.git/**
 **/test/**
 **/tests/**

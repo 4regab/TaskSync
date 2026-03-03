@@ -3,7 +3,41 @@
  * Handles tool call history, prompt queue, attachments, and file autocomplete
  */
 (function () {
-    const vscode = acquireVsCodeApi();
+    // ── Remote mode detection ──────────────────────────────────────────
+    var isRemote = (typeof acquireVsCodeApi === 'undefined');
+    var vscode;
+    if (isRemote) {
+        // Running in a browser served by RemoteServer — bridge via socket.io
+        var _socket = io();
+        var _remoteState = {};
+        vscode = {
+            postMessage: function (msg) { _socket.emit('message', msg); },
+            getState: function () { return _remoteState; },
+            setState: function (s) { _remoteState = s; return s; }
+        };
+        // Forward server→client messages as native MessageEvents so the
+        // existing window.addEventListener('message', …) handler picks them up.
+        _socket.on('message', function (msg) {
+            window.dispatchEvent(new MessageEvent('message', { data: msg }));
+        });
+        // Apply theme data from the extension host
+        _socket.on('message', function (msg) {
+            if (msg && msg.type === 'updateTheme') {
+                document.body.classList.toggle('vscode-light', msg.kind === 'light');
+                document.body.classList.toggle('vscode-dark', msg.kind === 'dark');
+            }
+            // Remote toast notification
+            if (msg && msg.type === 'toolCallPending') {
+                var toast = document.getElementById('remote-toast');
+                if (toast) {
+                    toast.classList.add('visible');
+                    setTimeout(function () { toast.classList.remove('visible'); }, 5000);
+                }
+            }
+        });
+    } else {
+        vscode = acquireVsCodeApi();
+    }
 
     // Restore persisted state (survives sidebar switch)
     const previousState = vscode.getState() || {};
@@ -116,6 +150,25 @@
             // Restore attachments display
             if (currentAttachments.length > 0) {
                 updateChipsDisplay();
+            }
+
+            // Remote mode: hide file-picker features and mark body
+            if (isRemote) {
+                document.body.classList.add('remote-mode');
+                if (attachBtn) attachBtn.style.display = 'none';
+                // Wire up remote title bar buttons (vscode is only available inside this IIFE)
+                var remoteNewSessionBtn = document.getElementById('remote-new-session-btn');
+                var remoteHistoryBtn = document.getElementById('remote-history-btn');
+                var remoteSettingsBtn = document.getElementById('remote-settings-btn');
+                if (remoteNewSessionBtn) remoteNewSessionBtn.addEventListener('click', function () {
+                    vscode.postMessage({ type: 'newSession' });
+                });
+                if (remoteHistoryBtn) remoteHistoryBtn.addEventListener('click', function () {
+                    openHistoryModal();
+                });
+                if (remoteSettingsBtn) remoteSettingsBtn.addEventListener('click', function () {
+                    openSettingsModal();
+                });
             }
 
             // Signal to extension that webview is ready to receive messages

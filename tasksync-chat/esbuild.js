@@ -7,7 +7,7 @@ async function main() {
         entryPoints: ['src/extension.ts'],
         bundle: true,
         outfile: 'dist/extension.js',
-        external: ['vscode'],
+        external: ['vscode', 'ws', 'bufferutil', 'utf-8-validate', 'express', 'socket.io', 'qrcode'],
         format: 'cjs',
         platform: 'node',
         target: 'node18',

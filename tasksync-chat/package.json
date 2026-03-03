@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "2.0.25",
+  "version": "2.0.26",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -244,6 +244,21 @@
               "prompt"
             ]
           }
+        },
+        "tasksync.remoteEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-start the remote access server on activation. Allows controlling TaskSync from a phone, tablet, or any browser on the same network."
+        },
+        "tasksync.remotePort": {
+          "type": "number",
+          "default": 3000,
+          "description": "Port for the remote access HTTP server. Set to 0 for dynamic port assignment."
+        },
+        "tasksync.mobileNotification": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send visual toast notifications to connected remote clients when AI calls ask_user."
         }
       }
     },
@@ -278,6 +293,16 @@
         "command": "tasksync.openSettings",
         "title": "TaskSync Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "tasksync.startRemote",
+        "title": "TaskSync: Toggle Remote Server",
+        "icon": "$(broadcast)"
+      },
+      {
+        "command": "tasksync.stopRemote",
+        "title": "TaskSync: Stop Remote Server",
+        "icon": "$(stop-circle)"
       }
     ],
     "menus": {
@@ -296,6 +321,16 @@
           "command": "tasksync.openSettings",
           "when": "view == taskSyncView",
           "group": "navigation@3"
+        },
+        {
+          "command": "tasksync.startRemote",
+          "when": "view == taskSyncView && !tasksync.remoteRunning",
+          "group": "navigation@4"
+        },
+        {
+          "command": "tasksync.stopRemote",
+          "when": "view == taskSyncView && tasksync.remoteRunning",
+          "group": "navigation@4"
         }
       ]
     }
@@ -308,15 +343,21 @@
     "lint": "biome lint src"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
     "@vscode/codicons": "^0.0.36",
-    "zod": "^3.23.8"
+    "express": "^5.2.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@types/express": "^5.0.6",
     "@types/node": "20.x",
+    "@types/qrcode": "^1.5.6",
     "@types/vscode": "^1.90.0",
     "esbuild": "^0.27.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "zod": "^3.23.8"
   }
 }

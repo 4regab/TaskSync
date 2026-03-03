@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { FILE_EXCLUSION_PATTERNS, FILE_SEARCH_EXCLUSION_PATTERNS, formatExcludePattern } from '../constants/fileExclusions';
 import { ContextManager, ContextReferenceType } from '../context';
+import type { RemoteServer } from '../remote/remoteServer';
 
 // Queued prompt interface
 export interface QueuedPrompt {
@@ -148,6 +149,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
     // Persisted history from past sessions (loaded from disk)
     private _persistedHistory: ToolCallEntry[] = [];
     private _currentToolCallId: string | null = null;
+
+    // Remote server reference (set from extension.ts)
+    public _remoteServer: RemoteServer | undefined;
 
     // Webview ready state - prevents race condition on first message
     private _webviewReady: boolean = false;
@@ -332,6 +336,109 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      */
     public triggerSendFromShortcut(): void {
         this._view?.webview.postMessage({ type: 'triggerSendFromShortcut' } as ToWebviewMessage);
+    }
+
+    // ── Remote Access Bridge ───────────────────────────────────────────
+
+    /**
+     * Broadcast a message to all connected remote clients.
+     * Called from the webview provider whenever state changes.
+     */
+    public broadcastToRemote(event: string, data: unknown): void {
+        this._remoteServer?.broadcast(event, data);
+    }
+
+    /**
+     * Handle a message originating from a remote browser client.
+     * Mirrors _handleWebviewMessage but blocks VS-Code-only actions.
+     */
+    public handleRemoteMessage(message: { type: string;[key: string]: unknown }): void {
+        // Block actions that require VS Code APIs not available remotely
+        const blockedTypes = new Set(['addAttachment', 'saveImage', 'openExternal', 'openFileLink', 'copyToClipboard']);
+        if (blockedTypes.has(message.type)) return;
+
+        // Delegate to the same handler used by the webview
+        this._handleWebviewMessage(message as FromWebviewMessage);
+    }
+
+    /**
+     * Send a full state snapshot to a newly connected remote socket.
+     */
+    public sendRemoteSnapshot(socket: { emit(event: string, data: unknown): void }): void {
+        // Queue state
+        socket.emit('message', {
+            type: 'updateQueue',
+            queue: this._promptQueue,
+            enabled: this._queueEnabled,
+        });
+
+        // Current session history
+        socket.emit('message', {
+            type: 'updateCurrentSession',
+            history: this._currentSessionCalls,
+        });
+
+        // Settings
+        const config = vscode.workspace.getConfiguration('tasksync');
+        socket.emit('message', {
+            type: 'updateSettings',
+            soundEnabled: this._soundEnabled,
+            interactiveApprovalEnabled: this._interactiveApprovalEnabled,
+            autopilotEnabled: this._autopilotEnabled,
+            autopilotText: this._autopilotText,
+            autopilotPrompts: this._autopilotPrompts,
+            reusablePrompts: this._reusablePrompts,
+            responseTimeout: this._readResponseTimeoutMinutes(config),
+            sessionWarningHours: this._sessionWarningHours,
+            maxConsecutiveAutoResponses: config.get<number>('maxConsecutiveAutoResponses', 5),
+            humanLikeDelayEnabled: this._humanLikeDelayEnabled,
+            humanLikeDelayMin: this._humanLikeDelayMin,
+            humanLikeDelayMax: this._humanLikeDelayMax,
+            sendWithCtrlEnter: this._sendWithCtrlEnter,
+        });
+
+        // Session timer
+        socket.emit('message', {
+            type: 'updateSessionTimer',
+            startTime: this._sessionStartTime,
+            frozenElapsed: this._sessionFrozenElapsed,
+        });
+
+        // If there's a pending tool call, send it
+        if (this._currentToolCallId) {
+            const entry = this._currentSessionCallsMap.get(this._currentToolCallId);
+            if (entry && entry.status === 'pending') {
+                const choices = this._parseChoices(entry.prompt);
+                socket.emit('message', {
+                    type: 'toolCallPending',
+                    id: entry.id,
+                    prompt: entry.prompt,
+                    isApprovalQuestion: choices.length === 0 && this._isApprovalQuestion(entry.prompt),
+                    choices: choices.length > 0 ? choices : undefined,
+                });
+            }
+        }
+
+        // Theme info
+        socket.emit('message', this._getThemeData());
+    }
+
+    /**
+     * Get current VS Code theme data to sync with remote clients.
+     */
+    private _getThemeData(): { type: string; kind: string } {
+        const kind = vscode.window.activeColorTheme.kind;
+        let themeName: string;
+        switch (kind) {
+            case vscode.ColorThemeKind.Light:
+            case vscode.ColorThemeKind.HighContrastLight:
+                themeName = 'light';
+                break;
+            default:
+                themeName = 'dark';
+                break;
+        }
+        return { type: 'updateTheme', kind: themeName };
     }
 
     /**
@@ -697,8 +804,8 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
         const responseTimeout = this._readResponseTimeoutMinutes(config);
         const maxConsecutiveAutoResponses = config.get<number>('maxConsecutiveAutoResponses', 5);
 
-        this._view?.webview.postMessage({
-            type: 'updateSettings',
+        const msg = {
+            type: 'updateSettings' as const,
             soundEnabled: this._soundEnabled,
             interactiveApprovalEnabled: this._interactiveApprovalEnabled,
             autopilotEnabled: this._autopilotEnabled,
@@ -712,7 +819,9 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             humanLikeDelayMin: this._humanLikeDelayMin,
             humanLikeDelayMax: this._humanLikeDelayMax,
             sendWithCtrlEnter: this._sendWithCtrlEnter
-        } as ToWebviewMessage);
+        };
+        this._view?.webview.postMessage(msg as ToWebviewMessage);
+        this.broadcastToRemote('message', msg);
     }
 
     /**
@@ -1041,6 +1150,16 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
             // Fallback: queue the message (should rarely happen now)
             this._pendingToolCallMessage = { id: toolCallId, prompt: question };
         }
+
+        // Broadcast to remote clients
+        this.broadcastToRemote('message', {
+            type: 'toolCallPending',
+            id: toolCallId,
+            prompt: question,
+            isApprovalQuestion: isApproval,
+            choices: choices.length > 0 ? choices : undefined,
+        });
+
         this._updateCurrentSessionUI();
 
         return new Promise<UserResponseResult>((resolve) => {
@@ -1139,6 +1258,11 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     entry: pendingEntry,
                     sessionTerminated: isTermination
                 } as ToWebviewMessage);
+                this.broadcastToRemote('message', {
+                    type: 'toolCallCompleted',
+                    entry: pendingEntry,
+                    sessionTerminated: isTermination
+                });
             }
 
             this._updateCurrentSessionUI();
@@ -1396,6 +1520,11 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     entry: completedEntry,
                     sessionTerminated: isTermination
                 } as ToWebviewMessage);
+                this.broadcastToRemote('message', {
+                    type: 'toolCallCompleted',
+                    entry: completedEntry,
+                    sessionTerminated: isTermination
+                });
 
                 this._updateCurrentSessionUI();
                 resolve({ value, queue: this._queueEnabled && this._promptQueue.length > 0, attachments });
@@ -1847,6 +1976,10 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                 type: 'toolCallCompleted',
                 entry: completedEntry
             } as ToWebviewMessage);
+            this.broadcastToRemote('message', {
+                type: 'toolCallCompleted',
+                entry: completedEntry
+            });
 
             this._updateCurrentSessionUI();
             this._saveQueueToDisk();
@@ -2560,21 +2693,25 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
      * Update queue UI in webview
      */
     private _updateQueueUI(): void {
-        this._view?.webview.postMessage({
-            type: 'updateQueue',
+        const msg = {
+            type: 'updateQueue' as const,
             queue: this._promptQueue,
             enabled: this._queueEnabled
-        } as ToWebviewMessage);
+        };
+        this._view?.webview.postMessage(msg as ToWebviewMessage);
+        this.broadcastToRemote('message', msg);
     }
 
     /**
      * Update current session UI in webview (cards in chat)
      */
     private _updateCurrentSessionUI(): void {
-        this._view?.webview.postMessage({
-            type: 'updateCurrentSession',
+        const msg = {
+            type: 'updateCurrentSession' as const,
             history: this._currentSessionCalls
-        } as ToWebviewMessage);
+        };
+        this._view?.webview.postMessage(msg as ToWebviewMessage);
+        this.broadcastToRemote('message', msg);
     }
 
     /**
@@ -2864,7 +3001,6 @@ export class TaskSyncWebviewProvider implements vscode.WebviewViewProvider, vsco
                     </div>
                 </div>
 
-                <p class="welcome-autopilot-info"> Tip: Enable <strong>Autopilot</strong> to automatically respond to ask_user prompts without waiting for your input, using a customizable prompt you can configure in Settings. Queued prompts always take priority over Autopilot responses. Configure the session timeout in settings to avoid keeping copilot session alive when you're away.</p>
                 <p class="welcome-autopilot-info">The session timer tracks how long you've been using one premium request. It is advisable to start a new session and use another premium request prompt after <strong>2-4 hours</strong> or <strong>50 tool calls</strong>.</p>
             </div>
 

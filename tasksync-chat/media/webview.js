@@ -953,7 +953,18 @@
 
     function handleSend() {
         var text = chatInput ? chatInput.value.trim() : '';
-        if (!text && currentAttachments.length === 0) return;
+        if (!text && currentAttachments.length === 0) {
+            // If choices are selected and input is empty, send the selected choices
+            var choicesBar = document.getElementById('choices-bar');
+            if (choicesBar && !choicesBar.classList.contains('hidden')) {
+                var selectedButtons = choicesBar.querySelectorAll('.choice-btn.selected');
+                if (selectedButtons.length > 0) {
+                    handleChoicesSend();
+                    return;
+                }
+            }
+            return;
+        }
 
         // Expand slash commands to full prompt text
         text = expandSlashCommands(text);
@@ -2037,7 +2048,7 @@
     }
 
     /**
-     * Show choices bar with dynamic buttons based on parsed choices
+     * Show choices bar with toggleable multi-select buttons
      */
     function showChoicesBar() {
         // Hide approval modal first
@@ -2059,30 +2070,45 @@
             }
         }
 
-        // Build choice buttons
-        var buttonsHtml = currentChoices.map(function (choice, index) {
+        // Build toggleable choice buttons
+        var buttonsHtml = currentChoices.map(function (choice) {
             var shortLabel = choice.shortLabel || choice.value;
             var title = choice.label || choice.value;
             return '<button class="choice-btn" data-value="' + escapeHtml(choice.value) + '" ' +
-                'data-index="' + index + '" title="' + escapeHtml(title) + '">' +
+                'title="' + escapeHtml(title) + '" ' +
+                'aria-pressed="false">' +
                 escapeHtml(shortLabel) + '</button>';
         }).join('');
 
         choicesBar.innerHTML = '<span class="choices-label">Choose:</span>' +
-            '<div class="choices-buttons">' + buttonsHtml + '</div>';
+            '<div class="choices-buttons">' + buttonsHtml + '</div>' +
+            '<div class="choices-actions">' +
+            '<button class="choices-action-btn choices-all-btn" title="Select all" aria-label="Select all">All</button>' +
+            '<button class="choices-action-btn choices-send-btn" title="Send selected" aria-label="Send selected choices" disabled>Send</button>' +
+            '</div>';
 
-        // Bind click events to choice buttons
+        // Bind click events to choice buttons (toggle selection)
         choicesBar.querySelectorAll('.choice-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var value = btn.getAttribute('data-value');
-                handleChoiceClick(value);
+                handleChoiceToggle(btn);
             });
         });
 
+        // Bind 'All' button
+        var allBtn = choicesBar.querySelector('.choices-all-btn');
+        if (allBtn) {
+            allBtn.addEventListener('click', handleChoicesSelectAll);
+        }
+
+        // Bind 'Send' button
+        var choicesSendBtn = choicesBar.querySelector('.choices-send-btn');
+        if (choicesSendBtn) {
+            choicesSendBtn.addEventListener('click', handleChoicesSend);
+        }
+
         choicesBar.classList.remove('hidden');
 
-        // Don't auto-focus buttons - let user click or use keyboard
-        // Focus the chat input instead for immediate typing
+        // Focus chat input for immediate typing
         if (chatInput) {
             chatInput.focus();
         }
@@ -2100,16 +2126,66 @@
     }
 
     /**
-     * Handle choice button click
+     * Toggle a choice button's selected state
      */
-    function handleChoiceClick(value) {
+    function handleChoiceToggle(btn) {
         if (!pendingToolCall) return;
+
+        var isSelected = btn.classList.toggle('selected');
+        btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+
+        updateChoicesSendButton();
+    }
+
+    /**
+     * Toggle all choices selected/deselected
+     */
+    function handleChoicesSelectAll() {
+        if (!pendingToolCall) return;
+
+        var choicesBar = document.getElementById('choices-bar');
+        if (!choicesBar) return;
+
+        var buttons = choicesBar.querySelectorAll('.choice-btn');
+        var allSelected = Array.from(buttons).every(function (btn) {
+            return btn.classList.contains('selected');
+        });
+
+        buttons.forEach(function (btn) {
+            if (allSelected) {
+                btn.classList.remove('selected');
+                btn.setAttribute('aria-pressed', 'false');
+            } else {
+                btn.classList.add('selected');
+                btn.setAttribute('aria-pressed', 'true');
+            }
+        });
+
+        updateChoicesSendButton();
+    }
+
+    /**
+     * Send all selected choices as a comma-separated response
+     */
+    function handleChoicesSend() {
+        if (!pendingToolCall) return;
+
+        var choicesBar = document.getElementById('choices-bar');
+        if (!choicesBar) return;
+
+        var selectedButtons = choicesBar.querySelectorAll('.choice-btn.selected');
+        if (selectedButtons.length === 0) return;
+
+        var values = Array.from(selectedButtons).map(function (btn) {
+            return btn.getAttribute('data-value');
+        });
+        var responseValue = values.join(', ');
 
         // Hide choices bar
         hideChoicesBar();
 
-        // Send the choice value as response
-        vscode.postMessage({ type: 'submit', value: value, attachments: [] });
+        // Send the response
+        vscode.postMessage({ type: 'submit', value: responseValue, attachments: [] });
         if (chatInput) {
             chatInput.value = '';
             chatInput.style.height = 'auto';
@@ -2119,6 +2195,32 @@
         updateChipsDisplay();
         updateSendButtonState();
         saveWebviewState();
+    }
+
+    /**
+     * Update the Send button state and All button label based on current selections
+     */
+    function updateChoicesSendButton() {
+        var choicesBar = document.getElementById('choices-bar');
+        if (!choicesBar) return;
+
+        var selectedCount = choicesBar.querySelectorAll('.choice-btn.selected').length;
+        var totalCount = choicesBar.querySelectorAll('.choice-btn').length;
+        var choicesSendBtn = choicesBar.querySelector('.choices-send-btn');
+        var allBtn = choicesBar.querySelector('.choices-all-btn');
+
+        if (choicesSendBtn) {
+            choicesSendBtn.disabled = selectedCount === 0;
+            choicesSendBtn.textContent = selectedCount > 0 ? 'Send (' + selectedCount + ')' : 'Send';
+        }
+
+        if (allBtn) {
+            var isAllSelected = totalCount > 0 && selectedCount === totalCount;
+            allBtn.textContent = isAllSelected ? 'None' : 'All';
+            var allBtnActionLabel = isAllSelected ? 'Deselect all' : 'Select all';
+            allBtn.title = allBtnActionLabel;
+            allBtn.setAttribute('aria-label', allBtnActionLabel);
+        }
     }
 
     // ===== SETTINGS MODAL FUNCTIONS =====

@@ -1840,6 +1840,7 @@ button#send-btn:disabled {
     gap: 6px;
     flex-wrap: wrap;
     justify-content: flex-end;
+    flex: 1;
 }
 
 /* Choice button - compact numbered style */
@@ -1870,6 +1871,74 @@ button#send-btn:disabled {
 
 .choice-btn:active {
     transform: scale(0.98);
+}
+
+/* Selected choice button */
+.choice-btn.selected {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background);
+}
+
+.choice-btn.selected:hover {
+    background-color: var(--vscode-button-hoverBackground);
+    border-color: var(--vscode-button-hoverBackground);
+}
+
+/* Actions container for All/Send buttons */
+.choices-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Action buttons (All, Send) */
+.choices-action-btn {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: var(--vscode-font-family);
+    border: 1px solid var(--vscode-panel-border);
+    background: transparent;
+    color: var(--vscode-foreground);
+    white-space: nowrap;
+}
+
+.choices-action-btn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.choices-action-btn:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+.choices-action-btn:active {
+    transform: scale(0.98);
+}
+
+.choices-action-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.choices-action-btn:disabled:hover {
+    background: transparent;
+}
+
+/* Send button - primary style when enabled */
+.choices-send-btn:not(:disabled) {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background);
+}
+
+.choices-send-btn:not(:disabled):hover {
+    background-color: var(--vscode-button-hoverBackground);
 }
 
 /* ===== SLASH COMMAND DROPDOWN STYLES ===== */

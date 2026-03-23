@@ -44,6 +44,9 @@ export function getHtmlContent(
 	const scriptUri = webview.asWebviewUri(
 		vscode.Uri.joinPath(extensionUri, "media", "webview.js"),
 	);
+	const mermaidScriptUri = webview.asWebviewUri(
+		vscode.Uri.joinPath(extensionUri, "media", "mermaid.min.js"),
+	);
 	const codiconsUri = webview.asWebviewUri(
 		vscode.Uri.joinPath(
 			extensionUri,
@@ -83,7 +86,7 @@ export function getHtmlContent(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource}; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net/npm/mermaid@10.9.3/; connect-src https://cdn.jsdelivr.net/npm/mermaid@10.9.3/; media-src ${webview.cspSource} data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource}; script-src 'nonce-${nonce}'; media-src ${webview.cspSource} data:;">
     <link href="${codiconsUri}" rel="stylesheet">
     <link href="${styleUri}" rel="stylesheet">
     <title>TaskSync Chat</title>
@@ -91,6 +94,7 @@ export function getHtmlContent(
 </head>
 <body>
     ${bodyHtml}
+    <script nonce="${nonce}">window.__MERMAID_SRC__ = "${mermaidScriptUri}";</script>
     <script nonce="${nonce}" src="${markdownLinksScriptUri}"></script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

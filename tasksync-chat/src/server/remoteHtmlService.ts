@@ -336,7 +336,7 @@ export class RemoteHtmlService {
     <meta name="theme-color" content="#1e1e1e">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self' https://cdn.jsdelivr.net/; img-src 'self' data:; script-src 'self' https://cdn.jsdelivr.net/npm/mermaid@10.9.3/; connect-src 'self' ${this.buildWsOrigin(host)} https://cdn.jsdelivr.net/npm/mermaid@10.9.3/; media-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data:; script-src 'self'; connect-src 'self' ${this.buildWsOrigin(host)}; media-src 'self' data:;">
     <title>TaskSync Remote</title>
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
     <link href="/codicon.css" rel="stylesheet">
@@ -370,6 +370,7 @@ export class RemoteHtmlService {
 
     ${bodyHtml}
 
+    <script>window.__MERMAID_SRC__ = "/media/mermaid.min.js";</script>
     <script src="/shared-constants.js"></script>
     <script src="/media/markdownLinks.js"></script>
     <script src="/media/webview.js"></script>

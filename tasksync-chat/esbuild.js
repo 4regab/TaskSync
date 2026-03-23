@@ -163,6 +163,13 @@ async function main() {
     buildWebview();
     console.log('Webview build complete');
 
+    // Copy mermaid.min.js to media/ for local serving (no CDN dependency)
+    fs.copyFileSync(
+        path.join(__dirname, 'node_modules', 'mermaid', 'dist', 'mermaid.min.js'),
+        path.join(__dirname, 'media', 'mermaid.min.js'),
+    );
+    console.log('Mermaid copied to media/');
+
     // Build extension (esbuild, TypeScript bundling)
     const ctx = await esbuild.context({
         entryPoints: ['src/extension.ts'],

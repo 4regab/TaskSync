@@ -462,11 +462,7 @@ function loadMermaid(callback) {
 	mermaidLoading = true;
 
 	let script = document.createElement("script");
-	script.src =
-		"https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js";
-	script.crossOrigin = "anonymous";
-	script.integrity =
-		"sha384-R63zfMfSwJF4xCR11wXii+QUsbiBIdiDzDbtxia72oGWfkT7WHJfmD/I/eeHPJyT";
+	script.src = window.__MERMAID_SRC__ || "mermaid.min.js";
 	script.onload = function () {
 		window.mermaid.initialize({
 			startOnLoad: false,

@@ -30,7 +30,7 @@ export async function loadQueueFromDiskAsync(p: P): Promise<void> {
 		const data = await fs.promises.readFile(queuePath, "utf8");
 		const parsed = JSON.parse(data);
 		p._promptQueue = Array.isArray(parsed.queue) ? parsed.queue : [];
-		p._queueEnabled = parsed.enabled === true;
+		p._queueEnabled = parsed.enabled !== false;
 	} catch (error) {
 		console.error("[TaskSync] Failed to load queue:", error);
 		p._promptQueue = [];

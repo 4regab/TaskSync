@@ -50,62 +50,75 @@ export function handleAddQueuePrompt(
 	const shouldAutoRespond =
 		p._queueEnabled && currentCallId && p._pendingRequests.has(currentCallId);
 
+	let handledAsToolResponse = false;
+
 	if (shouldAutoRespond) {
 		debugLog(
 			`[TaskSync] handleAddQueuePrompt — auto-responding to pending tool call: ${currentCallId}`,
 		);
 		const resolve = p._pendingRequests.get(currentCallId);
-		if (!resolve) return;
-
-		const pendingEntry = p._currentSessionCallsMap.get(currentCallId);
-
-		let completedEntry: ToolCallEntry;
-		if (pendingEntry && pendingEntry.status === "pending") {
-			pendingEntry.response = queuedPrompt.prompt;
-			pendingEntry.attachments = queuedPrompt.attachments;
-			pendingEntry.status = "completed";
-			pendingEntry.isFromQueue = true;
-			pendingEntry.timestamp = Date.now();
-			completedEntry = pendingEntry;
+		if (!resolve) {
+			// Inconsistent state: pending request id without a resolver. Clean up and fall through to queue.
+			debugLog(
+				`[TaskSync] handleAddQueuePrompt — missing resolver for pending tool call ${currentCallId}, falling back to queue`,
+			);
+			p._pendingRequests.delete(currentCallId);
+			p._currentToolCallId = null;
 		} else {
-			completedEntry = {
-				id: currentCallId,
-				prompt: "Tool call",
-				response: queuedPrompt.prompt,
-				attachments: queuedPrompt.attachments,
-				timestamp: Date.now(),
-				isFromQueue: true,
-				status: "completed",
-			};
-			p._currentSessionCalls.unshift(completedEntry);
-			p._currentSessionCallsMap.set(completedEntry.id, completedEntry);
+			const pendingEntry = p._currentSessionCallsMap.get(currentCallId);
+
+			let completedEntry: ToolCallEntry;
+			if (pendingEntry && pendingEntry.status === "pending") {
+				pendingEntry.response = queuedPrompt.prompt;
+				pendingEntry.attachments = queuedPrompt.attachments;
+				pendingEntry.status = "completed";
+				pendingEntry.isFromQueue = true;
+				pendingEntry.timestamp = Date.now();
+				completedEntry = pendingEntry;
+			} else {
+				completedEntry = {
+					id: currentCallId,
+					prompt: "Tool call",
+					response: queuedPrompt.prompt,
+					attachments: queuedPrompt.attachments,
+					timestamp: Date.now(),
+					isFromQueue: true,
+					status: "completed",
+				};
+				p._currentSessionCalls.unshift(completedEntry);
+				p._currentSessionCallsMap.set(completedEntry.id, completedEntry);
+			}
+
+			p._view?.webview.postMessage({
+				type: "toolCallCompleted",
+				entry: completedEntry,
+			} satisfies ToWebviewMessage);
+
+			p._updateCurrentSessionUI();
+			p._saveQueueToDisk();
+			p._updateQueueUI();
+
+			broadcastToolCallCompleted(p, completedEntry);
+
+			// Clear response timeout timer (matches resolveRemoteResponse behavior)
+			if (p._responseTimeoutTimer) {
+				clearTimeout(p._responseTimeoutTimer);
+				p._responseTimeoutTimer = null;
+			}
+
+			resolve({
+				value: queuedPrompt.prompt,
+				queue: hasQueuedItems(p),
+				attachments: queuedPrompt.attachments || [],
+			});
+			p._aiTurnActive = true;
+			p._pendingRequests.delete(currentCallId);
+			p._currentToolCallId = null;
+			handledAsToolResponse = true;
 		}
+	}
 
-		p._view?.webview.postMessage({
-			type: "toolCallCompleted",
-			entry: completedEntry,
-		} satisfies ToWebviewMessage);
-
-		p._updateCurrentSessionUI();
-		p._saveQueueToDisk();
-		p._updateQueueUI();
-
-		broadcastToolCallCompleted(p, completedEntry);
-
-		// Clear response timeout timer (matches resolveRemoteResponse behavior)
-		if (p._responseTimeoutTimer) {
-			clearTimeout(p._responseTimeoutTimer);
-			p._responseTimeoutTimer = null;
-		}
-
-		resolve({
-			value: queuedPrompt.prompt,
-			queue: hasQueuedItems(p),
-			attachments: queuedPrompt.attachments || [],
-		});
-		p._pendingRequests.delete(currentCallId);
-		p._currentToolCallId = null;
-	} else {
+	if (!handledAsToolResponse) {
 		debugLog(
 			`[TaskSync] handleAddQueuePrompt — no pending tool call, adding to queue (new size: ${p._promptQueue.length + 1})`,
 		);

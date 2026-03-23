@@ -2333,7 +2333,6 @@ function handleExtensionMessage(event) {
 			}
 			break;
 		case "clear":
-			console.log("[TaskSync Webview] clear — resetting session state");
 			promptQueue = [];
 			currentSessionCalls = [];
 			pendingToolCall = null;
@@ -2360,16 +2359,6 @@ function handleExtensionMessage(event) {
 }
 
 function showPendingToolCall(id, prompt, isApproval, choices, summary) {
-	console.log(
-		"[TaskSync Webview] showPendingToolCall — id:",
-		id,
-		"hasSummary:",
-		!!summary,
-		"summaryLength:",
-		summary ? summary.length : 0,
-		"promptLength:",
-		prompt ? prompt.length : 0,
-	);
 	pendingToolCall = { id: id, prompt: prompt, summary: summary || "" };
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
@@ -2387,23 +2376,11 @@ function showPendingToolCall(id, prompt, isApproval, choices, summary) {
 		pendingMessage.classList.remove("hidden");
 		let pendingHtml = "";
 		if (summary) {
-			console.log(
-				"[TaskSync Webview] Rendering summary in pending view — length:",
-				summary.length,
-				"preview:",
-				summary.slice(0, 80),
-			);
 			pendingHtml +=
 				'<div class="pending-ai-summary">' + formatMarkdown(summary) + "</div>";
-		} else {
-			console.log("[TaskSync Webview] No summary to render in pending view");
 		}
 		pendingHtml +=
 			'<div class="pending-ai-question">' + formatMarkdown(prompt) + "</div>";
-		console.log(
-			"[TaskSync Webview] Pending HTML set — totalLength:",
-			pendingHtml.length,
-		);
 		pendingMessage.innerHTML = pendingHtml;
 	} else {
 		console.error("[TaskSync Webview] pendingMessage element is null!");

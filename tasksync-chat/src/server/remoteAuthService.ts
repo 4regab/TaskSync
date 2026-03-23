@@ -242,7 +242,8 @@ export class RemoteAuthService {
 		}
 
 		const headerPin = req.headers["x-tasksync-pin"] as string | undefined;
-		const suppliedPin = headerPin || "";
+		const queryPin = url.searchParams.get("pin") ?? undefined;
+		const suppliedPin = headerPin ?? queryPin ?? "";
 
 		const valid = this.comparePinTimingSafe(suppliedPin);
 

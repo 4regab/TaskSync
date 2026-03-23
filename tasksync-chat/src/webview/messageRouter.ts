@@ -335,6 +335,7 @@ export function handleSubmit(
 				const queuedPrompt: QueuedPrompt = {
 					id: generateId("q"),
 					prompt: value.trim(),
+					attachments: attachments.length > 0 ? [...attachments] : undefined,
 				};
 				p._promptQueue.push(queuedPrompt);
 				// Auto-switch to queue mode so user sees their message went to queue

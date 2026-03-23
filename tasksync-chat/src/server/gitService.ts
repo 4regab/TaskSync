@@ -47,12 +47,14 @@ export interface GitChanges {
 export function isValidFilePath(filePath: string): boolean {
 	// Reject empty/whitespace-only paths
 	if (!filePath || !filePath.trim()) return false;
-	// Reject paths with shell metacharacters
-	const dangerousChars = /[`$|;&<>(){}[\]!*?\\'"\n\r\x00]/;
-	if (dangerousChars.test(filePath)) return false;
+	// Normalize separators so Windows-style paths are handled consistently
+	const normalizedPath = filePath.replace(/\\/g, "/");
+	// Reject paths with shell metacharacters (allow path separators)
+	const dangerousChars = /[`$|;&<>(){}[\]!*?'"\n\r\x00]/;
+	if (dangerousChars.test(normalizedPath)) return false;
 	// Reject absolute paths that escape workspace
-	if (filePath.includes("..")) {
-		const normalized = path.normalize(filePath);
+	if (normalizedPath.includes("..")) {
+		const normalized = path.normalize(normalizedPath);
 		if (normalized.startsWith("..")) return false;
 	}
 	return true;

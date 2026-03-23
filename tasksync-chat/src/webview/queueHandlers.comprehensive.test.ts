@@ -215,8 +215,9 @@ describe("handleAddQueuePrompt", () => {
 		});
 
 		handleAddQueuePrompt(p, "Task", "q_1_abc", []);
-		// Should not add to queue (shouldAutoRespond was true, but resolve was falsy)
-		expect(p._promptQueue).toHaveLength(0);
+		// Should fall through to queue since resolve was falsy (prompt not lost)
+		expect(p._promptQueue).toHaveLength(1);
+		expect(p._promptQueue[0].prompt).toBe("Task");
 	});
 });
 

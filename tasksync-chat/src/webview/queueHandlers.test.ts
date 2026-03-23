@@ -75,6 +75,9 @@ describe("handleEditQueuePrompt", () => {
 	it("rejects excessively long prompts", () => {
 		const p = createMockP([{ id: ID1, prompt: "Keep" }]);
 		const longPrompt = "x".repeat(100001);
+		handleEditQueuePrompt(p, ID1, longPrompt);
+		expect(p._promptQueue[0].prompt).toBe("Keep");
+		expect(p._saveQueueToDisk).not.toHaveBeenCalled();
 	});
 
 	it("does nothing for non-existent ID", () => {

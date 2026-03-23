@@ -59,8 +59,9 @@ describe("isValidFilePath", () => {
 			expect(isValidFilePath("file'name")).toBe(false);
 		});
 
-		it("rejects paths with backslash", () => {
-			expect(isValidFilePath("file\\name")).toBe(false);
+		it("allows paths with backslash (Windows paths)", () => {
+			expect(isValidFilePath("file\\name")).toBe(true);
+			expect(isValidFilePath("src\\app.ts")).toBe(true);
 		});
 
 		it("rejects paths with null bytes", () => {

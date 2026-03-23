@@ -289,13 +289,13 @@ describe("verifyHttpAuth", () => {
 		expect(result.allowed).toBe(false);
 	});
 
-	it("no longer accepts PIN via query string", () => {
+	it("accepts PIN via query string", () => {
 		const { svc } = createService("654321");
 		const req = createMockReq();
 		const url = new URL("http://localhost/api/test?pin=654321");
 
 		const result = svc.verifyHttpAuth(req, url);
-		expect(result.allowed).toBe(false);
+		expect(result.allowed).toBe(true);
 	});
 
 	it("locks out after repeated failures", () => {

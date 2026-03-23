@@ -36,11 +36,12 @@ export type {
 	QueuedPrompt,
 	ReusablePrompt,
 	ToolCallEntry,
-	UserResponseResult
+	UserResponseResult,
 } from "./webviewTypes";
 
 export class TaskSyncWebviewProvider
-	implements vscode.WebviewViewProvider, vscode.Disposable {
+	implements vscode.WebviewViewProvider, vscode.Disposable
+{
 	public static readonly viewType = VIEW_TYPE;
 
 	// All underscore-prefixed members are "internal" by convention but public

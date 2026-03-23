@@ -171,11 +171,15 @@ export async function generateSelfSignedCert(host: string): Promise<TlsCert> {
 	const notBefore = new Date();
 	const notAfter = new Date();
 	notAfter.setFullYear(notAfter.getFullYear() + 1);
+	const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(":");
+	const altNames = isIP
+		? [{ type: 7 as const, ip: host }]
+		: [{ type: 2 as const, value: host }];
 	const pems = await selfsigned.generate(attrs, {
 		keySize: 2048,
 		notBeforeDate: notBefore,
 		notAfterDate: notAfter,
-		extensions: [{ name: "subjectAltName", altNames: [{ type: 7, ip: host }] }],
+		extensions: [{ name: "subjectAltName", altNames }],
 	});
 	return { key: pems.private, cert: pems.cert };
 }

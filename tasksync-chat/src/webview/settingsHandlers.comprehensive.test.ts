@@ -1,0 +1,1314 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
+import {
+	DEFAULT_HUMAN_LIKE_DELAY_MAX,
+	DEFAULT_HUMAN_LIKE_DELAY_MIN,
+	DEFAULT_SESSION_WARNING_HOURS,
+	HUMAN_DELAY_MAX_LOWER,
+	HUMAN_DELAY_MAX_UPPER,
+	HUMAN_DELAY_MIN_LOWER,
+	HUMAN_DELAY_MIN_UPPER,
+	MAX_CONSECUTIVE_AUTO_RESPONSES_LIMIT,
+	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
+	SESSION_WARNING_HOURS_MAX,
+	SESSION_WARNING_HOURS_MIN,
+} from "../constants/remoteConstants";
+import {
+	broadcastAllSettingsToRemote,
+	buildSettingsPayload,
+	getAutopilotDefaultText,
+	handleAddAutopilotPrompt,
+	handleAddReusablePrompt,
+	handleEditAutopilotPrompt,
+	handleEditReusablePrompt,
+	handleRemoveAutopilotPrompt,
+	handleRemoveReusablePrompt,
+	handleReorderAutopilotPrompts,
+	handleSearchSlashCommands,
+	handleUpdateAutopilotSetting,
+	handleUpdateAutopilotText,
+	handleUpdateHumanDelayMax,
+	handleUpdateHumanDelayMin,
+	handleUpdateHumanDelaySetting,
+	handleUpdateInteractiveApprovalSetting,
+	handleUpdateMaxConsecutiveAutoResponses,
+	handleUpdateResponseTimeout,
+	handleUpdateSendWithCtrlEnterSetting,
+	handleUpdateSessionWarningHours,
+	handleUpdateSoundSetting,
+	loadSettings,
+	normalizeAutopilotText,
+	readResponseTimeoutMinutes,
+	saveAutopilotPrompts,
+	saveReusablePrompts,
+	updateSettingsUI,
+} from "../webview/settingsHandlers";
+
+// ─── Mock P factory ─────────────────────────────────────────
+
+function createMockP(overrides: Partial<any> = {}) {
+	return {
+		_soundEnabled: true,
+		_interactiveApprovalEnabled: true,
+		_sendWithCtrlEnter: false,
+		_autopilotEnabled: false,
+		_autopilotText: "Continue",
+		_autopilotPrompts: [] as string[],
+		_autopilotIndex: 0,
+		_reusablePrompts: [] as any[],
+		_queueEnabled: true,
+		_humanLikeDelayEnabled: true,
+		_humanLikeDelayMin: DEFAULT_HUMAN_LIKE_DELAY_MIN,
+		_humanLikeDelayMax: DEFAULT_HUMAN_LIKE_DELAY_MAX,
+		_sessionWarningHours: DEFAULT_SESSION_WARNING_HOURS,
+		_consecutiveAutoResponses: 0,
+		_isUpdatingConfig: false,
+		_AUTOPILOT_DEFAULT_TEXT: "Continue",
+		_view: {
+			webview: {
+				postMessage: vi.fn(),
+			},
+		},
+		_remoteServer: null as any,
+		...overrides,
+	} as any;
+}
+
+function createMockConfig(values: Record<string, any> = {}) {
+	return {
+		get: vi.fn((key: string, defaultValue?: any) =>
+			key in values ? values[key] : defaultValue,
+		),
+		update: vi.fn().mockResolvedValue(undefined),
+		inspect: vi.fn((_key: string): Record<string, any> | undefined => {
+			if (_key in values) {
+				return { globalValue: values[_key] };
+			}
+			return undefined;
+		}),
+	};
+}
+
+// ─── getAutopilotDefaultText ────────────────────────────────
+
+describe("getAutopilotDefaultText", () => {
+	it("returns inspected default value when it has content", () => {
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({ defaultValue: "My Default" });
+		const p = createMockP();
+		expect(getAutopilotDefaultText(p, config as any)).toBe("My Default");
+	});
+
+	it("returns p._AUTOPILOT_DEFAULT_TEXT when inspected default is empty", () => {
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({ defaultValue: "" });
+		const p = createMockP({ _AUTOPILOT_DEFAULT_TEXT: "Fallback" });
+		expect(getAutopilotDefaultText(p, config as any)).toBe("Fallback");
+	});
+
+	it("returns p._AUTOPILOT_DEFAULT_TEXT when no inspected default", () => {
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({});
+		const p = createMockP({ _AUTOPILOT_DEFAULT_TEXT: "Fallback" });
+		expect(getAutopilotDefaultText(p, config as any)).toBe("Fallback");
+	});
+
+	it("uses workspace configuration when no config param provided", () => {
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({ defaultValue: "FromConfig" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		expect(getAutopilotDefaultText(p)).toBe("FromConfig");
+	});
+});
+
+// ─── normalizeAutopilotText ─────────────────────────────────
+
+describe("normalizeAutopilotText", () => {
+	it("returns text when non-empty", () => {
+		const p = createMockP();
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({ defaultValue: "Default" });
+		expect(normalizeAutopilotText(p, "Custom text", config as any)).toBe(
+			"Custom text",
+		);
+	});
+
+	it("returns default when text is empty", () => {
+		const p = createMockP();
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({ defaultValue: "Default" });
+		expect(normalizeAutopilotText(p, "", config as any)).toBe("Default");
+	});
+
+	it("returns default when text is whitespace-only", () => {
+		const p = createMockP();
+		const config = createMockConfig();
+		config.inspect.mockReturnValue({ defaultValue: "Default" });
+		expect(normalizeAutopilotText(p, "   ", config as any)).toBe("Default");
+	});
+});
+
+// ─── readResponseTimeoutMinutes ─────────────────────────────
+
+describe("readResponseTimeoutMinutes", () => {
+	it("reads and normalizes config value", () => {
+		const config = createMockConfig({ responseTimeout: "30" });
+		expect(readResponseTimeoutMinutes(config as any)).toBe(30);
+	});
+
+	it("uses default when value is invalid", () => {
+		const config = createMockConfig({ responseTimeout: "abc" });
+		expect(readResponseTimeoutMinutes(config as any)).toBe(
+			RESPONSE_TIMEOUT_DEFAULT_MINUTES,
+		);
+	});
+
+	it("falls back to workspace config when no param", () => {
+		const config = createMockConfig();
+		config.get.mockReturnValue(String(RESPONSE_TIMEOUT_DEFAULT_MINUTES));
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+		expect(readResponseTimeoutMinutes()).toBe(RESPONSE_TIMEOUT_DEFAULT_MINUTES);
+	});
+});
+
+// ─── loadSettings ───────────────────────────────────────────
+
+describe("loadSettings", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("loads basic settings from config", () => {
+		const config = createMockConfig({
+			notificationSound: false,
+			interactiveApproval: false,
+			sendWithCtrlEnter: true,
+			humanLikeDelay: false,
+			humanLikeDelayMin: 5,
+			humanLikeDelayMax: 10,
+			sessionWarningHours: 3,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+
+		expect(p._soundEnabled).toBe(false);
+		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(p._sendWithCtrlEnter).toBe(true);
+		expect(p._humanLikeDelayEnabled).toBe(false);
+	});
+
+	it("migrates from old autoAnswer key", () => {
+		const config = createMockConfig({ autoAnswer: true });
+		config.inspect.mockImplementation((key: string) => {
+			if (key === "autopilot") return undefined;
+			if (key === "autoAnswer") return { globalValue: true };
+			if (key === "autopilotText") return undefined;
+			if (key === "autoAnswerText") return undefined;
+			return undefined;
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._autopilotEnabled).toBe(true);
+	});
+
+	it("uses new autopilot key when set", () => {
+		const config = createMockConfig({ autopilot: true });
+		config.inspect.mockImplementation((key: string) => {
+			if (key === "autopilot") return { workspaceValue: true };
+			if (key === "autopilotText") return undefined;
+			return undefined;
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._autopilotEnabled).toBe(true);
+	});
+
+	it("defaults autopilotEnabled to false when no keys are set", () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._autopilotEnabled).toBe(false);
+	});
+
+	it("loads autopilotPrompts from config", () => {
+		const config = createMockConfig({
+			autopilotPrompts: ["prompt1", "prompt2", ""],
+		});
+		config.inspect.mockImplementation((key: string) => {
+			if (key === "autopilot") return { workspaceValue: false };
+			if (key === "autopilotText") return { workspaceValue: "text" };
+			return undefined;
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		// Empty strings should be filtered out
+		expect(p._autopilotPrompts).toEqual(["prompt1", "prompt2"]);
+	});
+
+	it("clamps autopilotIndex when prompts array shrinks", () => {
+		const config = createMockConfig({
+			autopilotPrompts: ["only-one"],
+		});
+		config.inspect.mockImplementation((key: string) => {
+			if (key === "autopilot") return { workspaceValue: false };
+			if (key === "autopilotText") return { workspaceValue: "text" };
+			return undefined;
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _autopilotIndex: 5 });
+		loadSettings(p);
+		expect(p._autopilotIndex).toBe(0);
+	});
+
+	it("loads reusable prompts with generated IDs", () => {
+		const config = createMockConfig({
+			reusablePrompts: [
+				{ name: "fix", prompt: "Fix the bug" },
+				{ name: "test", prompt: "Write tests" },
+			],
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._reusablePrompts).toHaveLength(2);
+		expect(p._reusablePrompts[0].name).toBe("fix");
+		expect(p._reusablePrompts[0].id).toMatch(/^rp_/);
+	});
+
+	it("ensures humanLikeDelayMin <= humanLikeDelayMax", () => {
+		const config = createMockConfig({
+			humanLikeDelayMin: 15,
+			humanLikeDelayMax: 5,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._humanLikeDelayMin).toBe(p._humanLikeDelayMax);
+	});
+
+	it("clamps sessionWarningHours within bounds", () => {
+		const config = createMockConfig({
+			sessionWarningHours: 999,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._sessionWarningHours).toBe(SESSION_WARNING_HOURS_MAX);
+	});
+
+	it("handles non-finite sessionWarningHours", () => {
+		const config = createMockConfig({
+			sessionWarningHours: NaN,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._sessionWarningHours).toBe(DEFAULT_SESSION_WARNING_HOURS);
+	});
+
+	it("migrates old autoAnswerText to autopilotText", () => {
+		const config = createMockConfig({
+			autoAnswerText: "Old auto text",
+		});
+		config.inspect.mockImplementation((key: string) => {
+			if (key === "autopilot") return undefined;
+			if (key === "autoAnswer") return undefined;
+			if (key === "autopilotText") return undefined;
+			if (key === "autoAnswerText") return { globalValue: "Old auto text" };
+			return undefined;
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._autopilotText).toBe("Old auto text");
+	});
+
+	it("falls back autopilotPrompts to autopilotText when no saved prompts", () => {
+		const config = createMockConfig({
+			autopilotPrompts: [],
+			autopilotText: "Custom text",
+		});
+		config.inspect.mockImplementation((key: string) => {
+			if (key === "autopilot") return { workspaceValue: false };
+			if (key === "autopilotText") return { workspaceValue: "Custom text" };
+			return undefined;
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _AUTOPILOT_DEFAULT_TEXT: "Continue" });
+		loadSettings(p);
+		expect(p._autopilotPrompts).toEqual(["Custom text"]);
+	});
+});
+
+// ─── buildSettingsPayload ───────────────────────────────────
+
+describe("buildSettingsPayload", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("builds complete payload from P state", () => {
+		const config = createMockConfig({
+			responseTimeout: "30",
+			maxConsecutiveAutoResponses: 5,
+		});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_soundEnabled: false,
+			_autopilotEnabled: true,
+			_autopilotText: "Go ahead",
+			_autopilotPrompts: ["p1"],
+			_queueEnabled: false,
+		});
+
+		const payload = buildSettingsPayload(p);
+		expect(payload.soundEnabled).toBe(false);
+		expect(payload.autopilotEnabled).toBe(true);
+		expect(payload.autopilotText).toBe("Go ahead");
+		expect(payload.autopilotPrompts).toEqual(["p1"]);
+		expect(payload.queueEnabled).toBe(false);
+		expect(payload.responseTimeout).toBe(30);
+		expect(payload.maxConsecutiveAutoResponses).toBe(5);
+	});
+});
+
+// ─── updateSettingsUI ───────────────────────────────────────
+
+describe("updateSettingsUI", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("posts updateSettings message to webview", () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		updateSettingsUI(p);
+		expect(p._view.webview.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "updateSettings" }),
+		);
+	});
+});
+
+// ─── broadcastAllSettingsToRemote ────────────────────────────
+
+describe("broadcastAllSettingsToRemote", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("broadcasts when remote server exists", () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const broadcast = vi.fn();
+		const p = createMockP({ _remoteServer: { broadcast } });
+		broadcastAllSettingsToRemote(p);
+		expect(broadcast).toHaveBeenCalledWith(
+			"settingsChanged",
+			expect.objectContaining({ soundEnabled: true }),
+		);
+	});
+
+	it("does nothing when no remote server", () => {
+		const p = createMockP({ _remoteServer: null });
+		broadcastAllSettingsToRemote(p);
+		// should not throw
+	});
+});
+
+// ─── Settings update handlers ───────────────────────────────
+
+describe("handleUpdateSoundSetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates sound and writes config", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateSoundSetting(p, false);
+		expect(p._soundEnabled).toBe(false);
+		expect(config.update).toHaveBeenCalledWith(
+			"notificationSound",
+			false,
+			vscode.ConfigurationTarget.Global,
+		);
+	});
+});
+
+describe("handleUpdateInteractiveApprovalSetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates interactive approval setting", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateInteractiveApprovalSetting(p, false);
+		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(config.update).toHaveBeenCalled();
+	});
+});
+
+describe("handleUpdateAutopilotSetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates autopilot and resets consecutive counter", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _consecutiveAutoResponses: 5 });
+		await handleUpdateAutopilotSetting(p, true);
+		expect(p._autopilotEnabled).toBe(true);
+		expect(p._consecutiveAutoResponses).toBe(0);
+	});
+});
+
+describe("handleUpdateAutopilotText", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("normalizes and saves autopilot text", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateAutopilotText(p, "New text");
+		expect(p._autopilotText).toBe("New text");
+		expect(config.update).toHaveBeenCalledWith(
+			"autopilotText",
+			"New text",
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+});
+
+describe("handleUpdateSendWithCtrlEnterSetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates sendWithCtrlEnter setting", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateSendWithCtrlEnterSetting(p, true);
+		expect(p._sendWithCtrlEnter).toBe(true);
+		expect(config.update).toHaveBeenCalledWith(
+			"sendWithCtrlEnter",
+			true,
+			vscode.ConfigurationTarget.Global,
+		);
+	});
+});
+
+describe("handleUpdateHumanDelaySetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates humanLikeDelay setting", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateHumanDelaySetting(p, false);
+		expect(p._humanLikeDelayEnabled).toBe(false);
+	});
+});
+
+// ─── Human delay min/max with cross-field adjustment ────────
+
+describe("handleUpdateHumanDelayMin", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates min delay within valid range", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _humanLikeDelayMax: 10 });
+		await handleUpdateHumanDelayMin(p, 3);
+		expect(p._humanLikeDelayMin).toBe(3);
+	});
+
+	it("adjusts max when min exceeds max", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _humanLikeDelayMax: 5 });
+		await handleUpdateHumanDelayMin(p, 8);
+		expect(p._humanLikeDelayMin).toBe(8);
+		expect(p._humanLikeDelayMax).toBe(8);
+		// Should have written both min and max
+		expect(config.update).toHaveBeenCalledTimes(2);
+	});
+
+	it("ignores values below range", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		const originalMin = p._humanLikeDelayMin;
+		await handleUpdateHumanDelayMin(p, HUMAN_DELAY_MIN_LOWER - 1);
+		expect(p._humanLikeDelayMin).toBe(originalMin);
+	});
+
+	it("ignores values above range", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		const originalMin = p._humanLikeDelayMin;
+		await handleUpdateHumanDelayMin(p, HUMAN_DELAY_MIN_UPPER + 1);
+		expect(p._humanLikeDelayMin).toBe(originalMin);
+	});
+});
+
+describe("handleUpdateHumanDelayMax", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates max delay within valid range", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _humanLikeDelayMin: 1 });
+		await handleUpdateHumanDelayMax(p, 15);
+		expect(p._humanLikeDelayMax).toBe(15);
+	});
+
+	it("adjusts min when max drops below min", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _humanLikeDelayMin: 10 });
+		await handleUpdateHumanDelayMax(p, 5);
+		expect(p._humanLikeDelayMax).toBe(5);
+		expect(p._humanLikeDelayMin).toBe(5);
+		expect(config.update).toHaveBeenCalledTimes(2);
+	});
+
+	it("ignores values below range", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		const originalMax = p._humanLikeDelayMax;
+		await handleUpdateHumanDelayMax(p, HUMAN_DELAY_MAX_LOWER - 1);
+		expect(p._humanLikeDelayMax).toBe(originalMax);
+	});
+
+	it("ignores values above range", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		const originalMax = p._humanLikeDelayMax;
+		await handleUpdateHumanDelayMax(p, HUMAN_DELAY_MAX_UPPER + 1);
+		expect(p._humanLikeDelayMax).toBe(originalMax);
+	});
+});
+
+// ─── Session warning hours ──────────────────────────────────
+
+describe("handleUpdateSessionWarningHours", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("clamps value to max", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateSessionWarningHours(p, 999);
+		expect(p._sessionWarningHours).toBe(SESSION_WARNING_HOURS_MAX);
+	});
+
+	it("clamps value to min", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateSessionWarningHours(p, 0);
+		expect(p._sessionWarningHours).toBe(SESSION_WARNING_HOURS_MIN);
+	});
+
+	it("floors fractional values", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateSessionWarningHours(p, 3.7);
+		expect(p._sessionWarningHours).toBe(3);
+	});
+
+	it("rejects non-finite values", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		const original = p._sessionWarningHours;
+		await handleUpdateSessionWarningHours(p, NaN);
+		expect(p._sessionWarningHours).toBe(original);
+	});
+});
+
+// ─── Max consecutive auto responses ─────────────────────────
+
+describe("handleUpdateMaxConsecutiveAutoResponses", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("clamps to limit", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateMaxConsecutiveAutoResponses(p, 9999);
+		expect(config.update).toHaveBeenCalledWith(
+			"maxConsecutiveAutoResponses",
+			MAX_CONSECUTIVE_AUTO_RESPONSES_LIMIT,
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+
+	it("clamps to minimum of 1", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateMaxConsecutiveAutoResponses(p, 0);
+		expect(config.update).toHaveBeenCalledWith(
+			"maxConsecutiveAutoResponses",
+			1,
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+
+	it("rejects non-finite values", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateMaxConsecutiveAutoResponses(p, Infinity);
+		expect(config.update).not.toHaveBeenCalled();
+	});
+});
+
+// ─── Response timeout ───────────────────────────────────────
+
+describe("handleUpdateResponseTimeout", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("normalizes and saves as string", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateResponseTimeout(p, 30);
+		expect(config.update).toHaveBeenCalledWith(
+			"responseTimeout",
+			"30",
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+});
+
+// ─── Autopilot prompts management ───────────────────────────
+
+describe("handleAddAutopilotPrompt", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("adds non-empty prompt", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleAddAutopilotPrompt(p, "New prompt");
+		expect(p._autopilotPrompts).toContain("New prompt");
+		expect(p._view.webview.postMessage).toHaveBeenCalled();
+	});
+
+	it("ignores empty prompt", async () => {
+		const p = createMockP();
+		await handleAddAutopilotPrompt(p, "   ");
+		expect(p._autopilotPrompts).toHaveLength(0);
+	});
+});
+
+describe("handleEditAutopilotPrompt", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("edits prompt at valid index", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _autopilotPrompts: ["old"] });
+		await handleEditAutopilotPrompt(p, 0, "new");
+		expect(p._autopilotPrompts[0]).toBe("new");
+	});
+
+	it("rejects invalid index", async () => {
+		const p = createMockP({ _autopilotPrompts: ["old"] });
+		await handleEditAutopilotPrompt(p, 5, "new");
+		expect(p._autopilotPrompts[0]).toBe("old");
+	});
+
+	it("rejects negative index", async () => {
+		const p = createMockP({ _autopilotPrompts: ["old"] });
+		await handleEditAutopilotPrompt(p, -1, "new");
+		expect(p._autopilotPrompts[0]).toBe("old");
+	});
+
+	it("rejects empty prompt", async () => {
+		const p = createMockP({ _autopilotPrompts: ["old"] });
+		await handleEditAutopilotPrompt(p, 0, "  ");
+		expect(p._autopilotPrompts[0]).toBe("old");
+	});
+});
+
+describe("handleRemoveAutopilotPrompt", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("removes prompt and adjusts index when before current", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b", "c"],
+			_autopilotIndex: 2,
+		});
+		await handleRemoveAutopilotPrompt(p, 0);
+		expect(p._autopilotPrompts).toEqual(["b", "c"]);
+		expect(p._autopilotIndex).toBe(1); // decremented
+	});
+
+	it("clamps index when removing at/after current", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b"],
+			_autopilotIndex: 1,
+		});
+		await handleRemoveAutopilotPrompt(p, 1);
+		expect(p._autopilotPrompts).toEqual(["a"]);
+		expect(p._autopilotIndex).toBe(0); // clamped
+	});
+
+	it("rejects invalid index", async () => {
+		const p = createMockP({ _autopilotPrompts: ["a"] });
+		await handleRemoveAutopilotPrompt(p, -1);
+		expect(p._autopilotPrompts).toHaveLength(1);
+	});
+
+	it("rejects out-of-bounds index", async () => {
+		const p = createMockP({ _autopilotPrompts: ["a"] });
+		await handleRemoveAutopilotPrompt(p, 5);
+		expect(p._autopilotPrompts).toHaveLength(1);
+	});
+
+	it("keeps index unchanged when removing after current index", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b", "c"],
+			_autopilotIndex: 0,
+		});
+		await handleRemoveAutopilotPrompt(p, 2);
+		expect(p._autopilotPrompts).toEqual(["a", "b"]);
+		expect(p._autopilotIndex).toBe(0); // unchanged
+	});
+});
+
+// ─── Autopilot prompt reordering with index tracking ────────
+
+describe("handleReorderAutopilotPrompts", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("reorders prompts and tracks moved index", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b", "c"],
+			_autopilotIndex: 0,
+		});
+		await handleReorderAutopilotPrompts(p, 0, 2);
+		expect(p._autopilotPrompts).toEqual(["b", "c", "a"]);
+		expect(p._autopilotIndex).toBe(2); // moved with the item
+	});
+
+	it("adjusts index when item moves past current", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b", "c"],
+			_autopilotIndex: 1,
+		});
+		// Move item from before index (0) to after index (2)
+		await handleReorderAutopilotPrompts(p, 0, 2);
+		expect(p._autopilotIndex).toBe(0); // decremented
+	});
+
+	it("adjusts index when item moves before current", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b", "c"],
+			_autopilotIndex: 1,
+		});
+		// Move item from after index (2) to at/before index (0)
+		await handleReorderAutopilotPrompts(p, 2, 0);
+		expect(p._autopilotIndex).toBe(2); // incremented
+	});
+
+	it("rejects same from/to index", async () => {
+		const p = createMockP({ _autopilotPrompts: ["a", "b"] });
+		await handleReorderAutopilotPrompts(p, 0, 0);
+		// no change
+		expect(p._autopilotPrompts).toEqual(["a", "b"]);
+	});
+
+	it("rejects out-of-bounds indices", async () => {
+		const p = createMockP({ _autopilotPrompts: ["a", "b"] });
+		await handleReorderAutopilotPrompts(p, -1, 0);
+		expect(p._autopilotPrompts).toEqual(["a", "b"]);
+	});
+
+	it("does not adjust index when move does not cross it", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b", "c", "d"],
+			_autopilotIndex: 0,
+		});
+		// Move within range that doesn't include index 0
+		await handleReorderAutopilotPrompts(p, 2, 3);
+		expect(p._autopilotIndex).toBe(0); // unchanged
+	});
+});
+
+// ─── Reusable prompts ───────────────────────────────────────
+
+describe("handleAddReusablePrompt", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("adds a new reusable prompt", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleAddReusablePrompt(p, "Fix Bug", "Fix the bug in the code");
+		expect(p._reusablePrompts).toHaveLength(1);
+		expect(p._reusablePrompts[0].name).toBe("fix-bug");
+		expect(p._reusablePrompts[0].prompt).toBe("Fix the bug in the code");
+	});
+
+	it("normalizes name to lowercase with hyphens", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleAddReusablePrompt(p, "  Run  Tests  ", "test");
+		expect(p._reusablePrompts[0].name).toBe("run-tests");
+	});
+
+	it("rejects empty name", async () => {
+		const p = createMockP();
+		await handleAddReusablePrompt(p, "", "prompt");
+		expect(p._reusablePrompts).toHaveLength(0);
+	});
+
+	it("rejects empty prompt", async () => {
+		const p = createMockP();
+		await handleAddReusablePrompt(p, "name", "");
+		expect(p._reusablePrompts).toHaveLength(0);
+	});
+
+	it("rejects duplicate names", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+		vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined);
+
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "fix", prompt: "Fix it" }],
+		});
+		await handleAddReusablePrompt(p, "Fix", "Another fix");
+		expect(p._reusablePrompts).toHaveLength(1);
+		expect(vscode.window.showWarningMessage).toHaveBeenCalled();
+	});
+});
+
+describe("handleEditReusablePrompt", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("edits an existing prompt", async () => {
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "fix", prompt: "Old" }],
+		});
+		await handleEditReusablePrompt(p, "rp_1", "fix", "New prompt");
+		expect(p._reusablePrompts[0].prompt).toBe("New prompt");
+	});
+
+	it("rejects duplicate name when renaming", async () => {
+		vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined);
+
+		const p = createMockP({
+			_reusablePrompts: [
+				{ id: "rp_1", name: "fix", prompt: "Fix" },
+				{ id: "rp_2", name: "test", prompt: "Test" },
+			],
+		});
+		await handleEditReusablePrompt(p, "rp_1", "test", "New prompt");
+		// Should not have changed
+		expect(p._reusablePrompts[0].name).toBe("fix");
+		expect(vscode.window.showWarningMessage).toHaveBeenCalled();
+	});
+
+	it("does nothing for non-existent ID", async () => {
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "fix", prompt: "Fix" }],
+		});
+		await handleEditReusablePrompt(p, "rp_999", "fix", "New");
+		expect(p._reusablePrompts[0].prompt).toBe("Fix");
+	});
+
+	it("rejects empty name in edit", async () => {
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "fix", prompt: "Fix" }],
+		});
+		await handleEditReusablePrompt(p, "rp_1", "", "New prompt");
+		expect(p._reusablePrompts[0].prompt).toBe("Fix");
+	});
+
+	it("rejects empty prompt in edit", async () => {
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "fix", prompt: "Fix" }],
+		});
+		await handleEditReusablePrompt(p, "rp_1", "fix", "  ");
+		expect(p._reusablePrompts[0].prompt).toBe("Fix");
+	});
+});
+
+describe("handleRemoveReusablePrompt", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("removes a reusable prompt by ID", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_reusablePrompts: [
+				{ id: "rp_1", name: "fix", prompt: "Fix" },
+				{ id: "rp_2", name: "test", prompt: "Test" },
+			],
+		});
+		await handleRemoveReusablePrompt(p, "rp_1");
+		expect(p._reusablePrompts).toHaveLength(1);
+		expect(p._reusablePrompts[0].id).toBe("rp_2");
+	});
+});
+
+// ─── Slash command search ───────────────────────────────────
+
+describe("handleSearchSlashCommands", () => {
+	it("returns matching prompts by name", () => {
+		const p = createMockP({
+			_reusablePrompts: [
+				{ id: "rp_1", name: "fix-bug", prompt: "Fix the bug" },
+				{ id: "rp_2", name: "write-test", prompt: "Write tests" },
+				{ id: "rp_3", name: "refactor", prompt: "Refactor code" },
+			],
+		});
+		handleSearchSlashCommands(p, "fix");
+		expect(p._view.webview.postMessage).toHaveBeenCalledWith({
+			type: "slashCommandResults",
+			prompts: [{ id: "rp_1", name: "fix-bug", prompt: "Fix the bug" }],
+		});
+	});
+
+	it("returns matching prompts by prompt content", () => {
+		const p = createMockP({
+			_reusablePrompts: [
+				{ id: "rp_1", name: "fix-bug", prompt: "Fix the bug" },
+				{ id: "rp_2", name: "write-test", prompt: "Write tests" },
+			],
+		});
+		handleSearchSlashCommands(p, "tests");
+		expect(p._view.webview.postMessage).toHaveBeenCalledWith({
+			type: "slashCommandResults",
+			prompts: [{ id: "rp_2", name: "write-test", prompt: "Write tests" }],
+		});
+	});
+
+	it("is case-insensitive", () => {
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "Fix-Bug", prompt: "FIX" }],
+		});
+		handleSearchSlashCommands(p, "fix");
+		const call = p._view.webview.postMessage.mock.calls[0][0];
+		expect(call.prompts).toHaveLength(1);
+	});
+});
+
+// ─── saveReusablePrompts ────────────────────────────────────
+
+describe("saveReusablePrompts", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("saves prompts without IDs", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({
+			_reusablePrompts: [{ id: "rp_1", name: "fix", prompt: "Fix it" }],
+		});
+		await saveReusablePrompts(p);
+		expect(config.update).toHaveBeenCalledWith(
+			"reusablePrompts",
+			[{ name: "fix", prompt: "Fix it" }],
+			vscode.ConfigurationTarget.Global,
+		);
+	});
+});
+
+// ─── saveAutopilotPrompts ───────────────────────────────────
+
+describe("saveAutopilotPrompts", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("saves autopilot prompts array", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _autopilotPrompts: ["a", "b"] });
+		await saveAutopilotPrompts(p);
+		expect(config.update).toHaveBeenCalledWith(
+			"autopilotPrompts",
+			["a", "b"],
+			vscode.ConfigurationTarget.Global,
+		);
+	});
+});
+
+// ─── withConfigGuard error handling ─────────────────────────
+
+describe("config guard error handling", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("catches and logs config update errors", async () => {
+		const config = createMockConfig({});
+		config.update.mockRejectedValue(new Error("config write failed"));
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const p = createMockP();
+		await handleUpdateSoundSetting(p, false);
+		// Should not throw, and should have logged error
+		expect(errorSpy).toHaveBeenCalledWith(
+			"[TaskSync] Config update failed:",
+			expect.any(Error),
+		);
+		// _isUpdatingConfig should be reset (finally block)
+		expect(p._isUpdatingConfig).toBe(false);
+	});
+});

@@ -243,6 +243,36 @@ body {
     flex-shrink: 0;
 }
 
+/* ————— Remote Chat Messages Area ————— */
+.chat-stream-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 8px 4px 8px;
+    flex-shrink: 0;
+}
+
+.chat-stream-area.hidden {
+    display: none;
+}
+
+.chat-stream-msg {
+    padding: 10px 14px;
+    border-radius: 10px;
+    max-width: 90%;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    font-size: 13px;
+}
+
+.chat-stream-msg.user {
+    align-self: flex-end;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-bottom-right-radius: 3px;
+}
+
 /* Tool Call Card - Compact Design */
 .tool-call-card {
     background-color: var(--vscode-editor-background);
@@ -390,7 +420,13 @@ body {
 .pending-ai-question h3,
 .pending-ai-question h4,
 .pending-ai-question h5,
-.pending-ai-question h6 {
+.pending-ai-question h6,
+.pending-ai-summary h1,
+.pending-ai-summary h2,
+.pending-ai-summary h3,
+.pending-ai-summary h4,
+.pending-ai-summary h5,
+.pending-ai-summary h6 {
     margin: 12px 0 8px 0;
     font-weight: 600;
     color: var(--vscode-foreground);
@@ -398,32 +434,38 @@ body {
 }
 
 .tool-call-ai-response h1,
-.pending-ai-question h1 {
+.pending-ai-question h1,
+.pending-ai-summary h1 {
     font-size: 1.5em;
 }
 
 .tool-call-ai-response h2,
-.pending-ai-question h2 {
+.pending-ai-question h2,
+.pending-ai-summary h2 {
     font-size: 1.3em;
 }
 
 .tool-call-ai-response h3,
-.pending-ai-question h3 {
+.pending-ai-question h3,
+.pending-ai-summary h3 {
     font-size: 1.15em;
 }
 
 .tool-call-ai-response h4,
-.pending-ai-question h4 {
+.pending-ai-question h4,
+.pending-ai-summary h4 {
     font-size: 1.05em;
 }
 
 .tool-call-ai-response h5,
-.pending-ai-question h5 {
+.pending-ai-question h5,
+.pending-ai-summary h5 {
     font-size: 1em;
 }
 
 .tool-call-ai-response h6,
-.pending-ai-question h6 {
+.pending-ai-question h6,
+.pending-ai-summary h6 {
     font-size: 0.9em;
     color: var(--vscode-descriptionForeground);
 }
@@ -432,19 +474,23 @@ body {
 .tool-call-ai-response ul,
 .tool-call-ai-response ol,
 .pending-ai-question ul,
-.pending-ai-question ol {
+.pending-ai-question ol,
+.pending-ai-summary ul,
+.pending-ai-summary ol {
     margin: 8px 0;
     padding-left: 24px;
 }
 
 .tool-call-ai-response li,
-.pending-ai-question li {
+.pending-ai-question li,
+.pending-ai-summary li {
     margin: 4px 0;
 }
 
 /* Blockquotes in AI response */
 .tool-call-ai-response blockquote,
-.pending-ai-question blockquote {
+.pending-ai-question blockquote,
+.pending-ai-summary blockquote {
     margin: 8px 0;
     padding: 8px 12px;
     border-left: 3px solid var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
@@ -455,7 +501,8 @@ body {
 
 /* Horizontal rule in AI response */
 .tool-call-ai-response hr,
-.pending-ai-question hr {
+.pending-ai-question hr,
+.pending-ai-summary hr {
     border: none;
     border-top: 1px solid var(--vscode-panel-border);
     margin: 12px 0;
@@ -463,7 +510,8 @@ body {
 
 /* Markdown tables */
 .tool-call-ai-response .markdown-table,
-.pending-ai-question .markdown-table {
+.pending-ai-question .markdown-table,
+.pending-ai-summary .markdown-table {
     width: 100%;
     border-collapse: collapse;
     margin: 12px 0;
@@ -471,7 +519,8 @@ body {
 }
 
 .tool-call-ai-response .markdown-table th,
-.pending-ai-question .markdown-table th {
+.pending-ai-question .markdown-table th,
+.pending-ai-summary .markdown-table th {
     background-color: var(--vscode-editor-selectionBackground, rgba(127, 127, 127, 0.15));
     border: 1px solid var(--vscode-panel-border);
     padding: 8px 12px;
@@ -481,25 +530,29 @@ body {
 }
 
 .tool-call-ai-response .markdown-table td,
-.pending-ai-question .markdown-table td {
+.pending-ai-question .markdown-table td,
+.pending-ai-summary .markdown-table td {
     border: 1px solid var(--vscode-panel-border);
     padding: 8px 12px;
     color: var(--vscode-foreground);
 }
 
 .tool-call-ai-response .markdown-table tr:nth-child(even),
-.pending-ai-question .markdown-table tr:nth-child(even) {
+.pending-ai-question .markdown-table tr:nth-child(even),
+.pending-ai-summary .markdown-table tr:nth-child(even) {
     background-color: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.05));
 }
 
 .tool-call-ai-response .markdown-table tr:hover,
-.pending-ai-question .markdown-table tr:hover {
+.pending-ai-question .markdown-table tr:hover,
+.pending-ai-summary .markdown-table tr:hover {
     background-color: var(--vscode-list-activeSelectionBackground, rgba(127, 127, 127, 0.1));
 }
 
 /* Code block styling - uses VS Code theme colors */
 .tool-call-ai-response .code-block,
-.pending-ai-question .code-block {
+.pending-ai-question .code-block,
+.pending-ai-summary .code-block {
     background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
     border: 1px solid var(--vscode-panel-border);
     border-radius: 6px;
@@ -512,7 +565,8 @@ body {
 }
 
 .tool-call-ai-response .code-block code,
-.pending-ai-question .code-block code {
+.pending-ai-question .code-block code,
+.pending-ai-summary .code-block code {
     background: none;
     padding: 0;
     font-family: inherit;
@@ -524,7 +578,8 @@ body {
 
 /* Inline code styling - uses VS Code theme colors */
 .tool-call-ai-response .inline-code,
-.pending-ai-question .inline-code {
+.pending-ai-question .inline-code,
+.pending-ai-summary .inline-code {
     background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
     color: var(--vscode-editor-foreground);
     padding: 2px 6px;
@@ -535,7 +590,8 @@ body {
 
 /* Markdown links in AI response */
 .tool-call-ai-response .markdown-link,
-.pending-ai-question .markdown-link {
+.pending-ai-question .markdown-link,
+.pending-ai-summary .markdown-link {
     color: var(--vscode-textLink-foreground);
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -543,7 +599,8 @@ body {
 }
 
 .tool-call-ai-response .markdown-link:hover,
-.pending-ai-question .markdown-link:hover {
+.pending-ai-question .markdown-link:hover,
+.pending-ai-summary .markdown-link:hover {
     color: var(--vscode-textLink-activeForeground);
 }
 
@@ -583,6 +640,17 @@ body {
     color: #ffffff;
 }
 
+/* Pending AI Summary - Rendered markdown content from summary field */
+.pending-ai-summary {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--vscode-foreground);
+    word-wrap: break-word;
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+    margin-bottom: 4px;
+}
+
 /* Pending AI Question - Plain text bubble (no border) */
 .pending-ai-question {
     padding: 10px 12px;
@@ -590,6 +658,17 @@ body {
     line-height: 1.4;
     color: var(--vscode-foreground);
     word-wrap: break-word;
+}
+
+/* Session Started Notice - Brief confirmation after new session */
+.session-started-notice {
+    padding: 12px 4px;
+    font-size: 13px;
+    color: var(--vscode-textLink-foreground, #3794ff);
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* Working State Indicator - Animated dots */
@@ -628,6 +707,13 @@ body {
         opacity: 1;
         transform: scale(1);
     }
+}
+
+/* Idle notice - agent finished without follow-up */
+.working-indicator.idle-notice::before {
+    animation: none;
+    opacity: 0.5;
+    background-color: var(--vscode-descriptionForeground, #888);
 }
 
 /* New Session Prompt - shown after session terminated */
@@ -2651,4 +2737,36 @@ button#send-btn:disabled {
     color: var(--vscode-descriptionForeground);
     font-size: 11px;
     font-style: italic;
+}
+
+/* ===== New Session Modal ===== */
+.new-session-modal {
+    max-width: 300px;
+}
+
+.new-session-modal-content {
+    padding: 16px !important;
+}
+
+.new-session-note {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.new-session-warning {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 16px 0;
+    line-height: 1.4;
+}
+
+.new-session-btn-row {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
 }

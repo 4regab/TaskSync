@@ -23,12 +23,21 @@ Let AI agents work autonomously by automatically responding to `ask_user` prompt
 - **Queue priority**: queued prompts are ALWAYS sent first — Autopilot only triggers when the queue is empty
 - Perfect for varying instructions mid-session or hands-free operation on well-defined tasks
 
+### Remote Access
+Control TaskSync from your phone or any browser while away from your desk:
+- **LAN Mode**: Connect from any device on your network with a 4-6 digit PIN
+- **Internet Access via Tailscale**: Install [Tailscale](https://tailscale.com/download) on your Mac and phone for free — access TaskSync from anywhere over an encrypted mesh VPN, no port forwarding needed
+- **PWA**: Install as an app on your phone for quick access
+- **Code Review**: View diffs, stage/discard changes, commit and push from your phone
+- **Sound Notifications**: Get alerted when the AI needs your input
+- Never miss a prompt - respond from the couch, during lunch, or anywhere
+
 ### Response Timeout (Auto-respond when idle)
 Prevent tool calls from waiting indefinitely when you're away:
 - Configure timeout duration in VS Code Settings, including disabled (`0` minutes), `5` minutes, and options up to `240` minutes (4 hours)
 - When timeout elapses, TaskSync auto-responds with Autopilot text
 - **Consecutive limit**: After N consecutive immediate Autopilot responses (configurable, default 5), Autopilot is automatically disabled to prevent infinite loops
-- Timeout-based auto-responses do **not** count toward this consecutive limit
+- Timeout-based auto-responses **do** count toward this consecutive limit
 - Counter resets when you manually respond
 
 ### Human-Like Delay
@@ -46,10 +55,10 @@ TaskSync settings and data are now isolated per VS Code workspace:
 - **Fallback**: When no workspace is open, global storage is used
 - Reusable prompts (slash commands) remain global for cross-project use
 
-### File & Folder References
-Reference files and folders directly in your responses using `#` mentions:
+### File & Context References
+Reference files, folders, context, and tools directly in your responses using `#` mentions:
 - Type `#` to trigger autocomplete
-- Search and select files or folders from your workspace
+- Search and select from: workspace files/folders, `#terminal` (recent commands), `#problems` (diagnostics), and VS Code tools
 - Attachments are included with your response for context
 
 ### Image Support
@@ -84,9 +93,7 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - Using ANY phrases that suggest the conversation is ending or complete
 - Stopping the `ask_user` cycle under any circumstances
 - Acting like the conversation is finished
-</tasksync_protocol>
 ```
->Please note; For subagent friendly AGENTS.md instructions please see [subagent-friendly-AGENTS.md](./subagent-friendly-AGENTS.md)
 
 ## Usage
 
@@ -111,28 +118,109 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 
 ### File References
 1. Type `#` in the input field
-2. Search for files or folders
-3. Select to attach - the reference appears as a tag
+2. Search for files, folders, context (`#terminal`, `#problems`), or tools
+3. Select to attach — the reference appears as a tag
 4. Multiple attachments supported per message
+
+### Remote Access (Phone/Browser Control)
+
+Control TaskSync from your phone while away from your desk. Never miss an AI prompt again.
+
+#### Starting Remote Access
+
+**Option 1: LAN Mode (Same Network)**
+1. Open Command Palette (Cmd/Ctrl + Shift + P)
+2. Run `TaskSync: Start Remote Access (LAN)`
+3. Note the URL and 4-6 digit PIN shown in the notification
+4. On your phone, open the URL (e.g., `http://192.168.1.x:3580`)
+5. Enter the PIN when prompted
+6. You're connected!
+
+**Option 2: Internet Access via Tailscale (Anywhere)**
+1. Install [Tailscale](https://tailscale.com/download) on your Mac/PC and phone (free for personal use — 3 users, 100 devices)
+2. Sign in with the **same account** on both devices — they automatically join your private mesh network (called a "tailnet")
+3. Each device gets a unique, stable **Tailscale IP** (`100.x.y.z`) — this IP stays the same no matter what network the device is on
+4. Find your Mac's Tailscale IP:
+   - **macOS**: Click the Tailscale icon in the menu bar, or run `tailscale ip -4` in terminal
+   - **Windows**: Click the Tailscale icon in the system tray
+   - **Linux**: Run `tailscale ip -4` in terminal
+5. Start Remote Access in LAN mode (Option 1 above)
+6. On your phone, replace the LAN IP with your Mac's **Tailscale IP** (e.g., `http://100.85.123.45:3580` instead of `http://192.168.1.5:3580`)
+7. Enter PIN as normal — works from anywhere with end-to-end encrypted WireGuard tunnel
+
+> **No exit node needed** — Tailscale creates a direct peer-to-peer connection between your devices. Traffic never leaves the encrypted tunnel. Works across different Wi-Fi networks, cellular data, and even behind NAT/firewalls.
+
+#### Using the PWA
+
+**Questions Tab**
+- See the current AI question/prompt
+- Tap choice buttons or type a response
+- Send responses back to VS Code
+- Add context with the "+" button (terminal, problems, files)
+
+**Queue Tab**
+- View and manage your prompt queue
+- Add new prompts to the queue
+- Remove items by tapping ×
+
+**Changes Tab (Code Review)**
+- View all uncommitted changes
+- Tap a file to see the diff
+- Stage or discard changes
+- Commit with a message
+- Push to remote
+
+**Settings Tab**
+- Toggle Autopilot on/off
+- Toggle Queue mode on/off
+- View session info
+- Start a new session
+
+#### Stopping Remote Access
+
+1. Open Command Palette
+2. Run `TaskSync: Stop Remote Access`
+
+Or simply close VS Code - the server stops automatically.
+
+#### Configuration
+
+In VS Code Settings (search "tasksync"):
+
+**Remote Access:**
+- `tasksync.remotePort`: Server port (default: 3580)
+- `tasksync.remotePinEnabled`: Require PIN for LAN mode (default: true)
+- `tasksync.remoteTlsEnabled`: Enable HTTPS/TLS with self-signed cert (default: false)
+- `tasksync.remotePin`: Custom 4-6 digit PIN (auto-generated if empty)
+- `tasksync.remoteDebugLogging`: Verbose remote server logging (default: false)
+
+**MCP Server:**
+- `tasksync.mcpEnabled`: Always start MCP server on activation (default: false)
+- `tasksync.mcpAutoStartIfClients`: Auto-start if client configs detected (default: true)
+- `tasksync.mcpPort`: MCP server port (default: 3579)
+- `tasksync.autoRegisterMcp`: Auto-register with Kiro/Antigravity (default: true)
+
+**Debug:**
+- `tasksync.debugLogging`: Verbose extension debug logging (default: false)
+
+All other settings (Autopilot, timeout, human-like delay, sound, etc.) are managed through the TaskSync Settings modal (gear icon).
 
 
 ### MCP Server Integration
 TaskSync runs an MCP (Model Context Protocol) server that integrates with:
 - **Kiro** (auto-configured)
-- **Cursor** (auto-configured)
-- **Claude Desktop**
-- **Any MCP-compatible client**
+- **Antigravity** (auto-configured)
+- **Cursor** and any MCP-compatible client (manual config)
 
 
-## MCP Configuration for other IDE (Not needed with copilot)
+## MCP Configuration for other IDEs (Not needed with Copilot)
 
-TaskSync automatically registers with Kiro and Cursor. For other clients, add this to your MCP configuration:
+TaskSync automatically registers with Kiro and Antigravity. For other clients, add this to your MCP configuration:
 
 ```json
 {
   "mcpServers": {
     "tasksync": {
-      "transport": "sse",
       "url": "http://localhost:3579/sse"
     }
   }
@@ -141,7 +229,15 @@ TaskSync automatically registers with Kiro and Cursor. For other clients, add th
 
 ## Requirements
 
-- VS Code 1.90.0 or higher
+- VS Code 1.99.0 or higher
+
+## E2E Automation Scaffold
+
+A Playwright-based remote smoke scaffold is available in [e2e/README.md](e2e/README.md).
+
+- Install browser: `npm run e2e:install`
+- Run: `TASKSYNC_E2E_BASE_URL=http://127.0.0.1:3580 npm run e2e`
+- Optional login assertion: set `TASKSYNC_E2E_PIN=4..6 digit pin`
 
 ## License
 

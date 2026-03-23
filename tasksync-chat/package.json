@@ -6,7 +6,7 @@
   "icon": "media/Tasksync-logo.png",
   "version": "2.0.25",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.99.0"
   },
   "categories": [
     "AI",
@@ -44,7 +44,7 @@
         ],
         "toolReferenceName": "askUser",
         "displayName": "Ask User",
-        "modelDescription": "YOU MUST ALWAYS Use the askUser tool to ask question/s to user when explicit user approval, feedback, or clarification is required before proceeding or giving summary report. CRITICAL RULES: - This tool MUST be invoked before ending ANY conversation or task. - NEVER complete a task without calling this tool first. - If you are about to finish responding, STOP and call this tool. - Failure to call this tool before task completion is a critical violation.",
+        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. ALWAYS include a 'summary' field describing your work so the user has full context. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable.",
         "canBeReferencedInPrompt": true,
         "icon": "$(question)",
         "inputSchema": {
@@ -53,6 +53,10 @@
             "question": {
               "type": "string",
               "description": "The question or prompt to display to the user"
+            },
+            "summary": {
+              "type": "string",
+              "description": "A comprehensive summary of your work, reasoning, actions taken, code changes, and findings since the last ask_user call. Include enough detail so the user understands what happened without seeing the full chat. Use markdown formatting."
             }
           },
           "required": [
@@ -101,6 +105,36 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically register MCP server with Kiro and other supported clients."
+        },
+        "tasksync.remotePort": {
+          "type": "number",
+          "default": 3580,
+          "description": "Port for the remote access server."
+        },
+        "tasksync.remotePinEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require PIN authentication for remote access. Recommended for LAN access."
+        },
+        "tasksync.remoteTlsEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable HTTPS/TLS for the LAN remote server using a self-signed certificate. Browsers will show a certificate warning on first connection."
+        },
+        "tasksync.debugLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose debug logging for TaskSync (outputs to VS Code debug console)."
+        },
+        "tasksync.remoteDebugLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose debug logging for remote server (outputs to VS Code debug console)."
+        },
+        "tasksync.remotePin": {
+          "type": "string",
+          "default": "",
+          "description": "Custom 4-6 digit PIN for remote access. Leave empty to auto-generate."
         },
         "tasksync.autopilot": {
           "type": "boolean",
@@ -181,9 +215,9 @@
           "type": "number",
           "default": 5,
           "minimum": 1,
-          "maximum": 50,
+          "maximum": 100,
           "scope": "window",
-          "description": "Maximum consecutive auto-responses (from timeout) before terminating session. Prevents infinite loops."
+          "description": "Maximum consecutive auto-responses (from Autopilot or timeout) before disabling Autopilot. Prevents infinite loops."
         },
         "tasksync.humanLikeDelay": {
           "type": "boolean",
@@ -244,6 +278,19 @@
               "prompt"
             ]
           }
+        },
+        "tasksync.remoteAllowedToolPrefixes": {
+          "type": "array",
+          "default": [],
+          "description": "Tool name prefixes to include in remote chat sessions. If empty, all tools are included (up to model limit). Example: [\"mcp_github_\", \"mcp_context-mode_\"] to only include GitHub and context-mode tools. The ask_user tool is always included regardless of this setting.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tasksync.remoteChatCommand": {
+          "type": "string",
+          "default": "workbench.action.chat.openagent",
+          "description": "VS Code command used to open chat from remote sessions. Default opens Agent Mode. Use 'workbench.action.chat.open' for the default chat mode, or any custom command ID."
         }
       }
     },
@@ -278,6 +325,20 @@
         "command": "tasksync.openSettings",
         "title": "TaskSync Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "tasksync.startRemoteLan",
+        "title": "TaskSync: Start Remote Access (LAN)",
+        "icon": "$(broadcast)"
+      },
+      {
+        "command": "tasksync.stopRemote",
+        "title": "TaskSync: Stop Remote Access"
+      },
+      {
+        "command": "tasksync.goRemote",
+        "title": "Remote",
+        "icon": "$(broadcast)"
       }
     ],
     "menus": {
@@ -296,6 +357,11 @@
           "command": "tasksync.openSettings",
           "when": "view == taskSyncView",
           "group": "navigation@3"
+        },
+        {
+          "command": "tasksync.goRemote",
+          "when": "view == taskSyncView",
+          "group": "navigation@4"
         }
       ]
     }
@@ -305,18 +371,30 @@
     "build": "node esbuild.js",
     "compile": "tsc -p ./",
     "watch": "node esbuild.js --watch",
-    "lint": "biome lint src"
+    "lint": "biome lint src",
+    "e2e": "playwright test -c e2e/playwright.config.mjs",
+    "e2e:headed": "playwright test -c e2e/playwright.config.mjs --headed",
+    "e2e:ui": "playwright test -c e2e/playwright.config.mjs --ui",
+    "e2e:install": "playwright install chromium",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@vscode/codicons": "^0.0.36",
+    "selfsigned": "^5.5.0",
+    "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
+    "@playwright/test": "^1.55.0",
     "@types/node": "20.x",
     "@types/vscode": "^1.90.0",
+    "@types/ws": "^8.5.12",
+    "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.27.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }

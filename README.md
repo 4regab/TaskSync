@@ -22,10 +22,12 @@ A dedicated VS Code sidebar extension with smart prompt queue system. _Setup ins
 **Features:**
 - Smart Queue Mode - batch responses for AI agents
 - Autopilot - let agents work autonomously with customizable auto-responses
+- Remote Access - control from your phone via LAN or Tailscale, with PWA and code review
 - Give new tasks/feedback using ask_user tool
-- File/folder references with `#` autocomplete
+- File, folder, tool, and context references with `#` autocomplete
 - Image paste support (copilot will view your image)
 - Tool call history with session tracking
+- MCP server for cross-IDE integration (Kiro, Antigravity, Cursor, and more)
 
 **Installation:** Install from VS Code Marketplace or build from source with `npx vsce package`.
 

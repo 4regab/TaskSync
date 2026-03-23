@@ -121,7 +121,11 @@ export function stopSessionTimerInterval(p: P): void {
 export function playSystemSound(): void {
 	const platform = process.platform;
 	const onErr = (err: Error | null) => {
-		if (err) console.error("[TaskSync] Sound playback error:", err.message);
+		if (err)
+			debugLog(
+				"[TaskSync] playSystemSound — sound playback error:",
+				err.message,
+			);
 	};
 
 	try {
@@ -140,6 +144,6 @@ export function playSystemSound(): void {
 			);
 		}
 	} catch (e) {
-		console.error("[TaskSync] Sound playback error:", e);
+		debugLog("[TaskSync] playSystemSound — sound playback error:", e);
 	}
 }

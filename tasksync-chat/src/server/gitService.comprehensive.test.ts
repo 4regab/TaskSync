@@ -433,16 +433,16 @@ describe("GitService getRepo multi-root", () => {
 		const repo2 = createMockRepo();
 		const api = createMockGitAPI([repo1, repo2]);
 		api.getRepository.mockImplementation((uri: any) =>
-			uri?.fsPath === "/project-b/file.ts" ? repo2 : null,
+			uri?.fsPath === "/project-a/sub/file.ts" ? repo2 : null,
 		);
 		setupGitExtension(api);
 		await service.initialize();
 
-		// getDiff with absolute path triggers getRepo(fileUri)
+		// getDiff with absolute path under workspace triggers getRepo(fileUri)
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/project-a" } },
 		];
-		await service.getDiff("/project-b/file.ts");
+		await service.getDiff("/project-a/sub/file.ts");
 		expect(repo2.diffWithHEAD).toHaveBeenCalled();
 	});
 

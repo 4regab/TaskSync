@@ -13,9 +13,9 @@ describe("isValidFilePath", () => {
 			expect(isValidFilePath("path/to/file.js")).toBe(true);
 		});
 
-		it("accepts absolute paths", () => {
-			expect(isValidFilePath("/home/user/file.txt")).toBe(true);
-			expect(isValidFilePath("/Users/dev/project/src/app.ts")).toBe(true);
+		it("rejects absolute paths (no workspace root in test)", () => {
+			expect(isValidFilePath("/home/user/file.txt")).toBe(false);
+			expect(isValidFilePath("/Users/dev/project/src/app.ts")).toBe(false);
 		});
 
 		it("accepts paths with dots (non-traversal)", () => {

@@ -43,6 +43,7 @@ export interface GitChanges {
 /**
  * Validate file paths to prevent command injection.
  * Rejects paths with shell metacharacters or attempted traversal.
+ * Absolute paths are only allowed if they resolve under the workspace root.
  */
 export function isValidFilePath(filePath: string): boolean {
 	// Reject empty/whitespace-only paths
@@ -52,7 +53,19 @@ export function isValidFilePath(filePath: string): boolean {
 	// Reject paths with shell metacharacters (allow path separators)
 	const dangerousChars = /[`$|;&<>(){}[\]!*?'"\n\r\x00]/;
 	if (dangerousChars.test(normalizedPath)) return false;
-	// Reject absolute paths that escape workspace
+
+	// Absolute paths must resolve under the workspace root
+	if (path.isAbsolute(filePath)) {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (!workspaceFolders || workspaceFolders.length === 0) return false;
+		const resolved = path.resolve(filePath);
+		const root = path.resolve(workspaceFolders[0].uri.fsPath);
+		const rel = path.relative(root, resolved);
+		if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+		return true;
+	}
+
+	// Relative paths: reject directory traversal that escapes
 	if (normalizedPath.includes("..")) {
 		const normalized = path.normalize(normalizedPath);
 		if (normalized.startsWith("..")) return false;

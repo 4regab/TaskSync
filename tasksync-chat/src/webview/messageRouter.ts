@@ -343,13 +343,30 @@ export function handleSubmit(
 				notifyQueueChanged(p);
 			}
 		}
-		// NOTE: Temp images are NOT cleaned up here anymore.
-		// They are stored in the ToolCallEntry.attachments and will be cleaned up when:
-		// 1. clearCurrentSession() is called
-		// 2. dispose() is called (extension deactivation)
-
-		// Clear attachments after submit and sync with webview
-		p._attachments = [];
-		p._updateAttachmentsUI();
+	} else {
+		debugLog(
+			"[TaskSync] handleSubmit — no pending tool call, queueing message",
+		);
+		// No active tool call - queue message if it has content so it is not dropped
+		if (value && value.trim()) {
+			const queuedPrompt: QueuedPrompt = {
+				id: generateId("q"),
+				prompt: value.trim(),
+				attachments: attachments.length > 0 ? [...attachments] : undefined,
+			};
+			p._promptQueue.push(queuedPrompt);
+			// Auto-switch to queue mode so user sees their message went to queue
+			p._queueEnabled = true;
+			notifyQueueChanged(p);
+		}
 	}
+
+	// NOTE: Temp images are NOT cleaned up here anymore.
+	// They are stored in the ToolCallEntry.attachments and will be cleaned up when:
+	// 1. clearCurrentSession() is called
+	// 2. dispose() is called (extension deactivation)
+
+	// Clear attachments after submit and sync with webview
+	p._attachments = [];
+	p._updateAttachmentsUI();
 }

@@ -9,7 +9,7 @@ import {
 	MAX_ATTACHMENT_URI_LENGTH,
 	MAX_ATTACHMENTS,
 } from "../constants/remoteConstants";
-import type { AttachmentInfo } from "../webview/webviewProvider";
+import type { AttachmentInfo } from "../webview/webviewTypes";
 
 /**
  * Send a typed error response over a WebSocket connection.

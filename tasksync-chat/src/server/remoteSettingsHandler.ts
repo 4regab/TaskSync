@@ -2,7 +2,7 @@
  * Remote settings message dispatcher.
  * Routes settings-related WebSocket messages to the provider's settings handlers.
  */
-import type WebSocket from "ws";
+import type { WebSocket } from "ws";
 import { ErrorCode } from "../constants/remoteConstants";
 import * as settingsH from "../webview/settingsHandlers";
 import type { P } from "../webview/webviewTypes";

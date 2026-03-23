@@ -68,7 +68,7 @@ export class RemoteAuthService {
 		return attempt;
 	}
 
-	constructor(private context: vscode.ExtensionContext) {}
+	constructor(private context: vscode.ExtensionContext) { }
 
 	/**
 	 * Handle PIN/session-token authentication for a WebSocket client.

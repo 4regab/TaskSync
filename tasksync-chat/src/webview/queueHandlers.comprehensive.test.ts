@@ -164,7 +164,7 @@ describe("handleAddQueuePrompt", () => {
 		const resolve = vi.fn();
 		const pendingRequests = new Map<string, any>();
 		pendingRequests.set("tc_1", resolve);
-		const timer = setTimeout(() => {}, 10000);
+		const timer = setTimeout(() => { }, 10000);
 
 		const p = createMockP({
 			_queueEnabled: true,

@@ -124,8 +124,13 @@ export class TerminalContextProvider implements vscode.Disposable {
 				// Remove all execution trackers associated with this terminal
 				const toDelete: vscode.TerminalShellExecution[] = [];
 
+				const hasTerminal = (
+					exec: vscode.TerminalShellExecution,
+				): exec is vscode.TerminalShellExecution & { terminal: vscode.Terminal } =>
+					typeof (exec as unknown as Record<string, unknown>).terminal !== "undefined";
+
 				for (const [execution] of this._activeExecutions) {
-					if ("terminal" in execution && execution.terminal === terminal) {
+					if (hasTerminal(execution) && execution.terminal === terminal) {
 						toDelete.push(execution);
 					}
 				}

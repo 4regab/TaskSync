@@ -212,16 +212,16 @@ export function registerTools(
 					| vscode.LanguageModelTextPart
 					| vscode.LanguageModelDataPart
 				)[] = [
-					new vscode.LanguageModelTextPart(
-						JSON.stringify({
-							response: result.response,
-							queued: result.queue,
-							attachmentCount: result.attachments.length,
-							instruction:
-								"The user can ONLY see messages sent via this tool. After processing this response, you MUST call askUser again to report results. NEVER end your turn without calling askUser.",
-						}),
-					),
-				];
+						new vscode.LanguageModelTextPart(
+							JSON.stringify({
+								response: result.response,
+								queued: result.queue,
+								attachmentCount: result.attachments.length,
+								instruction:
+									"The user can ONLY see messages sent via this tool. After processing this response, you MUST call askUser again to report results. NEVER end your turn without calling askUser.",
+							}),
+						),
+					];
 
 				// Add image attachments as LanguageModelDataPart for vision models
 				if (result.attachments && result.attachments.length > 0) {

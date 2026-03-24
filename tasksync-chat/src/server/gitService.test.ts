@@ -33,6 +33,11 @@ describe("isValidFilePath", () => {
 			expect(isValidFilePath("my file.txt")).toBe(true);
 			expect(isValidFilePath("path/with spaces/file.js")).toBe(true);
 		});
+
+		it("allows paths with backslash (Windows paths)", () => {
+			expect(isValidFilePath("file\\name")).toBe(true);
+			expect(isValidFilePath("src\\app.ts")).toBe(true);
+		});
 	});
 
 	describe("invalid paths", () => {
@@ -57,11 +62,6 @@ describe("isValidFilePath", () => {
 		it("rejects paths with quotes", () => {
 			expect(isValidFilePath('file"name')).toBe(false);
 			expect(isValidFilePath("file'name")).toBe(false);
-		});
-
-		it("allows paths with backslash (Windows paths)", () => {
-			expect(isValidFilePath("file\\name")).toBe(true);
-			expect(isValidFilePath("src\\app.ts")).toBe(true);
 		});
 
 		it("rejects paths with null bytes", () => {

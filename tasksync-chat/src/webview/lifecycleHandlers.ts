@@ -197,10 +197,11 @@ export function disposeProvider(p: P): void {
 	p._fileSearchCache.clear();
 	p._currentSessionCallsMap.clear();
 
-	// Reject all pending requests so callers don't hang forever
+	// Resolve all pending requests with cancelled flag so callers don't hang forever.
+	// The cancelled flag ensures tools.ts treats this as a cancellation, not a real user response.
 	for (const [id, resolve] of p._pendingRequests) {
 		debugLog(`disposeProvider — rejecting pending request ${id}`);
-		resolve({ value: "[Extension disposed]", queue: false, attachments: [] });
+		resolve({ value: "[Extension disposed]", queue: false, attachments: [], cancelled: true });
 	}
 	p._pendingRequests.clear();
 

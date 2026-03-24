@@ -150,7 +150,7 @@ export class TerminalContextProvider implements vscode.Disposable {
 	 */
 	private async _readExecutionOutput(
 		execution: vscode.TerminalShellExecution,
-		tracker: { output: string[] },
+		tracker: ExecutionTracker,
 	): Promise<void> {
 		try {
 			const stream = execution.read();
@@ -158,6 +158,8 @@ export class TerminalContextProvider implements vscode.Disposable {
 			for await (const data of stream) {
 				tracker.output.push(data);
 				outputSize += data.length;
+				// Update timestamp so stale-execution cleanup doesn't kill active streams
+				tracker.timestamp = Date.now();
 
 				// Limit output size to prevent memory issues (max 50KB per command)
 				if (outputSize > this._MAX_OUTPUT_BYTES) {

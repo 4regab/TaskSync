@@ -15,6 +15,8 @@ function generateSharedConstants() {
     );
 
     // Extract simple numeric constants: export const NAME = <number>;
+    // NOTE: This regex only supports integer literals. If a constant becomes an expression
+    // (e.g., 5 * 60 * 1000), extractNum() will throw at build time — this is intentional.
     function extractNum(name) {
         const m = source.match(new RegExp(`export const ${name}\\s*=\\s*(\\d+)`));
         if (!m)

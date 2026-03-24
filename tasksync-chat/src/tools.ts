@@ -193,19 +193,13 @@ export function registerTools(
 			token: vscode.CancellationToken,
 		) {
 			const params = options.input;
-			const safeQuestion =
-				typeof params?.question === "string" ? params.question : "";
 
 			debugLog(
 				"[TaskSync] LM tool invoke — question:",
-				safeQuestion.slice(0, 60),
+				params.question.slice(0, 60),
 			);
 			try {
-				const safeParams: Input = {
-					question: safeQuestion,
-					summary: params?.summary,
-				};
-				const result = await askUser(safeParams, provider, token);
+				const result = await askUser(params, provider, token);
 
 				// Build result parts - text first, then images
 				const resultParts: (

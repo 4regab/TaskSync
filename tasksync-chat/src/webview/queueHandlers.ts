@@ -146,12 +146,6 @@ export function handleRemoveQueuePrompt(p: P, promptId: string): void {
 	if (p._promptQueue.length !== beforeLength) {
 		notifyQueueChanged(p);
 	}
-	if (p._promptQueue.length !== beforeLength) {
-		notifyQueueChanged(p);
-	}
-	if (p._promptQueue.length !== beforeLength) {
-		notifyQueueChanged(p);
-	}
 }
 
 /**

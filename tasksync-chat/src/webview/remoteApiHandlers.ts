@@ -14,7 +14,6 @@ import {
 	MAX_QUEUE_PROMPT_LENGTH,
 	MAX_QUEUE_SIZE,
 	MAX_REMOTE_HISTORY_ITEMS,
-	MAX_SEARCH_QUERY_LENGTH,
 } from "../constants/remoteConstants";
 import { isApprovalQuestion, parseChoices } from "./choiceParser";
 import { searchToolsForAutocomplete } from "./fileHandlers";
@@ -78,17 +77,17 @@ export function getRemoteState(p: P): {
 		pending:
 			pendingEntry && pendingEntry.status === "pending"
 				? {
-						id: pendingEntry.id,
-						prompt: pendingEntry.prompt,
-						summary: pendingEntry.summary,
-						choices: parseChoices(pendingEntry.prompt).map((c) => ({
-							label: c.label,
-							value: c.value,
-							shortLabel: c.shortLabel,
-						})),
-						isApproval: isApprovalQuestion(pendingEntry.prompt),
-						timestamp: pendingEntry.timestamp,
-					}
+					id: pendingEntry.id,
+					prompt: pendingEntry.prompt,
+					summary: pendingEntry.summary,
+					choices: parseChoices(pendingEntry.prompt).map((c) => ({
+						label: c.label,
+						value: c.value,
+						shortLabel: c.shortLabel,
+					})),
+					isApproval: isApprovalQuestion(pendingEntry.prompt),
+					timestamp: pendingEntry.timestamp,
+				}
 				: null,
 		queue: p._promptQueue.map(
 			(q: { id: string; prompt: string; attachments?: AttachmentInfo[] }) => ({
@@ -356,7 +355,7 @@ export async function searchFilesForRemote(
 	const toolResults = searchToolsForAutocomplete(query || "");
 
 	// File search requires at least 2 chars to avoid loading entire workspace
-	if (!query || query.length < 2 || query.length > MAX_SEARCH_QUERY_LENGTH) {
+	if (!query || query.length < 2) {
 		return toolResults;
 	}
 

@@ -3,7 +3,7 @@ import {
 	RESPONSE_TIMEOUT_ALLOWED_VALUES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
 } from "../constants/remoteConstants";
-import { normalizeResponseTimeout } from "../webview/settingsHandlers";
+import { normalizeResponseTimeout } from "./settingsHandlers";
 
 describe("normalizeResponseTimeout", () => {
 	it("accepts valid allowed values", () => {

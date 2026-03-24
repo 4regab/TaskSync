@@ -201,7 +201,12 @@ export function disposeProvider(p: P): void {
 	// The cancelled flag ensures tools.ts treats this as a cancellation, not a real user response.
 	for (const [id, resolve] of p._pendingRequests) {
 		debugLog(`disposeProvider — rejecting pending request ${id}`);
-		resolve({ value: "[Extension disposed]", queue: false, attachments: [], cancelled: true });
+		resolve({
+			value: "[Extension disposed]",
+			queue: false,
+			attachments: [],
+			cancelled: true,
+		});
 	}
 	p._pendingRequests.clear();
 

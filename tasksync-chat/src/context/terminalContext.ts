@@ -38,8 +38,8 @@ export class TerminalContextProvider implements vscode.Disposable {
 	// Cleanup stale executions after 5 minutes (prevents memory leak if terminal killed,
 	// but allows long-running commands like npm install to complete)
 	private readonly _STALE_EXECUTION_TIMEOUT_MS = 300000;
-	// Max output bytes per command to prevent memory issues (~50KB)
-	private readonly _MAX_OUTPUT_BYTES = 50000;
+	// Max output chars per command to prevent memory issues (~50KB for ASCII)
+	private readonly _MAX_OUTPUT_CHARS = 50000;
 	private _cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
 	constructor() {
@@ -162,7 +162,7 @@ export class TerminalContextProvider implements vscode.Disposable {
 				tracker.timestamp = Date.now();
 
 				// Limit output size to prevent memory issues (max 50KB per command)
-				if (outputSize > this._MAX_OUTPUT_BYTES) {
+				if (outputSize > this._MAX_OUTPUT_CHARS) {
 					tracker.output.push("\n... (output truncated)");
 					break;
 				}

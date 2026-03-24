@@ -150,6 +150,10 @@ Control TaskSync from your phone while away from your desk. Never miss an AI pro
 
 > **No exit node needed** — Tailscale creates a direct peer-to-peer connection between your devices. Traffic never leaves the encrypted tunnel. Works across different Wi-Fi networks, cellular data, and even behind NAT/firewalls.
 
+> **TLS is optional with Tailscale** — Tailscale already encrypts all traffic end-to-end via WireGuard, so you can leave `tasksync.remoteTlsEnabled` as `false` and avoid self-signed certificate warnings in the browser.
+
+> **Install as a PWA** — On your phone's browser, tap the share/menu button and select "Add to Home Screen" to install TaskSync as a native-feeling app with its own icon and full-screen experience.
+
 #### Using the PWA
 
 **Questions Tab**

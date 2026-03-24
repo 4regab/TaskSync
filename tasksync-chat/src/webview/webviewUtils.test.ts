@@ -17,6 +17,9 @@ import {
 vi.mock("fs", () => ({
 	existsSync: vi.fn(() => false),
 	statSync: vi.fn(() => ({ isFile: () => true })),
+	promises: {
+		stat: vi.fn(() => Promise.reject(new Error("ENOENT"))),
+	},
 }));
 
 // ─── formatElapsed ───────────────────────────────────────────
@@ -381,58 +384,60 @@ describe("markSessionTerminated", () => {
 
 describe("resolveFileLinkUri", () => {
 	afterEach(() => {
-		vi.mocked(fs.existsSync).mockReturnValue(false);
+		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
 	});
 
-	it("returns null for empty string", () => {
-		expect(resolveFileLinkUri("")).toBeNull();
+	it("returns null for empty string", async () => {
+		expect(await resolveFileLinkUri("")).toBeNull();
 	});
 
-	it("returns null for whitespace-only string", () => {
-		expect(resolveFileLinkUri("   ")).toBeNull();
+	it("returns null for whitespace-only string", async () => {
+		expect(await resolveFileLinkUri("   ")).toBeNull();
 	});
 
-	it("returns null when file does not exist (absolute path)", () => {
-		vi.mocked(fs.existsSync).mockReturnValue(false);
-		expect(resolveFileLinkUri("/nonexistent/file.ts")).toBeNull();
+	it("returns null when file does not exist (absolute path)", async () => {
+		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		expect(await resolveFileLinkUri("/nonexistent/file.ts")).toBeNull();
 	});
 
-	it("returns Uri for existing absolute path", () => {
+	it("returns Uri for existing absolute path", async () => {
 		// Make Uri.parse throw so it falls through to isAbsolute check
 		const origParse = vscode.Uri.parse;
 		(vscode.Uri as any).parse = () => {
 			throw new Error("not a URI");
 		};
-		vi.mocked(fs.existsSync).mockReturnValue(true);
-		vi.mocked(fs.statSync).mockReturnValue({ isFile: () => true } as any);
-		const result = resolveFileLinkUri("/existing/file.ts");
+		vi.mocked(fs.promises.stat).mockResolvedValue({
+			isFile: () => true,
+		} as any);
+		const result = await resolveFileLinkUri("/existing/file.ts");
 		expect(result).not.toBeNull();
 		(vscode.Uri as any).parse = origParse;
 	});
 
-	it("returns null for absolute path that is a directory", () => {
+	it("returns null for absolute path that is a directory", async () => {
 		const origParse = vscode.Uri.parse;
 		(vscode.Uri as any).parse = () => {
 			throw new Error("not a URI");
 		};
-		vi.mocked(fs.existsSync).mockReturnValue(true);
-		vi.mocked(fs.statSync).mockReturnValue({ isFile: () => false } as any);
-		expect(resolveFileLinkUri("/some/directory")).toBeNull();
+		vi.mocked(fs.promises.stat).mockResolvedValue({
+			isFile: () => false,
+		} as any);
+		expect(await resolveFileLinkUri("/some/directory")).toBeNull();
 		(vscode.Uri as any).parse = origParse;
 	});
 
-	it("strips leading ./ from relative paths", () => {
-		vi.mocked(fs.existsSync).mockReturnValue(false);
+	it("strips leading ./ from relative paths", async () => {
+		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
 		// Should normalize path and not crash
-		expect(resolveFileLinkUri("./src/file.ts")).toBeNull();
+		expect(await resolveFileLinkUri("./src/file.ts")).toBeNull();
 	});
 
-	it("returns null for relative path with no workspace folders", () => {
-		vi.mocked(fs.existsSync).mockReturnValue(false);
-		expect(resolveFileLinkUri("src/file.ts")).toBeNull();
+	it("returns null for relative path with no workspace folders", async () => {
+		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		expect(await resolveFileLinkUri("src/file.ts")).toBeNull();
 	});
 
-	it("resolves relative path against workspace folders", () => {
+	it("resolves relative path against workspace folders", async () => {
 		const origParse = vscode.Uri.parse;
 		(vscode.Uri as any).parse = () => {
 			throw new Error("not a URI");
@@ -441,17 +446,18 @@ describe("resolveFileLinkUri", () => {
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/workspace" } },
 		];
-		vi.mocked(fs.existsSync).mockReturnValue(true);
-		vi.mocked(fs.statSync).mockReturnValue({ isFile: () => true } as any);
+		vi.mocked(fs.promises.stat).mockResolvedValue({
+			isFile: () => true,
+		} as any);
 
-		const result = resolveFileLinkUri("src/file.ts");
+		const result = await resolveFileLinkUri("src/file.ts");
 		expect(result).not.toBeNull();
 
 		(vscode.workspace as any).workspaceFolders = original;
 		(vscode.Uri as any).parse = origParse;
 	});
 
-	it("returns null when relative file not found in any workspace folder", () => {
+	it("returns null when relative file not found in any workspace folder", async () => {
 		const origParse = vscode.Uri.parse;
 		(vscode.Uri as any).parse = () => {
 			throw new Error("not a URI");
@@ -460,19 +466,20 @@ describe("resolveFileLinkUri", () => {
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/workspace" } },
 		];
-		vi.mocked(fs.existsSync).mockReturnValue(false);
+		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
 
-		expect(resolveFileLinkUri("nonexistent/file.ts")).toBeNull();
+		expect(await resolveFileLinkUri("nonexistent/file.ts")).toBeNull();
 
 		(vscode.workspace as any).workspaceFolders = original;
 		(vscode.Uri as any).parse = origParse;
 	});
 
-	it("resolves file:// URI scheme", () => {
-		vi.mocked(fs.existsSync).mockReturnValue(true);
-		vi.mocked(fs.statSync).mockReturnValue({ isFile: () => true } as any);
+	it("resolves file:// URI scheme", async () => {
+		vi.mocked(fs.promises.stat).mockResolvedValue({
+			isFile: () => true,
+		} as any);
 
-		const result = resolveFileLinkUri("file:///some/file.ts");
+		const result = await resolveFileLinkUri("file:///some/file.ts");
 		expect(result).not.toBeNull();
 	});
 });

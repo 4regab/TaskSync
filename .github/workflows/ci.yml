@@ -39,5 +39,5 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Check for duplicate blocks
-        run: npm run check-duplicates
+      - name: Code quality checks
+        run: npm run check-code

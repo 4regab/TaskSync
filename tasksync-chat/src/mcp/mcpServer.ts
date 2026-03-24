@@ -66,7 +66,7 @@ export class McpServerManager {
 	private readonly SESSION_REAP_INTERVAL_MS = 60 * 1000; // Check every minute
 	private _isRunning: boolean = false;
 
-	constructor(private provider: TaskSyncWebviewProvider) {}
+	constructor(private provider: TaskSyncWebviewProvider) { }
 
 	/**
 	 * Check if MCP server is currently running
@@ -150,15 +150,15 @@ export class McpServerManager {
 							| { type: "text"; text: string }
 							| { type: "image"; data: string; mimeType: string }
 						> = [
-							{
-								type: "text",
-								text: JSON.stringify({
-									...result,
-									instruction:
-										"The user can ONLY see messages sent via this tool. After processing this response, you MUST call askUser again to report results. NEVER end your turn without calling askUser.",
-								}),
-							},
-						];
+								{
+									type: "text",
+									text: JSON.stringify({
+										...result,
+										instruction:
+											"The user can ONLY see messages sent via this tool. After processing this response, you MUST call askUser again to report results. NEVER end your turn without calling askUser.",
+									}),
+								},
+							];
 
 						if (result.attachments?.length) {
 							const imageParts = await Promise.all(
@@ -300,7 +300,7 @@ export class McpServerManager {
 	 * Periodically close idle sessions to prevent unbounded memory growth.
 	 */
 	private startSessionReaper(): void {
-		this.sessionReapInterval = setInterval(() => {
+		this.sessionReapInterval = setInterval(async () => {
 			const now = Date.now();
 			const expired: string[] = [];
 			for (const [sessionId, timestamp] of this.sessionTimestamps) {
@@ -310,18 +310,18 @@ export class McpServerManager {
 			}
 			for (const sessionId of expired) {
 				const transport = this.transports.get(sessionId);
-				if (transport) {
-					transport
-						.close()
-						.catch((e) =>
-							console.error(
-								`[TaskSync MCP] Error closing stale session ${sessionId}:`,
-								e,
-							),
-						);
-				}
 				this.transports.delete(sessionId);
 				this.sessionTimestamps.delete(sessionId);
+				if (transport) {
+					try {
+						await transport.close();
+					} catch (e) {
+						console.error(
+							`[TaskSync MCP] Error closing stale session ${sessionId}:`,
+							e,
+						);
+					}
+				}
 			}
 		}, this.SESSION_REAP_INTERVAL_MS);
 	}
@@ -388,7 +388,10 @@ export class McpServerManager {
 				config.mcpServers = {};
 			}
 
-			config.mcpServers[serverName] = serverConfig;
+			config.mcpServers[serverName] = {
+				...config.mcpServers[serverName],
+				...serverConfig,
+			};
 			await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2));
 		} catch (error) {
 			console.error(

@@ -94,8 +94,8 @@ export async function loadPersistedHistoryFromDiskAsync(p: P): Promise<void> {
 		const parsed = JSON.parse(data);
 		p._persistedHistory = Array.isArray(parsed.history)
 			? parsed.history
-					.filter((entry: ToolCallEntry) => entry.status === "completed")
-					.slice(0, p._MAX_HISTORY_ENTRIES)
+				.filter((entry: ToolCallEntry) => entry.status === "completed")
+				.slice(0, p._MAX_HISTORY_ENTRIES)
 			: [];
 	} catch (error) {
 		console.error("[TaskSync] Failed to load persisted history:", error);
@@ -174,8 +174,8 @@ export function savePersistedHistoryToDiskSync(p: P): void {
 		const storagePath = getStorageUri(p).fsPath;
 		const historyPath = path.join(storagePath, "tool-history.json");
 
-		if (!fs.existsSync(storagePath)) {
-			fs.mkdirSync(storagePath, { recursive: true });
+		if (!fs.existsSync(storagePath)) { // sync-io-allowed: deactivation hook must complete before process exits
+			fs.mkdirSync(storagePath, { recursive: true }); // sync-io-allowed
 		}
 
 		const completedHistory = p._persistedHistory.filter(
@@ -184,7 +184,7 @@ export function savePersistedHistoryToDiskSync(p: P): void {
 
 		let merged = completedHistory;
 		try {
-			const existing = fs.readFileSync(historyPath, "utf8");
+			const existing = fs.readFileSync(historyPath, "utf8"); // sync-io-allowed
 			const parsed = JSON.parse(existing);
 			if (Array.isArray(parsed.history)) {
 				merged = mergeAndDedup(
@@ -200,7 +200,7 @@ export function savePersistedHistoryToDiskSync(p: P): void {
 		p._persistedHistory = merged;
 
 		const data = JSON.stringify({ history: merged }, null, 2);
-		fs.writeFileSync(historyPath, data, "utf8");
+		fs.writeFileSync(historyPath, data, "utf8"); // sync-io-allowed
 		p._historyDirty = false;
 	} catch (error) {
 		console.error("[TaskSync] Failed to save persisted history:", error);

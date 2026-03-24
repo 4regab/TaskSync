@@ -305,9 +305,7 @@ export async function handleSaveImage(
 		}
 
 		const tempDir = path.join(storageUri.fsPath, "temp-images");
-		if (!fs.existsSync(tempDir)) {
-			await fs.promises.mkdir(tempDir, { recursive: true });
-		}
+		await fs.promises.mkdir(tempDir, { recursive: true });
 
 		const existingImages = p._attachments.filter(
 			(a: AttachmentInfo) => a.isTemporary,
@@ -319,7 +317,12 @@ export async function handleSaveImage(
 		let filePath = path.join(tempDir, fileName);
 
 		let counter = existingImages;
-		while (fs.existsSync(filePath)) {
+		while (
+			await fs.promises
+				.access(filePath)
+				.then(() => true)
+				.catch(() => false)
+		) {
 			counter++;
 			fileName = `image-pasted-${counter}${ext}`;
 			filePath = path.join(tempDir, fileName);
@@ -420,7 +423,7 @@ export async function handleOpenFileLink(target: string): Promise<void> {
 		return;
 	}
 
-	const fileUri = resolveFileLinkUri(parsedTarget.filePath);
+	const fileUri = await resolveFileLinkUri(parsedTarget.filePath);
 	if (!fileUri) {
 		vscode.window.showWarningMessage(
 			`File not found: ${parsedTarget.filePath}`,
@@ -548,15 +551,16 @@ export async function handleSelectContextReference(
 /**
  * Clean up temporary image files from disk by URI list.
  */
-export function cleanupTempImagesByUri(uris: string[]): void {
+export async function cleanupTempImagesByUri(uris: string[]): Promise<void> {
 	for (const uri of uris) {
 		try {
 			const filePath = vscode.Uri.parse(uri).fsPath;
-			if (fs.existsSync(filePath)) {
-				fs.unlinkSync(filePath);
-			}
+			await fs.promises.unlink(filePath);
 		} catch (error) {
-			console.error("[TaskSync] Failed to cleanup temp image:", error);
+			// ENOENT is fine — file already gone
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				console.error("[TaskSync] Failed to cleanup temp image:", error);
+			}
 		}
 	}
 }
@@ -578,6 +582,6 @@ export function cleanupTempImagesFromEntries(
 		}
 	}
 	if (tempUris.length > 0) {
-		cleanupTempImagesByUri(tempUris);
+		void cleanupTempImagesByUri(tempUris);
 	}
 }

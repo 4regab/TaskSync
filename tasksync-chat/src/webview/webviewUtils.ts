@@ -215,9 +215,23 @@ export function parseFileLinkTarget(target: string): {
 }
 
 /**
+ * Check whether a path exists and is a regular file.
+ */
+async function isFile(filePath: string): Promise<boolean> {
+	try {
+		const stat = await fs.promises.stat(filePath);
+		return stat.isFile();
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Resolve a file link path to an existing file URI.
  */
-export function resolveFileLinkUri(rawPath: string): vscode.Uri | null {
+export async function resolveFileLinkUri(
+	rawPath: string,
+): Promise<vscode.Uri | null> {
 	const normalizedPath = rawPath.trim().replace(/^\.\//, "").trim();
 	if (!normalizedPath) {
 		return null;
@@ -225,11 +239,7 @@ export function resolveFileLinkUri(rawPath: string): vscode.Uri | null {
 
 	try {
 		const parsedUri = vscode.Uri.parse(normalizedPath);
-		if (
-			parsedUri.scheme === "file" &&
-			fs.existsSync(parsedUri.fsPath) &&
-			fs.statSync(parsedUri.fsPath).isFile()
-		) {
+		if (parsedUri.scheme === "file" && (await isFile(parsedUri.fsPath))) {
 			return parsedUri;
 		}
 	} catch {
@@ -237,7 +247,7 @@ export function resolveFileLinkUri(rawPath: string): vscode.Uri | null {
 	}
 
 	if (path.isAbsolute(normalizedPath)) {
-		if (fs.existsSync(normalizedPath) && fs.statSync(normalizedPath).isFile()) {
+		if (await isFile(normalizedPath)) {
 			return vscode.Uri.file(path.resolve(normalizedPath));
 		}
 		return null;
@@ -250,7 +260,7 @@ export function resolveFileLinkUri(rawPath: string): vscode.Uri | null {
 
 	for (const folder of workspaceFolders) {
 		const candidatePath = path.resolve(folder.uri.fsPath, normalizedPath);
-		if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+		if (await isFile(candidatePath)) {
 			return vscode.Uri.file(candidatePath);
 		}
 	}

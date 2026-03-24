@@ -82,14 +82,14 @@ npm install
 | Type-check | `npx tsc --noEmit` |
 | Test | `npx vitest run` |
 | Lint | `npm run lint` |
-| Duplicate check | `npm run check-duplicates` |
+| Code quality | `npm run check-code` |
 | Full validation | `npm run validate` |
 | Watch mode | `npm run watch` |
 | Package VSIX | `npx vsce package` |
 
 > **Build output** goes to `dist/` (extension bundle), `media/webview.js` (webview bundle), and `web/shared-constants.js` (auto-generated for the remote PWA).
 >
-> Always run `npm run validate` after making changes. This runs build, tsc, vitest, lint, and the duplicate block scanner.
+> Always run `npm run validate` after making changes. This runs build, tsc, vitest, lint, and the code quality scanner.
 
 ---
 

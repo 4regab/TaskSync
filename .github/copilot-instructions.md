@@ -30,7 +30,7 @@ All commands run from `tasksync-chat/`:
 ```bash
 cd tasksync-chat
 npm install          # Always run first
-npm run validate     # Full validation: build + tsc + test + lint + duplicate scanner
+npm run validate     # Full validation: build + tsc + test + lint + code quality scanner
 ```
 
 Or run individually:
@@ -40,7 +40,7 @@ node esbuild.js      # Build → dist/extension.js, media/webview.js, web/shared
 npx tsc --noEmit     # Type-check (must produce 0 errors)
 npx vitest run       # Run all tests (387+ tests, must all pass)
 npm run lint         # Biome lint (must produce 0 issues)
-npm run check-duplicates  # Scan for duplicate code blocks (tool corruption detection)
+npm run check-code        # Code quality scanner (duplicates, sync I/O, etc.)
 ```
 
 Always run these four checks (build, tsc, vitest, lint) after making changes. The CI workflow (`.github/workflows/auto-release.yml`) runs on pushes to `main` — it installs deps, builds, version-bumps, packages VSIX, and creates a GitHub release.

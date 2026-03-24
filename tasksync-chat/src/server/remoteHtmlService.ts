@@ -43,7 +43,7 @@ export class RemoteHtmlService {
 	constructor(
 		private webDir: string,
 		private mediaDir: string,
-	) {}
+	) { }
 
 	/**
 	 * Preload HTML templates asynchronously during server startup.
@@ -110,7 +110,7 @@ export class RemoteHtmlService {
 		// Route: /shared-constants.js - serve shared constants (SSOT for frontend)
 		if (url.pathname === "/shared-constants.js") {
 			const sharedConstantsPath = path.join(this.webDir, "shared-constants.js");
-			this.serveFile(sharedConstantsPath, res);
+			void this.serveFile(sharedConstantsPath, res);
 			return;
 		}
 
@@ -135,7 +135,7 @@ export class RemoteHtmlService {
 				return;
 			}
 
-			this.serveFile(fullPath, res);
+			void this.serveFile(fullPath, res);
 			return;
 		}
 
@@ -149,7 +149,7 @@ export class RemoteHtmlService {
 				"dist",
 				"codicon.css",
 			);
-			this.serveFile(codiconPath, res);
+			void this.serveFile(codiconPath, res);
 			return;
 		}
 
@@ -163,7 +163,7 @@ export class RemoteHtmlService {
 				"dist",
 				"codicon.ttf",
 			);
-			this.serveFile(codiconPath, res);
+			void this.serveFile(codiconPath, res);
 			return;
 		}
 
@@ -195,7 +195,7 @@ export class RemoteHtmlService {
 		const isLoginPage = url.pathname === "/" || url.pathname === "/index.html";
 		const cspHeader = isLoginPage ? this.buildLoginCsp(requestHost) : undefined;
 
-		this.serveFile(
+		void this.serveFile(
 			fullPath,
 			res,
 			() => {
@@ -215,12 +215,12 @@ export class RemoteHtmlService {
 	 * Uses realpath to atomically resolve symlinks and verify the canonical path
 	 * is within allowed directories, preventing TOCTOU race conditions.
 	 */
-	serveFile(
+	async serveFile(
 		fullPath: string,
 		res: http.ServerResponse,
 		onNotFound?: () => void,
 		cspOverride?: string,
-	): void {
+	): Promise<void> {
 		const ext = path.extname(fullPath).toLowerCase();
 		const canonicalWebDir = path.resolve(this.webDir);
 		const canonicalMediaDir = path.resolve(this.mediaDir);
@@ -230,57 +230,58 @@ export class RemoteHtmlService {
 			"node_modules",
 		);
 
-		// Atomically resolve symlinks and verify the canonical path
-		fs.realpath(fullPath, (realpathErr, resolvedPath) => {
-			if (realpathErr) {
-				if (onNotFound) {
-					onNotFound();
-				} else {
-					res.writeHead(404);
-					res.end("Not Found");
-				}
-				return;
+		let resolvedPath: string;
+		try {
+			resolvedPath = await fs.promises.realpath(fullPath);
+		} catch {
+			if (onNotFound) {
+				onNotFound();
+			} else {
+				res.writeHead(404);
+				res.end("Not Found");
 			}
+			return;
+		}
 
-			// Verify resolved path is within allowed directories
-			const inWebDir =
-				resolvedPath.startsWith(canonicalWebDir + path.sep) ||
-				resolvedPath === canonicalWebDir;
-			const inMediaDir =
-				resolvedPath.startsWith(canonicalMediaDir + path.sep) ||
-				resolvedPath === canonicalMediaDir;
-			const inNodeModules = resolvedPath.startsWith(
-				canonicalNodeModules + path.sep,
-			);
-			if (!inWebDir && !inMediaDir && !inNodeModules) {
-				res.writeHead(403);
-				res.end("Forbidden");
-				return;
+		// Verify resolved path is within allowed directories
+		const inWebDir =
+			resolvedPath.startsWith(canonicalWebDir + path.sep) ||
+			resolvedPath === canonicalWebDir;
+		const inMediaDir =
+			resolvedPath.startsWith(canonicalMediaDir + path.sep) ||
+			resolvedPath === canonicalMediaDir;
+		const inNodeModules = resolvedPath.startsWith(
+			canonicalNodeModules + path.sep,
+		);
+		if (!inWebDir && !inMediaDir && !inNodeModules) {
+			res.writeHead(403);
+			res.end("Forbidden");
+			return;
+		}
+
+		let data: Buffer;
+		try {
+			data = await fs.promises.readFile(resolvedPath);
+		} catch {
+			if (onNotFound) {
+				onNotFound();
+			} else {
+				res.writeHead(404);
+				res.end("Not Found");
 			}
+			return;
+		}
 
-			fs.readFile(resolvedPath, (err, data) => {
-				if (err) {
-					if (onNotFound) {
-						onNotFound();
-					} else {
-						res.writeHead(404);
-						res.end("Not Found");
-					}
-					return;
-				}
-
-				const headers: Record<string, string> = {
-					"Content-Type": CONTENT_TYPES[ext] || "application/octet-stream",
-					"Cache-Control": "no-cache",
-				};
-				if (cspOverride) {
-					headers["Content-Security-Policy"] = cspOverride;
-				}
-				setSecurityHeaders(res, this.tlsEnabled);
-				res.writeHead(200, headers);
-				res.end(data);
-			});
-		});
+		const headers: Record<string, string> = {
+			"Content-Type": CONTENT_TYPES[ext] || "application/octet-stream",
+			"Cache-Control": "no-cache",
+		};
+		if (cspOverride) {
+			headers["Content-Security-Policy"] = cspOverride;
+		}
+		setSecurityHeaders(res, this.tlsEnabled);
+		res.writeHead(200, headers);
+		res.end(data);
 	}
 
 	/**
@@ -293,9 +294,9 @@ export class RemoteHtmlService {
 		res.end(html);
 	}
 
-	/** Build WebSocket origin directives from the request host. Falls back to broad `ws: wss:` if empty. */
+	/** Build WebSocket origin directives from the request host. Returns empty string if host is unavailable. */
 	private buildWsOrigin(host: string): string {
-		if (!host) return "ws: wss:";
+		if (!host) return "";
 		return `ws://${host} wss://${host}`;
 	}
 

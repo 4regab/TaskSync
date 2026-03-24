@@ -78,7 +78,7 @@ export function getHtmlContent(
 	).fsPath;
 	if (!cachedBodyTemplate) {
 		try {
-			cachedBodyTemplate = fs.readFileSync(templatePath, "utf8");
+			cachedBodyTemplate = fs.readFileSync(templatePath, "utf8"); // sync-io-allowed: sync fallback when async preload misses
 		} catch (err) {
 			console.error(
 				"Failed to load webview body template (sync fallback):",

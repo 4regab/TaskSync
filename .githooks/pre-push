@@ -20,7 +20,7 @@ npx vitest run
 echo "🧹 Linting..."
 npm run lint
 
-echo "🔁 Scanning for duplicate blocks..."
-node scripts/check-duplicates.js
+echo "🔁 Running code quality checks..."
+node scripts/check-code-quality.js
 
 echo "✅ All pre-push checks passed!"

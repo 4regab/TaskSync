@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MAX_QUEUE_PROMPT_LENGTH } from "../constants/remoteConstants";
 import {
 	handleClearQueue,
 	handleEditQueuePrompt,
@@ -84,7 +85,7 @@ describe("handleEditQueuePrompt", () => {
 
 	it("rejects excessively long prompts", () => {
 		const p = createMockP([{ id: ID1, prompt: "Keep" }]);
-		const longPrompt = "x".repeat(100001);
+		const longPrompt = "x".repeat(MAX_QUEUE_PROMPT_LENGTH + 1);
 		handleEditQueuePrompt(p, ID1, longPrompt);
 		expect(p._promptQueue[0].prompt).toBe("Keep");
 		expect(p._saveQueueToDisk).not.toHaveBeenCalled();

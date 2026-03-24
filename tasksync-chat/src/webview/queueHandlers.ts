@@ -1,4 +1,5 @@
 import {
+	MAX_QUEUE_SIZE,
 	isValidQueueId,
 	MAX_QUEUE_PROMPT_LENGTH,
 } from "../constants/remoteConstants";
@@ -119,6 +120,12 @@ export function handleAddQueuePrompt(
 	}
 
 	if (!handledAsToolResponse) {
+		if (p._promptQueue.length >= MAX_QUEUE_SIZE) {
+			debugLog(
+				`[TaskSync] handleAddQueuePrompt — rejected: queue full (${p._promptQueue.length}/${MAX_QUEUE_SIZE})`,
+			);
+			return;
+		}
 		debugLog(
 			`[TaskSync] handleAddQueuePrompt — no pending tool call, adding to queue (new size: ${p._promptQueue.length + 1})`,
 		);

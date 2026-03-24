@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MAX_QUEUE_PROMPT_LENGTH, MAX_QUEUE_SIZE } from "../constants/remoteConstants";
 import * as vscode from "vscode";
 import {
 	handleAddQueuePrompt,
@@ -74,7 +75,7 @@ describe("handleAddQueuePrompt", () => {
 
 	it("rejects overly long prompt", () => {
 		const p = createMockP();
-		const longPrompt = "x".repeat(100001);
+		const longPrompt = "x".repeat(MAX_QUEUE_PROMPT_LENGTH + 1);
 		handleAddQueuePrompt(p, longPrompt, "q_1_abc", []);
 		expect(p._promptQueue).toHaveLength(0);
 	});
@@ -97,6 +98,16 @@ describe("handleAddQueuePrompt", () => {
 		handleAddQueuePrompt(p, "task", "q_1_abc", []);
 		expect(p._attachments).toEqual([]);
 		expect(p._updateAttachmentsUI).toHaveBeenCalled();
+	});
+
+	it("rejects when queue is full", () => {
+		const queue = Array.from({ length: MAX_QUEUE_SIZE }, (_, i) => ({
+			id: `q_${i}_abc`,
+			prompt: `task ${i}`,
+		}));
+		const p = createMockP({ _promptQueue: queue });
+		handleAddQueuePrompt(p, "overflow", "q_999_abc", []);
+		expect(p._promptQueue).toHaveLength(MAX_QUEUE_SIZE);
 	});
 
 	// Auto-respond path

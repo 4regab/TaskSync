@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
 import {
 	MAX_QUEUE_PROMPT_LENGTH,
@@ -238,6 +238,10 @@ describe("handleAddQueuePrompt", () => {
 // ─── handleToggleQueue ──────────────────────────────────────
 
 describe("handleToggleQueue", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("enables queue and saves", () => {
 		const p = createMockP({ _queueEnabled: false });
 		handleToggleQueue(p, true);

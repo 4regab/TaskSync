@@ -16,7 +16,7 @@ export async function dispatchSettingsMessage(
 	ws: WebSocket,
 	provider: P,
 	broadcastFn: (type: string, data: unknown) => void,
-	msg: { type: string;[key: string]: unknown },
+	msg: { type: string; [key: string]: unknown },
 ): Promise<boolean> {
 	switch (msg.type) {
 		case "updateSoundSetting":
@@ -136,7 +136,12 @@ export async function dispatchSettingsMessage(
 		case "reorderAutopilotPrompts": {
 			const from = Number(msg.fromIndex);
 			const to = Number(msg.toIndex);
-			if (!Number.isInteger(from) || from < 0 || !Number.isInteger(to) || to < 0) {
+			if (
+				!Number.isInteger(from) ||
+				from < 0 ||
+				!Number.isInteger(to) ||
+				to < 0
+			) {
 				sendWsError(ws, "Invalid indices", ErrorCode.INVALID_INPUT);
 				return true;
 			}

@@ -28,7 +28,7 @@ export async function preloadBodyTemplate(
 	try {
 		cachedBodyTemplate = await fs.promises.readFile(templatePath, "utf8");
 	} catch (err) {
-		console.error("Failed to preload webview body template:", err);
+		console.error("[TaskSync] Failed to preload webview body template:", err);
 		cachedBodyTemplate = undefined;
 	}
 }
@@ -81,7 +81,7 @@ export function getHtmlContent(
 			cachedBodyTemplate = fs.readFileSync(templatePath, "utf8"); // sync-io-allowed: sync fallback when async preload misses
 		} catch (err) {
 			console.error(
-				"Failed to load webview body template (sync fallback):",
+				"[TaskSync] Failed to load webview body template (sync fallback):",
 				err,
 			);
 		}

@@ -142,28 +142,30 @@ export class GitService {
 		};
 	}
 
-	async getDiff(filePath: string): Promise<string> {
+	/**
+	 * Resolve a file path to a repo, workspace root, and validated relative path.
+	 * Shared by getDiff, stage, unstage, and discard to avoid repetition.
+	 */
+	private resolveFilePath(filePath: string): {
+		repo: Repository;
+		workspaceRoot: string;
+		relativePath: string;
+	} {
 		const fileUri = path.isAbsolute(filePath)
 			? vscode.Uri.file(filePath)
 			: undefined;
 		const repo = this.getRepo(fileUri);
-
-		// Find workspace root to resolve relative path
 		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-		if (!workspaceRoot) {
-			throw new Error("No workspace folder");
-		}
-
-		// diffWithHEAD expects relative path
+		if (!workspaceRoot) throw new Error("No workspace folder");
 		const relativePath = path.isAbsolute(filePath)
 			? vscode.workspace.asRelativePath(filePath)
 			: filePath;
+		if (!isValidFilePath(relativePath)) throw new Error("Invalid file path");
+		return { repo, workspaceRoot, relativePath };
+	}
 
-		// Validate path
-		if (!isValidFilePath(relativePath)) {
-			throw new Error("Invalid file path");
-		}
-
+	async getDiff(filePath: string): Promise<string> {
+		const { repo, relativePath } = this.resolveFilePath(filePath);
 		try {
 			return await repo.diffWithHEAD(relativePath);
 		} catch (err) {
@@ -174,23 +176,7 @@ export class GitService {
 	}
 
 	async stage(filePath: string): Promise<void> {
-		const fileUri = path.isAbsolute(filePath)
-			? vscode.Uri.file(filePath)
-			: undefined;
-		const repo = this.getRepo(fileUri);
-		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-		if (!workspaceRoot) throw new Error("No workspace folder");
-
-		// Git add expects relative paths
-		const relativePath = path.isAbsolute(filePath)
-			? vscode.workspace.asRelativePath(filePath)
-			: filePath;
-
-		// Validate path
-		if (!isValidFilePath(relativePath)) {
-			throw new Error("Invalid file path");
-		}
-
+		const { repo, relativePath } = this.resolveFilePath(filePath);
 		await repo.add([relativePath]);
 	}
 
@@ -205,17 +191,7 @@ export class GitService {
 	}
 
 	async unstage(filePath: string): Promise<void> {
-		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-		if (!workspaceRoot) throw new Error("No workspace folder");
-
-		const relativePath = path.isAbsolute(filePath)
-			? vscode.workspace.asRelativePath(filePath)
-			: filePath;
-
-		// Validate path to prevent any malicious input
-		if (!isValidFilePath(relativePath)) {
-			throw new Error("Invalid file path");
-		}
+		const { workspaceRoot, relativePath } = this.resolveFilePath(filePath);
 
 		// Use spawn with arguments array to completely avoid shell injection
 		const { spawn } = await import("node:child_process");
@@ -236,19 +212,7 @@ export class GitService {
 	}
 
 	async discard(filePath: string): Promise<void> {
-		const fileUri = path.isAbsolute(filePath)
-			? vscode.Uri.file(filePath)
-			: undefined;
-		const repo = this.getRepo(fileUri);
-		const relativePath = path.isAbsolute(filePath)
-			? vscode.workspace.asRelativePath(filePath)
-			: filePath;
-
-		// Validate path
-		if (!isValidFilePath(relativePath)) {
-			throw new Error("Invalid file path");
-		}
-
+		const { repo, relativePath } = this.resolveFilePath(filePath);
 		await repo.clean([relativePath]);
 	}
 

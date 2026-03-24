@@ -416,4 +416,21 @@ describe("generateSelfSignedCert", () => {
 		expect(result.key).toContain("PRIVATE KEY");
 		expect(result.cert).toContain("CERTIFICATE");
 	});
+
+	it("generates valid cert for hostname with port stripped", async () => {
+		const result = await generateSelfSignedCert("localhost:3580");
+		expect(result.key).toContain("PRIVATE KEY");
+		expect(result.cert).toContain("CERTIFICATE");
+	});
+
+	it("generates valid cert for bracketed IPv6 with port", async () => {
+		const result = await generateSelfSignedCert("[::1]:3580");
+		expect(result.key).toContain("PRIVATE KEY");
+		expect(result.cert).toContain("CERTIFICATE");
+	});
+
+	it("generates valid cert for plain hostname", async () => {
+		const result = await generateSelfSignedCert("myhost.local");
+		expect(result.cert).toContain("CERTIFICATE");
+	});
 });

@@ -333,6 +333,10 @@ describe("GitService.discard", () => {
 		const api = createMockGitAPI([repo]);
 		setupGitExtension(api);
 		await service.initialize();
+
+		(vscode.workspace as any).workspaceFolders = [
+			{ uri: { fsPath: "/workspace" } },
+		];
 	});
 
 	it("discards changes for relative path", async () => {

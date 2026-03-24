@@ -77,9 +77,15 @@ export function getHtmlContent(
 		"webview-body.html",
 	).fsPath;
 	if (!cachedBodyTemplate) {
-		cachedBodyTemplate = fs.readFileSync(templatePath, "utf8");
+		try {
+			cachedBodyTemplate = fs.readFileSync(templatePath, "utf8");
+		} catch (err) {
+			console.error("Failed to load webview body template (sync fallback):", err);
+		}
 	}
-	let bodyHtml = cachedBodyTemplate;
+	let bodyHtml =
+		cachedBodyTemplate ??
+		`<main class="tsc-root"><h1>TaskSync Chat</h1><p>Unable to load the webview template. Please reload the window.</p></main>`;
 
 	bodyHtml = bodyHtml
 		.replace(/\{\{LOGO_URI\}\}/g, logoUri.toString())

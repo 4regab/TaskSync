@@ -14,6 +14,7 @@ import {
 	MAX_QUEUE_PROMPT_LENGTH,
 	MAX_QUEUE_SIZE,
 	MAX_REMOTE_HISTORY_ITEMS,
+	MAX_SEARCH_QUERY_LENGTH,
 } from "../constants/remoteConstants";
 import { isApprovalQuestion, parseChoices } from "./choiceParser";
 import { searchToolsForAutocomplete } from "./fileHandlers";
@@ -355,7 +356,7 @@ export async function searchFilesForRemote(
 	const toolResults = searchToolsForAutocomplete(query || "");
 
 	// File search requires at least 2 chars to avoid loading entire workspace
-	if (!query || query.length < 2) {
+	if (!query || query.length < 2 || query.length > MAX_SEARCH_QUERY_LENGTH) {
 		return toolResults;
 	}
 

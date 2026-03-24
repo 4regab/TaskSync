@@ -44,7 +44,7 @@
         ],
         "toolReferenceName": "askUser",
         "displayName": "Ask User",
-        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. ALWAYS include a 'summary' field describing your work so the user has full context. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable.",
+        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. Include a 'summary' field describing your work so the user has full context. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable.",
         "canBeReferencedInPrompt": true,
         "icon": "$(question)",
         "inputSchema": {

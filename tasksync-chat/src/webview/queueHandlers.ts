@@ -136,13 +136,22 @@ export function handleAddQueuePrompt(
  */
 export function handleRemoveQueuePrompt(p: P, promptId: string): void {
 	if (!isValidQueueId(promptId)) return;
+	const beforeLength = p._promptQueue.length;
 	debugLog(
-		`[TaskSync] handleRemoveQueuePrompt — promptId: ${promptId}, queueSize before: ${p._promptQueue.length}`,
+		`[TaskSync] handleRemoveQueuePrompt — promptId: ${promptId}, queueSize before: ${beforeLength}`,
 	);
 	p._promptQueue = p._promptQueue.filter(
 		(pr: QueuedPrompt) => pr.id !== promptId,
 	);
-	notifyQueueChanged(p);
+	if (p._promptQueue.length !== beforeLength) {
+		notifyQueueChanged(p);
+	}
+	if (p._promptQueue.length !== beforeLength) {
+		notifyQueueChanged(p);
+	}
+	if (p._promptQueue.length !== beforeLength) {
+		notifyQueueChanged(p);
+	}
 }
 
 /**

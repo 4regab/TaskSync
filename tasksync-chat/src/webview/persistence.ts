@@ -58,9 +58,7 @@ export async function saveQueueToDiskAsync(p: P): Promise<void> {
 		const storagePath = getStorageUri(p).fsPath;
 		const queuePath = path.join(storagePath, "queue.json");
 
-		if (!fs.existsSync(storagePath)) {
-			await fs.promises.mkdir(storagePath, { recursive: true });
-		}
+		await fs.promises.mkdir(storagePath, { recursive: true });
 
 		const data = JSON.stringify(
 			{

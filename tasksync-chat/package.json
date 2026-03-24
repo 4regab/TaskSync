@@ -374,6 +374,7 @@
     "lint": "biome lint src",
     "check-duplicates": "node scripts/check-duplicates.js",
     "validate": "npm run build && npx tsc --noEmit && npm test && npm run lint && npm run check-duplicates",
+    "prepare": "cd .. && git config core.hooksPath .githooks",
     "e2e": "playwright test -c e2e/playwright.config.mjs",
     "e2e:headed": "playwright test -c e2e/playwright.config.mjs --headed",
     "e2e:ui": "playwright test -c e2e/playwright.config.mjs --ui",

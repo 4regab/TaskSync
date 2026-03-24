@@ -82,12 +82,14 @@ npm install
 | Type-check | `npx tsc --noEmit` |
 | Test | `npx vitest run` |
 | Lint | `npm run lint` |
+| Duplicate check | `npm run check-duplicates` |
+| Full validation | `npm run validate` |
 | Watch mode | `npm run watch` |
 | Package VSIX | `npx vsce package` |
 
 > **Build output** goes to `dist/` (extension bundle), `media/webview.js` (webview bundle), and `web/shared-constants.js` (auto-generated for the remote PWA).
 >
-> Always run build, tsc, vitest, and lint after making changes.
+> Always run `npm run validate` after making changes. This runs build, tsc, vitest, lint, and the duplicate block scanner.
 
 ---
 
@@ -135,7 +137,7 @@ These principles are mandatory for all changes:
 
 ## Testing
 
-- **Framework:** Vitest (14 test files, 384+ tests, ~98% coverage)
+- **Framework:** Vitest (14 test files, 385+ tests, ~98% coverage)
 - **Mocks:** VS Code API is mocked in `src/__mocks__/vscode.ts`
 - **Test setup:** Tests that use git operations must set `(vscode.workspace as any).workspaceFolders` in `beforeEach`
 - **Coverage:** Maintain or improve coverage. Add tests for security-sensitive code, edge cases, and error handling paths.

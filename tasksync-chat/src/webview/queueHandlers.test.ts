@@ -36,6 +36,16 @@ describe("handleRemoveQueuePrompt", () => {
 		expect(p._promptQueue.map((q: any) => q.id)).toEqual([ID1, ID3]);
 	});
 
+	it("calls notifyQueueChanged exactly once per removal", () => {
+		const p = createMockP([
+			{ id: ID1, prompt: "First" },
+			{ id: ID2, prompt: "Second" },
+		]);
+		handleRemoveQueuePrompt(p, ID1);
+		expect(p._saveQueueToDisk).toHaveBeenCalledTimes(1);
+		expect(p._updateQueueUI).toHaveBeenCalledTimes(1);
+	});
+
 	it("does nothing for non-existent ID", () => {
 		const p = createMockP([{ id: ID1, prompt: "First" }]);
 		handleRemoveQueuePrompt(p, "q_999_zzz");

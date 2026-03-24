@@ -70,7 +70,7 @@ export function handleAddQueuePrompt(
 			let completedEntry: ToolCallEntry;
 			if (pendingEntry && pendingEntry.status === "pending") {
 				pendingEntry.response = queuedPrompt.prompt;
-				pendingEntry.attachments = queuedPrompt.attachments;
+				pendingEntry.attachments = queuedPrompt.attachments || [];
 				pendingEntry.status = "completed";
 				pendingEntry.isFromQueue = true;
 				pendingEntry.timestamp = Date.now();
@@ -80,7 +80,7 @@ export function handleAddQueuePrompt(
 					id: currentCallId,
 					prompt: "Tool call",
 					response: queuedPrompt.prompt,
-					attachments: queuedPrompt.attachments,
+					attachments: queuedPrompt.attachments || [],
 					timestamp: Date.now(),
 					isFromQueue: true,
 					status: "completed",

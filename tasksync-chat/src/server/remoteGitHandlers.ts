@@ -179,7 +179,7 @@ export async function handleCommit(
 	// Validate commit message
 	const trimmed = (message || "").trim();
 	if (!trimmed || trimmed.length > MAX_COMMIT_MESSAGE_LENGTH) {
-		sendWsError(ws, "Invalid commit message");
+		sendWsError(ws, "Invalid commit message", ErrorCode.INVALID_INPUT);
 		return;
 	}
 	try {
@@ -265,7 +265,7 @@ export async function dispatchGitMessage(
 	gitServiceAvailable: boolean,
 	broadcast: BroadcastFn,
 	searchFn: (query: string) => Promise<unknown[]>,
-	msg: { type: string; [key: string]: unknown },
+	msg: { type: string;[key: string]: unknown },
 ): Promise<boolean> {
 	switch (msg.type) {
 		case "getChanges":

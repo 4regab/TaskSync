@@ -25,7 +25,12 @@ export async function preloadBodyTemplate(
 		"media",
 		"webview-body.html",
 	).fsPath;
-	cachedBodyTemplate = await fs.promises.readFile(templatePath, "utf8");
+	try {
+		cachedBodyTemplate = await fs.promises.readFile(templatePath, "utf8");
+	} catch (err) {
+		console.error("Failed to preload webview body template:", err);
+		cachedBodyTemplate = undefined;
+	}
 }
 
 /**

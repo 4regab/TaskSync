@@ -49,7 +49,9 @@ export function handleAddQueuePrompt(
 	// Check if we should auto-respond BEFORE adding to queue (race condition fix)
 	const currentCallId = p._currentToolCallId;
 	const shouldAutoRespond =
-		p._queueEnabled && currentCallId && p._pendingRequests.has(currentCallId);
+		!!p._queueEnabled &&
+		currentCallId !== null &&
+		p._pendingRequests.has(currentCallId);
 
 	let handledAsToolResponse = false;
 

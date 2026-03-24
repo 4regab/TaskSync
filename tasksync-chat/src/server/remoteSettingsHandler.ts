@@ -113,7 +113,7 @@ export async function dispatchSettingsMessage(
 		case "editAutopilotPrompt": {
 			const index = Number(msg.index);
 			const prompt = typeof msg.prompt === "string" ? msg.prompt : "";
-			if (!Number.isFinite(index) || !prompt.trim()) {
+			if (!Number.isInteger(index) || index < 0 || !prompt.trim()) {
 				sendWsError(ws, "Invalid input", ErrorCode.INVALID_INPUT);
 				return true;
 			}
@@ -124,7 +124,7 @@ export async function dispatchSettingsMessage(
 
 		case "removeAutopilotPrompt": {
 			const index = Number(msg.index);
-			if (!Number.isFinite(index)) {
+			if (!Number.isInteger(index) || index < 0) {
 				sendWsError(ws, "Invalid index", ErrorCode.INVALID_INPUT);
 				return true;
 			}
@@ -136,7 +136,7 @@ export async function dispatchSettingsMessage(
 		case "reorderAutopilotPrompts": {
 			const from = Number(msg.fromIndex);
 			const to = Number(msg.toIndex);
-			if (!Number.isFinite(from) || !Number.isFinite(to)) {
+			if (!Number.isInteger(from) || from < 0 || !Number.isInteger(to) || to < 0) {
 				sendWsError(ws, "Invalid indices", ErrorCode.INVALID_INPUT);
 				return true;
 			}

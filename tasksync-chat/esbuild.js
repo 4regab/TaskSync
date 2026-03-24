@@ -15,10 +15,11 @@ function generateSharedConstants() {
     );
 
     // Extract simple numeric constants: export const NAME = <number>;
-    // NOTE: This regex only supports integer literals. If a constant becomes an expression
-    // (e.g., 5 * 60 * 1000), extractNum() will throw at build time — this is intentional.
+    // NOTE: This regex only supports standalone integer literal assignments.
+    // If a constant becomes an expression (e.g., 5 * 60 * 1000), extractNum()
+    // will throw at build time — this is intentional and enforced by the regex.
     function extractNum(name) {
-        const m = source.match(new RegExp(`export const ${name}\\s*=\\s*(\\d+)`));
+        const m = source.match(new RegExp(`export const ${name}\\s*=\\s*(\\d+)\\s*;`));
         if (!m)
             throw new Error(`Failed to extract ${name} from remoteConstants.ts`);
         return Number(m[1]);

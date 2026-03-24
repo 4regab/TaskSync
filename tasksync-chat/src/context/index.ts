@@ -82,7 +82,7 @@ export class ContextManager {
 		const lowerQuery = query.toLowerCase().replace("@", "");
 
 		// Terminal suggestions
-		if ("terminal".includes(lowerQuery) || lowerQuery.startsWith("term")) {
+		if ("terminal".startsWith(lowerQuery) || lowerQuery.startsWith("term")) {
 			const commands =
 				this._terminalProvider.formatCommandListForAutocomplete();
 			if (commands.length > 0) {
@@ -103,7 +103,7 @@ export class ContextManager {
 		}
 
 		// Problems suggestions
-		if ("problems".includes(lowerQuery) || lowerQuery.startsWith("prob")) {
+		if ("problems".startsWith(lowerQuery) || lowerQuery.startsWith("prob")) {
 			const problemsInfo = this._problemsProvider.formatForAutocomplete();
 			suggestions.push({
 				type: "problems",

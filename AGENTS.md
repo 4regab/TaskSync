@@ -85,7 +85,9 @@ npm install
 | Watch mode | `npm run watch` |
 | Package VSIX | `npx vsce package` |
 
-> **Build output** goes to `dist/` (extension bundle) and `media/webview.js` (webview bundle). The build also auto-generates `web/shared-constants.js` for the remote PWA.
+> **Build output** goes to `dist/` (extension bundle), `media/webview.js` (webview bundle), and `web/shared-constants.js` (auto-generated for the remote PWA).
+>
+> Always run build, tsc, vitest, and lint after making changes.
 
 ---
 
@@ -102,7 +104,19 @@ npm install
 - **Type assertions:** Use `satisfies` over `as` for message types (e.g., `} satisfies ToWebviewMessage)`). The `satisfies` keyword validates shape at compile time; `as` silently bypasses checks.
 - **Async I/O:** Prefer async file operations over synchronous equivalents.
 - **Promises:** `IncomingRequest` objects must store both `resolve` and `reject` for proper cleanup on dispose.
-- **DRY:** Shared logic goes in `webviewUtils.ts`. Examples: `debugLog()`, `mergeAndDedup()`, `notifyQueueChanged()`, `hasQueuedItems()`.
+- **DRY:** Shared logic goes in `webviewUtils.ts`. Examples: `debugLog()`, `mergeAndDedup()`, `notifyQueueChanged()`, `hasQueuedItems()`, `resolveFilePath()` (gitService).
+
+---
+
+## SSOT / DRY / KISS / YAGNI Principles
+
+These principles are mandatory for all changes:
+
+- **Single Source of Truth (SSOT):** Every concept, constant, type, or piece of logic must have exactly one canonical definition. Constants live in `src/constants/`. Shared types live in `webviewTypes.ts`. Shared helpers live in `webviewUtils.ts`.
+- **Don't Repeat Yourself (DRY):** If logic is used in more than one place, extract it into a shared helper. When you see the same pattern in 3+ call sites, extract it.
+- **Keep It Simple, Stupid (KISS):** Prefer the simplest solution that works. Do not add abstraction layers without clear justification. A small amount of duplication is acceptable if the alternative is a complex abstraction for only 2 call sites.
+- **You Aren't Gonna Need It (YAGNI):** Do not add features, parameters, or code paths "just in case." Only implement what is needed for the current task.
+- **Handler pattern:** All handler modules (`*Handlers.ts`) receive a `P` interface — do not add direct imports from `webviewProvider.ts`. This prevents circular dependencies.
 
 ---
 
@@ -121,8 +135,10 @@ npm install
 
 ## Testing
 
-- **Framework:** Vitest (14 test files, 381+ tests)
+- **Framework:** Vitest (14 test files, 384+ tests, ~98% coverage)
 - **Mocks:** VS Code API is mocked in `src/__mocks__/vscode.ts`
+- **Test setup:** Tests that use git operations must set `(vscode.workspace as any).workspaceFolders` in `beforeEach`
+- **Coverage:** Maintain or improve coverage. Add tests for security-sensitive code, edge cases, and error handling paths.
 - Run `npx vitest run` to execute all tests. Always verify tests pass after changes.
 
 ---
@@ -135,6 +151,14 @@ npm install
 
 ## Security & Responsible Use
 
-- Do not commit secrets or credentials.
-- Do not introduce synchronous blocking calls on the VS Code extension host.
-- No `console.log` or `console.warn` in production code — use `debugLog()` for debug output and `console.error` for genuine errors.
+Follow OWASP Top 10 principles. Specific patterns enforced in this codebase:
+
+- **No credentials in code:** Never commit secrets, API keys, or tokens.
+- **No blocking calls:** Do not introduce synchronous blocking calls on the VS Code extension host.
+- **No console.log/warn:** Use `debugLog()` for debug output and `console.error` for genuine errors.
+- **Timing-safe comparison:** Use `crypto.timingSafeEqual` with SHA-256 digests for PIN/secret comparison. See `remoteAuthService.ts`.
+- **Path traversal prevention:** Validate all remote file paths with `isValidFilePath()` in `gitService.ts`. Use `path.isAbsolute()` instead of `startsWith("/")`.
+- **Command injection prevention:** Use `child_process.spawn` with argument arrays — never `exec` or string interpolation.
+- **Input validation at boundaries:** Validate all user/remote input at the entry point. Trust internal code deeper in call stacks.
+- **Security headers:** Set CSP, X-Content-Type-Options, X-Frame-Options, and X-XSS-Protection on all HTTP responses.
+- **Origin validation:** Check `Origin` and `Host` headers on WebSocket upgrade requests.

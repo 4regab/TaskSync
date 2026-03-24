@@ -2128,12 +2128,21 @@ function handleSend() {
 		debugLog("handleSend: → chatMessage");
 		addChatStreamUserBubble(text);
 		vscode.postMessage({ type: "chatMessage", content: text });
+		// Show "Working…" immediately so the user knows the AI received the message
+		isProcessingResponse = true;
+		updatePendingUI();
 	} else {
 		vscode.postMessage({
 			type: "submit",
 			value: text,
 			attachments: currentAttachments,
 		});
+		// In remote mode, show "Working…" optimistically while awaiting server round-trip
+		if (isRemoteMode && pendingToolCall) {
+			pendingToolCall = null;
+			isProcessingResponse = true;
+			updatePendingUI();
+		}
 	}
 
 	if (chatInput) {
@@ -3187,10 +3196,10 @@ function renderQueue() {
 			let attachmentBadge =
 				item.attachments && item.attachments.length > 0
 					? '<span class="queue-item-attachment-badge" title="' +
-						item.attachments.length +
-						' attachment(s)" aria-label="' +
-						item.attachments.length +
-						' attachments"><span class="codicon codicon-file-media" aria-hidden="true"></span></span>'
+					item.attachments.length +
+					' attachment(s)" aria-label="' +
+					item.attachments.length +
+					' attachments"><span class="codicon codicon-file-media" aria-hidden="true"></span></span>'
 					: "";
 			return (
 				'<div class="queue-item" data-id="' +
@@ -3379,6 +3388,12 @@ function handleApprovalContinue() {
 
 	// Send affirmative response
 	vscode.postMessage({ type: "submit", value: "yes", attachments: [] });
+	// In remote mode, show "Working…" optimistically while awaiting server round-trip
+	if (isRemoteMode) {
+		pendingToolCall = null;
+		isProcessingResponse = true;
+		updatePendingUI();
+	}
 	if (chatInput) {
 		chatInput.value = "";
 		chatInput.style.height = "auto";
@@ -3590,6 +3605,12 @@ function handleChoicesSend() {
 
 	// Send the response
 	vscode.postMessage({ type: "submit", value: responseValue, attachments: [] });
+	// In remote mode, show "Working…" optimistically while awaiting server round-trip
+	if (isRemoteMode) {
+		pendingToolCall = null;
+		isProcessingResponse = true;
+		updatePendingUI();
+	}
 	if (chatInput) {
 		chatInput.value = "";
 		chatInput.style.height = "auto";

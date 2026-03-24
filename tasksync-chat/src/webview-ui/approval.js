@@ -173,6 +173,12 @@ function handleChoicesSend() {
 
 	// Send the response
 	vscode.postMessage({ type: "submit", value: responseValue, attachments: [] });
+	// In remote mode, show "Working…" optimistically while awaiting server round-trip
+	if (isRemoteMode) {
+		pendingToolCall = null;
+		isProcessingResponse = true;
+		updatePendingUI();
+	}
 	if (chatInput) {
 		chatInput.value = "";
 		chatInput.style.height = "auto";

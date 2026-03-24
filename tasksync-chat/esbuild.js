@@ -73,7 +73,7 @@ function getTaskSyncWsProtocol() {
     return location.protocol === 'https:' ? 'wss:' : 'ws:';
 }
 
-// Reconnection settings
+// Reconnection settings (build-script defaults, not from remoteConstants.ts — PWA-only)
 var TASKSYNC_MAX_RECONNECT_ATTEMPTS = 20;
 var TASKSYNC_MAX_RECONNECT_DELAY_MS = 30000;
 

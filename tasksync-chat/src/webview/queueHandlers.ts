@@ -40,7 +40,7 @@ export function handleAddQueuePrompt(
 	);
 
 	const queuedPrompt: QueuedPrompt = {
-		id: id || generateId("q"),
+		id: isValidQueueId(id) ? id : generateId("q"),
 		prompt: trimmed,
 		attachments: attachments.length > 0 ? [...attachments] : undefined,
 	};

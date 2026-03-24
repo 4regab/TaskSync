@@ -57,6 +57,7 @@ export function setSecurityHeaders(
 ): void {
 	res.setHeader("X-Content-Type-Options", "nosniff");
 	res.setHeader("X-Frame-Options", "DENY");
+	res.setHeader("X-XSS-Protection", "0");
 	res.setHeader("Referrer-Policy", "no-referrer");
 	if (isTls) {
 		res.setHeader("Strict-Transport-Security", "max-age=31536000");
@@ -177,11 +178,15 @@ export async function generateSelfSignedCert(host: string): Promise<TlsCert> {
 		// Bracketed IPv6: [::1]:3580 → ::1
 		const closeBracket = bareHost.indexOf("]");
 		if (closeBracket !== -1) bareHost = bareHost.slice(1, closeBracket);
-	} else if (bareHost.includes(":") && !bareHost.includes("::")) {
-		// host:port (but not IPv6 like ::1)
+	} else {
+		// Unbracketed host: only treat as host:port if there is exactly one colon.
+		// Fully-expanded IPv6 without brackets (e.g. 2001:db8:0:0:0:0:0:1) has multiple colons.
+		const firstColon = bareHost.indexOf(":");
 		const lastColon = bareHost.lastIndexOf(":");
-		const maybePart = bareHost.slice(lastColon + 1);
-		if (/^\d+$/.test(maybePart)) bareHost = bareHost.slice(0, lastColon);
+		if (firstColon !== -1 && firstColon === lastColon) {
+			const maybePart = bareHost.slice(lastColon + 1);
+			if (/^\d+$/.test(maybePart)) bareHost = bareHost.slice(0, lastColon);
+		}
 	}
 	const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(bareHost);
 	const isIPv6 = bareHost.includes(":");

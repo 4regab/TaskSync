@@ -65,6 +65,7 @@ describe("setSecurityHeaders", () => {
 		setSecurityHeaders(res);
 		expect(res.headers["X-Content-Type-Options"]).toBe("nosniff");
 		expect(res.headers["X-Frame-Options"]).toBe("DENY");
+		expect(res.headers["X-XSS-Protection"]).toBe("0");
 		expect(res.headers["Referrer-Policy"]).toBe("no-referrer");
 	});
 
@@ -431,6 +432,11 @@ describe("generateSelfSignedCert", () => {
 
 	it("generates valid cert for plain hostname", async () => {
 		const result = await generateSelfSignedCert("myhost.local");
+		expect(result.cert).toContain("CERTIFICATE");
+	});
+
+	it("generates valid cert for fully-expanded IPv6 (no brackets)", async () => {
+		const result = await generateSelfSignedCert("2001:db8:0:0:0:0:0:1");
 		expect(result.cert).toContain("CERTIFICATE");
 	});
 });

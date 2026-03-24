@@ -203,7 +203,10 @@ export function registerTools(
 			try {
 				const safeParams: Input = {
 					question: safeQuestion,
-					summary: params?.summary,
+					summary:
+						typeof params?.summary === "string"
+							? params.summary
+							: undefined,
 				};
 				const result = await askUser(safeParams, provider, token);
 

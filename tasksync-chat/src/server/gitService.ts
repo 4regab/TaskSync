@@ -143,7 +143,7 @@ export class GitService {
 	}
 
 	async getDiff(filePath: string): Promise<string> {
-		const fileUri = filePath.startsWith("/")
+		const fileUri = path.isAbsolute(filePath)
 			? vscode.Uri.file(filePath)
 			: undefined;
 		const repo = this.getRepo(fileUri);
@@ -155,7 +155,7 @@ export class GitService {
 		}
 
 		// diffWithHEAD expects relative path
-		const relativePath = filePath.startsWith("/")
+		const relativePath = path.isAbsolute(filePath)
 			? vscode.workspace.asRelativePath(filePath)
 			: filePath;
 
@@ -174,7 +174,7 @@ export class GitService {
 	}
 
 	async stage(filePath: string): Promise<void> {
-		const fileUri = filePath.startsWith("/")
+		const fileUri = path.isAbsolute(filePath)
 			? vscode.Uri.file(filePath)
 			: undefined;
 		const repo = this.getRepo(fileUri);
@@ -182,7 +182,7 @@ export class GitService {
 		if (!workspaceRoot) throw new Error("No workspace folder");
 
 		// Git add expects relative paths
-		const relativePath = filePath.startsWith("/")
+		const relativePath = path.isAbsolute(filePath)
 			? vscode.workspace.asRelativePath(filePath)
 			: filePath;
 
@@ -208,7 +208,7 @@ export class GitService {
 		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 		if (!workspaceRoot) throw new Error("No workspace folder");
 
-		const relativePath = filePath.startsWith("/")
+		const relativePath = path.isAbsolute(filePath)
 			? vscode.workspace.asRelativePath(filePath)
 			: filePath;
 
@@ -236,11 +236,11 @@ export class GitService {
 	}
 
 	async discard(filePath: string): Promise<void> {
-		const fileUri = filePath.startsWith("/")
+		const fileUri = path.isAbsolute(filePath)
 			? vscode.Uri.file(filePath)
 			: undefined;
 		const repo = this.getRepo(fileUri);
-		const relativePath = filePath.startsWith("/")
+		const relativePath = path.isAbsolute(filePath)
 			? vscode.workspace.asRelativePath(filePath)
 			: filePath;
 

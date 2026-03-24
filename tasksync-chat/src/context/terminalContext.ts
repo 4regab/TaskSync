@@ -147,15 +147,13 @@ export class TerminalContextProvider implements vscode.Disposable {
 	): Promise<void> {
 		try {
 			const stream = execution.read();
+			let outputSize = 0;
 			for await (const data of stream) {
 				tracker.output.push(data);
+				outputSize += data.length;
 
 				// Limit output size to prevent memory issues (max 50KB per command)
-				const totalLength = tracker.output.reduce(
-					(sum, s) => sum + s.length,
-					0,
-				);
-				if (totalLength > this._MAX_OUTPUT_BYTES) {
+				if (outputSize > this._MAX_OUTPUT_BYTES) {
 					tracker.output.push("\n... (output truncated)");
 					break;
 				}

@@ -171,10 +171,24 @@ export async function generateSelfSignedCert(host: string): Promise<TlsCert> {
 	const notBefore = new Date();
 	const notAfter = new Date();
 	notAfter.setFullYear(notAfter.getFullYear() + 1);
-	const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(":");
+	// Strip port and brackets to get the bare hostname/IP
+	let bareHost = host;
+	if (bareHost.startsWith("[")) {
+		// Bracketed IPv6: [::1]:3580 → ::1
+		const closeBracket = bareHost.indexOf("]");
+		if (closeBracket !== -1) bareHost = bareHost.slice(1, closeBracket);
+	} else if (bareHost.includes(":") && !bareHost.includes("::")) {
+		// host:port (but not IPv6 like ::1)
+		const lastColon = bareHost.lastIndexOf(":");
+		const maybePart = bareHost.slice(lastColon + 1);
+		if (/^\d+$/.test(maybePart)) bareHost = bareHost.slice(0, lastColon);
+	}
+	const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(bareHost);
+	const isIPv6 = bareHost.includes(":");
+	const isIP = isIPv4 || isIPv6;
 	const altNames = isIP
-		? [{ type: 7 as const, ip: host }]
-		: [{ type: 2 as const, value: host }];
+		? [{ type: 7 as const, ip: bareHost }]
+		: [{ type: 2 as const, value: bareHost }];
 	const pems = await selfsigned.generate(attrs, {
 		keySize: 2048,
 		notBeforeDate: notBefore,

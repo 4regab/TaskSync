@@ -17,13 +17,17 @@ export class RemoteAuthService {
 	pin: string = "";
 	readonly authenticatedClients: Set<WebSocket> = new Set();
 
-	/** Timing-safe PIN comparison to prevent timing attacks. */
+	/** Timing-safe PIN comparison using SHA-256 digests to prevent timing attacks. */
 	private comparePinTimingSafe(input: string): boolean {
-		if (input.length !== this.pin.length) return false;
-		const pinBuffer = Buffer.from(this.pin, "utf8");
-		const inputBuffer = Buffer.from(input, "utf8");
-		if (pinBuffer.length !== inputBuffer.length) return false;
-		return crypto.timingSafeEqual(pinBuffer, inputBuffer);
+		const pinDigest = crypto
+			.createHash("sha256")
+			.update(this.pin, "utf8")
+			.digest();
+		const inputDigest = crypto
+			.createHash("sha256")
+			.update(input, "utf8")
+			.digest();
+		return crypto.timingSafeEqual(pinDigest, inputDigest);
 	}
 	private failedAttempts: Map<
 		string,

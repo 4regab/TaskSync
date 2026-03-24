@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { MAX_QUEUE_PROMPT_LENGTH, MAX_QUEUE_SIZE } from "../constants/remoteConstants";
 import * as vscode from "vscode";
+import {
+	MAX_QUEUE_PROMPT_LENGTH,
+	MAX_QUEUE_SIZE,
+} from "../constants/remoteConstants";
 import {
 	handleAddQueuePrompt,
 	handleClearPersistedHistory,

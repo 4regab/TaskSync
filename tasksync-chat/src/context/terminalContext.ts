@@ -126,8 +126,11 @@ export class TerminalContextProvider implements vscode.Disposable {
 
 				const hasTerminal = (
 					exec: vscode.TerminalShellExecution,
-				): exec is vscode.TerminalShellExecution & { terminal: vscode.Terminal } =>
-					typeof (exec as unknown as Record<string, unknown>).terminal !== "undefined";
+				): exec is vscode.TerminalShellExecution & {
+					terminal: vscode.Terminal;
+				} =>
+					typeof (exec as unknown as Record<string, unknown>).terminal !==
+					"undefined";
 
 				for (const [execution] of this._activeExecutions) {
 					if (hasTerminal(execution) && execution.terminal === terminal) {

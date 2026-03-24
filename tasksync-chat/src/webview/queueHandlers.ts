@@ -1,7 +1,7 @@
 import {
-	MAX_QUEUE_SIZE,
 	isValidQueueId,
 	MAX_QUEUE_PROMPT_LENGTH,
+	MAX_QUEUE_SIZE,
 } from "../constants/remoteConstants";
 import { buildSettingsPayload } from "./settingsHandlers";
 import type {

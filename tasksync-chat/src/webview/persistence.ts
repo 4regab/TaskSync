@@ -94,8 +94,8 @@ export async function loadPersistedHistoryFromDiskAsync(p: P): Promise<void> {
 		const parsed = JSON.parse(data);
 		p._persistedHistory = Array.isArray(parsed.history)
 			? parsed.history
-				.filter((entry: ToolCallEntry) => entry.status === "completed")
-				.slice(0, p._MAX_HISTORY_ENTRIES)
+					.filter((entry: ToolCallEntry) => entry.status === "completed")
+					.slice(0, p._MAX_HISTORY_ENTRIES)
 			: [];
 	} catch (error) {
 		console.error("[TaskSync] Failed to load persisted history:", error);

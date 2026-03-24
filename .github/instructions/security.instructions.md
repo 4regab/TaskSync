@@ -14,6 +14,8 @@ All code in `src/server/` handles remote client connections and must follow stri
 ## Path Traversal Prevention
 - All file paths from remote clients must be validated with `isValidFilePath()` in `gitService.ts`
 - Reject `..`, null bytes, backticks, and shell metacharacters
+- Absolute paths are only allowed when they resolve under the workspace root
+- Normalize backslashes to forward slashes before validation (Windows compatibility)
 - Use `path.isAbsolute()` instead of `startsWith("/")` for cross-platform correctness
 - Use the shared `resolveFilePath()` helper for getDiff/stage/unstage/discard operations
 
@@ -34,6 +36,7 @@ All code in `src/server/` handles remote client connections and must follow stri
 - Always test IPv4, IPv6 (`::1`), bracketed IPv6 (`[::1]:port`), and hostname:port formats
 
 ## HTTP Security
-- Set `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection` on all responses
+- Set `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection: 0` on all responses
+- Use `X-XSS-Protection: 0` (not `1; mode=block`) \u2014 the built-in XSS auditor is deprecated and can introduce vulnerabilities; CSP is the proper mitigation
 - Check `Origin` and `Host` headers on WebSocket upgrade requests
 - See `serverUtils.ts` `setSecurityHeaders()` and `isAllowedOrigin()`

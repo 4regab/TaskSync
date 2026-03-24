@@ -80,7 +80,10 @@ export function getHtmlContent(
 		try {
 			cachedBodyTemplate = fs.readFileSync(templatePath, "utf8");
 		} catch (err) {
-			console.error("Failed to load webview body template (sync fallback):", err);
+			console.error(
+				"Failed to load webview body template (sync fallback):",
+				err,
+			);
 		}
 	}
 	let bodyHtml =

@@ -77,17 +77,17 @@ export function getRemoteState(p: P): {
 		pending:
 			pendingEntry && pendingEntry.status === "pending"
 				? {
-					id: pendingEntry.id,
-					prompt: pendingEntry.prompt,
-					summary: pendingEntry.summary,
-					choices: parseChoices(pendingEntry.prompt).map((c) => ({
-						label: c.label,
-						value: c.value,
-						shortLabel: c.shortLabel,
-					})),
-					isApproval: isApprovalQuestion(pendingEntry.prompt),
-					timestamp: pendingEntry.timestamp,
-				}
+						id: pendingEntry.id,
+						prompt: pendingEntry.prompt,
+						summary: pendingEntry.summary,
+						choices: parseChoices(pendingEntry.prompt).map((c) => ({
+							label: c.label,
+							value: c.value,
+							shortLabel: c.shortLabel,
+						})),
+						isApproval: isApprovalQuestion(pendingEntry.prompt),
+						timestamp: pendingEntry.timestamp,
+					}
 				: null,
 		queue: p._promptQueue.map(
 			(q: { id: string; prompt: string; attachments?: AttachmentInfo[] }) => ({

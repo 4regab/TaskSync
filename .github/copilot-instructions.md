@@ -38,7 +38,7 @@ Or run individually:
 ```bash
 node esbuild.js      # Build → dist/extension.js, media/webview.js, web/shared-constants.js
 npx tsc --noEmit     # Type-check (must produce 0 errors)
-npx vitest run       # Run all tests (385+ tests, must all pass)
+npx vitest run       # Run all tests (387+ tests, must all pass)
 npm run lint         # Biome lint (must produce 0 issues)
 npm run check-duplicates  # Scan for duplicate code blocks (tool corruption detection)
 ```
@@ -83,7 +83,7 @@ Follow OWASP Top 10 principles. Specific patterns enforced in this codebase:
 
 ## Testing Strategy
 
-- **Framework:** Vitest, 14 test files, 385+ tests, ~98% coverage
+- **Framework:** Vitest, 14 test files, 387+ tests, ~98% coverage
 - **VS Code mock:** `src/__mocks__/vscode.ts` — mocks VS Code API for unit tests
 - **Test setup:** Tests that use git operations must set `(vscode.workspace as any).workspaceFolders` in `beforeEach`
 - **Coverage requirement:** Maintain or improve coverage. Add tests for new logic, especially:

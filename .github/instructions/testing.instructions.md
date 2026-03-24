@@ -5,7 +5,7 @@ applyTo: "**/*.test.ts"
 # Testing Standards
 
 ## Framework
-- Vitest with 384+ tests across 14 test files (~98% coverage)
+- Vitest with 387+ tests across 14 test files (~98% coverage)
 - VS Code API is mocked in `src/__mocks__/vscode.ts`
 
 ## Test Setup
@@ -23,3 +23,4 @@ applyTo: "**/*.test.ts"
 - Use descriptive test names: "throws for invalid file path", "strips port from hostname"
 - Test both happy paths and error conditions
 - For async operations, use `await expect(...).rejects.toThrow()`
+- Import constants from `remoteConstants.ts` in tests — do not hard-code values (SSOT)

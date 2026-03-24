@@ -137,7 +137,7 @@ These principles are mandatory for all changes:
 
 ## Testing
 
-- **Framework:** Vitest (14 test files, 385+ tests, ~98% coverage)
+- **Framework:** Vitest (14 test files, 387+ tests, ~98% coverage)
 - **Mocks:** VS Code API is mocked in `src/__mocks__/vscode.ts`
 - **Test setup:** Tests that use git operations must set `(vscode.workspace as any).workspaceFolders` in `beforeEach`
 - **Coverage:** Maintain or improve coverage. Add tests for security-sensitive code, edge cases, and error handling paths.

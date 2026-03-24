@@ -23,3 +23,5 @@ applyTo: "tasksync-chat/src/webview/**"
 
 ## Storage
 - Queue, history, and settings are per-workspace (workspace-scoped storage with global fallback)
+- Queue enforces `MAX_QUEUE_SIZE` (100) and `MAX_QUEUE_PROMPT_LENGTH` (100000) limits
+- Use `await fs.promises.mkdir(path, { recursive: true })` for directory creation \u2014 never `fs.existsSync`

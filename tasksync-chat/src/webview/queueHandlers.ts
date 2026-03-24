@@ -191,6 +191,7 @@ export function handleReorderQueue(
 	if (fromIndex < 0 || toIndex < 0) return;
 	if (fromIndex >= p._promptQueue.length || toIndex >= p._promptQueue.length)
 		return;
+	if (fromIndex === toIndex) return;
 
 	const [removed] = p._promptQueue.splice(fromIndex, 1);
 	p._promptQueue.splice(toIndex, 0, removed);

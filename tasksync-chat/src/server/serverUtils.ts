@@ -141,7 +141,11 @@ export function isPortAvailable(port: number): Promise<boolean> {
 	return new Promise((resolve) => {
 		const server = http.createServer();
 		server.once("error", () => {
-			server.close();
+			try {
+				server.close();
+			} catch {
+				// Server may not have started listening — ignore close errors
+			}
 			resolve(false);
 		});
 		server.once("listening", () => server.close(() => resolve(true)));

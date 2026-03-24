@@ -130,18 +130,22 @@ export function playSystemSound(): void {
 
 	try {
 		if (platform === "win32") {
-			spawn("powershell.exe", [
+			const child = spawn("powershell.exe", [
 				"-Command",
 				"[System.Media.SystemSounds]::Exclamation.Play()",
-			]).on("error", onErr);
+			], { stdio: "ignore", windowsHide: true });
+			child.on("error", onErr);
+			child.unref();
 		} else if (platform === "darwin") {
-			execFile("afplay", ["/System/Library/Sounds/Tink.aiff"], onErr);
+			const child = execFile("afplay", ["/System/Library/Sounds/Tink.aiff"], onErr);
+			child.unref();
 		} else {
-			execFile(
+			const child = execFile(
 				"paplay",
 				["/usr/share/sounds/freedesktop/stereo/message.oga"],
 				onErr,
 			);
+			child.unref();
 		}
 	} catch (e) {
 		debugLog("[TaskSync] playSystemSound — sound playback error:", e);

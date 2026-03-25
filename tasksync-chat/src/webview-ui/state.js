@@ -7,9 +7,9 @@ const RESPONSE_TIMEOUT_ALLOWED_VALUES =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_ALLOWED !== "undefined"
 		? new Set(TASKSYNC_RESPONSE_TIMEOUT_ALLOWED)
 		: new Set([
-				0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
-				240,
-			]);
+			0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
+			240,
+		]);
 const RESPONSE_TIMEOUT_DEFAULT =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_DEFAULT !== "undefined"
 		? TASKSYNC_RESPONSE_TIMEOUT_DEFAULT
@@ -72,6 +72,18 @@ let queueEnabled = true; // Default to true (Queue mode ON by default)
 let dropdownOpen = false;
 let currentAttachments = previousState.attachments || []; // Restore attachments
 let selectedCard = "queue";
+let changesPanelVisible = false;
+let changesLoading = false;
+let changesError = "";
+let selectedChangeFile = "";
+let selectedChangeDiff = "";
+let changesState = { staged: [], unstaged: [] };
+let changeStatsByFile = {};
+let changeStatsRequestToken = 0;
+let changeStatsInFlight = {};
+let remoteSessionStartTime = null;
+let remoteSessionFrozenElapsed = null;
+let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
@@ -80,10 +92,12 @@ let pendingToolCall = null;
 let isProcessingResponse = false; // True when AI is processing user's response
 let isApprovalQuestion = false; // True when current pending question is an approval-type question
 let currentChoices = []; // Parsed choices from multi-choice questions
+let lastPendingContentHtml = "";
 
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
+let askUserVerbosePayloadEnabled = false;
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -136,6 +150,17 @@ let chatContainer,
 	autocompleteEmpty;
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
+let changesSection,
+	changesRefreshBtn,
+	changesCloseBtn,
+	changesSummary,
+	changesStatus,
+	changesUnstagedGroup,
+	changesUnstagedList,
+	changesDiffTitle,
+	changesDiffMeta,
+	changesDiffOutput,
+	remoteSessionTimerEl;
 let chatStreamArea; // DOM container for remote user message bubbles
 let historyModal,
 	historyModalOverlay,
@@ -157,6 +182,7 @@ let slashDropdown, slashList, slashEmpty;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
+	askUserVerbosePayloadToggle,
 	sendShortcutToggle,
 	autopilotToggle,
 	promptsList,

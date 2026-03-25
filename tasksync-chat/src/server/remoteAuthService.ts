@@ -252,6 +252,29 @@ export class RemoteAuthService {
 
 		const clientIp = this.normalizeIp(req.socket.remoteAddress || "");
 
+		// Prefer session token auth for API requests from active remote app sessions.
+		// This avoids OTP-rotation failures while still binding tokens to client IP.
+		const headerToken = req.headers[
+			"x-tasksync-session"
+		] as string | undefined;
+		const queryToken = url.searchParams.get("sessionToken") ?? undefined;
+		const suppliedToken = headerToken ?? queryToken;
+		if (suppliedToken && this.SESSION_TOKEN_PATTERN.test(suppliedToken)) {
+			const tokenData = this.sessionTokens.get(suppliedToken);
+			if (
+				tokenData &&
+				tokenData.clientIp === clientIp &&
+				tokenData.expiresAt > Date.now()
+			) {
+				// Sliding expiry while actively used.
+				tokenData.expiresAt = Date.now() + this.SESSION_TOKEN_EXPIRY_MS;
+				this.failedAttempts.delete(clientIp);
+				return { allowed: true };
+			}
+			// Remove stale/invalid tokens.
+			this.sessionTokens.delete(suppliedToken);
+		}
+
 		// Check lockout (shared with WebSocket auth)
 		const attempt = this.getActiveAttempt(clientIp);
 		if (attempt && attempt.lockUntil > Date.now()) {

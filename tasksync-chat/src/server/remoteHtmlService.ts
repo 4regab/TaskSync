@@ -8,7 +8,7 @@ import {
 } from "../constants/remoteConstants";
 import type { FileSearchResult } from "../webview/webviewProvider";
 import type { GitService } from "./gitService";
-import { isValidFilePath } from "./gitService";
+import { GIT_READ_ONLY_MESSAGE, isValidFilePath } from "./gitService";
 import type { RemoteAuthService } from "./remoteAuthService";
 import {
 	getSafeErrorMessage,
@@ -373,12 +373,16 @@ export class RemoteHtmlService {
         <div class="remote-header-left">
             <span class="remote-header-title">TaskSync</span>
             <span class="remote-status" id="remote-connection-status" title="Connecting..." role="status" aria-live="polite"><span class="sr-only">Connecting</span></span>
+			<span class="remote-session-timer inactive" id="remote-session-timer" title="Session timer (idle)" aria-live="polite">0s</span>
         </div>
         <div class="remote-header-right">
-            <button class="remote-btn" id="remote-new-session-btn" title="New Session">
-                <span class="codicon codicon-add"></span> New Session
+			<button class="remote-btn remote-btn-icon" id="remote-new-session-btn" title="New Session" aria-label="New Session">
+				<span class="codicon codicon-add"></span>
+			</button>
+			<button class="remote-btn remote-btn-icon" id="remote-changes-btn" title="Code Review" aria-label="Code Review">
+				<span class="codicon codicon-source-control"></span>
             </button>
-            <button class="remote-btn" id="remote-settings-btn" title="Settings">
+			<button class="remote-btn remote-btn-icon" id="remote-settings-btn" title="Settings" aria-label="Settings">
                 <span class="codicon codicon-gear"></span>
             </button>
         </div>
@@ -538,6 +542,19 @@ export class RemoteHtmlService {
 		broadcast?: (type: string, data: unknown) => void,
 	): Promise<void> {
 		try {
+			if (
+				pathname === "/api/stage" ||
+				pathname === "/api/unstage" ||
+				pathname === "/api/discard" ||
+				pathname === "/api/stageAll" ||
+				pathname === "/api/commit" ||
+				pathname === "/api/push"
+			) {
+				res.writeHead(403);
+				res.end(JSON.stringify({ error: GIT_READ_ONLY_MESSAGE }));
+				return;
+			}
+
 			switch (pathname) {
 				case "/api/stage":
 				case "/api/unstage":

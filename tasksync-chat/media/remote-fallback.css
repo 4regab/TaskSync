@@ -158,6 +158,23 @@ body.remote-mode {
     background: #f14c4c;
 }
 
+.remote-session-timer {
+    min-width: 52px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #8a8a8a;
+}
+
+.remote-session-timer.active {
+    color: #d4d4d4;
+}
+
+.remote-session-timer.frozen {
+    color: #d7ba7d;
+}
+
 .remote-header-right {
     display: flex;
     align-items: center;
@@ -181,6 +198,23 @@ body.remote-mode {
     background: #4c4c4c;
 }
 
+.remote-btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+}
+
+.remote-btn.active {
+    background: #0e639c;
+    color: #ffffff;
+}
+
+.remote-btn.active:hover {
+    background: #1177bb;
+}
+
 /* Hide VS Code-only settings in remote mode */
 .remote-mode .vscode-only {
     display: none !important;
@@ -190,6 +224,11 @@ body.remote-mode {
 @media (max-width: 480px) {
     .remote-header {
         padding: 0 12px;
+    }
+
+    .remote-session-timer {
+        min-width: 46px;
+        font-size: 11px;
     }
 
     .main-container {

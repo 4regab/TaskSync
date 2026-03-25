@@ -7,7 +7,7 @@ import {
 	truncateDiff,
 } from "../constants/remoteConstants";
 import type { GitService } from "./gitService";
-import { isValidFilePath } from "./gitService";
+import { GIT_READ_ONLY_MESSAGE, isValidFilePath } from "./gitService";
 import { getSafeErrorMessage, sendWsError } from "./serverUtils";
 
 /**
@@ -265,8 +265,21 @@ export async function dispatchGitMessage(
 	gitServiceAvailable: boolean,
 	broadcast: BroadcastFn,
 	searchFn: (query: string) => Promise<unknown[]>,
-	msg: { type: string; [key: string]: unknown },
+	msg: { type: string;[key: string]: unknown },
 ): Promise<boolean> {
+	const isWriteType =
+		msg.type === "stageFile" ||
+		msg.type === "unstageFile" ||
+		msg.type === "stageAll" ||
+		msg.type === "discardFile" ||
+		msg.type === "commitChanges" ||
+		msg.type === "pushChanges";
+
+	if (isWriteType) {
+		sendWsError(ws, GIT_READ_ONLY_MESSAGE, ErrorCode.INVALID_INPUT);
+		return true;
+	}
+
 	switch (msg.type) {
 		case "getChanges":
 			await handleGetChanges(ws, gitService, gitServiceAvailable);

@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 // Git extension types
 interface Repository {
 	state: RepositoryState;
+	rootUri?: vscode.Uri;
 	diffWithHEAD(path: string): Promise<string>;
 	add(paths: string[]): Promise<void>;
 	clean(paths: string[]): Promise<void>;
@@ -39,6 +40,9 @@ export interface GitChanges {
 	staged: FileChange[];
 	unstaged: FileChange[];
 }
+
+export const GIT_READ_ONLY_MESSAGE =
+	"Git write operations are disabled. Code Review is read-only.";
 
 /**
  * Validate file paths to prevent command injection.
@@ -77,6 +81,13 @@ export function isValidFilePath(filePath: string): boolean {
 export class GitService {
 	private api: GitAPI | null = null;
 	private initialized: boolean = false;
+
+	/**
+	 * TaskSync remote Code Review operates in read-only mode.
+	 */
+	isReadOnlyMode(): boolean {
+		return true;
+	}
 
 	async initialize(): Promise<void> {
 		if (this.initialized) return;
@@ -131,9 +142,10 @@ export class GitService {
 			"deleted", // 6
 			"untracked", // 7
 		];
+		const repoRoot = repo.rootUri?.fsPath;
 
 		const mapChange = (c: Change): FileChange => ({
-			path: vscode.workspace.asRelativePath(c.uri),
+			path: this.toRepoRelativePath(repo, c.uri.fsPath, repoRoot),
 			status: statusMap[c.status] || "unknown",
 		});
 
@@ -149,7 +161,7 @@ export class GitService {
 	 */
 	private resolveFilePath(filePath: string): {
 		repo: Repository;
-		workspaceRoot: string;
+		repoRoot: string;
 		relativePath: string;
 	} {
 		const fileUri = path.isAbsolute(filePath)
@@ -160,11 +172,54 @@ export class GitService {
 			? vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath
 			: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 		if (!workspaceRoot) throw new Error("No workspace folder");
-		const relativePath = path.isAbsolute(filePath)
-			? path.relative(workspaceRoot, filePath)
-			: filePath;
+		const repoRoot = repo.rootUri?.fsPath || workspaceRoot;
+		const relativePath = this.toRepoRelativePath(repo, filePath, workspaceRoot);
 		if (!isValidFilePath(relativePath)) throw new Error("Invalid file path");
-		return { repo, workspaceRoot, relativePath };
+		return { repo, repoRoot, relativePath };
+	}
+
+	/**
+	 * Convert an absolute/workspace-relative path to a path relative to the repo root.
+	 */
+	private toRepoRelativePath(
+		repo: Repository,
+		filePath: string,
+		workspaceRoot?: string,
+	): string {
+		const repoRoot = repo.rootUri?.fsPath;
+
+		// Build an absolute candidate for relative input when possible.
+		const absoluteCandidate = path.isAbsolute(filePath)
+			? path.resolve(filePath)
+			: workspaceRoot
+				? path.resolve(workspaceRoot, filePath)
+				: undefined;
+
+		if (repoRoot && absoluteCandidate) {
+			const relFromRepo = path.relative(path.resolve(repoRoot), absoluteCandidate);
+			if (!relFromRepo.startsWith("..") && !path.isAbsolute(relFromRepo)) {
+				return relFromRepo.replace(/\\/g, "/");
+			}
+		}
+
+		if (path.isAbsolute(filePath)) {
+			return vscode.workspace.asRelativePath(filePath).replace(/\\/g, "/");
+		}
+
+		if (repoRoot && workspaceRoot) {
+			const relFromWorkspace = path.relative(
+				path.resolve(workspaceRoot),
+				path.resolve(repoRoot),
+			);
+			if (relFromWorkspace && !relFromWorkspace.startsWith("..")) {
+				const prefix = relFromWorkspace.replace(/\\/g, "/") + "/";
+				if (filePath.replace(/\\/g, "/").startsWith(prefix)) {
+					return filePath.replace(/\\/g, "/").slice(prefix.length);
+				}
+			}
+		}
+
+		return filePath.replace(/\\/g, "/");
 	}
 
 	async getDiff(filePath: string): Promise<string> {
@@ -185,8 +240,9 @@ export class GitService {
 
 	async stageAll(): Promise<void> {
 		const repo = this.getRepo();
+		const repoRoot = repo.rootUri?.fsPath;
 		const paths = repo.state.workingTreeChanges.map((c) =>
-			vscode.workspace.asRelativePath(c.uri),
+			this.toRepoRelativePath(repo, c.uri.fsPath, repoRoot),
 		);
 		if (paths.length > 0) {
 			await repo.add(paths);
@@ -194,13 +250,13 @@ export class GitService {
 	}
 
 	async unstage(filePath: string): Promise<void> {
-		const { workspaceRoot, relativePath } = this.resolveFilePath(filePath);
+		const { repoRoot, relativePath } = this.resolveFilePath(filePath);
 
 		// Use spawn with arguments array to completely avoid shell injection
 		const { spawn } = await import("node:child_process");
 		await new Promise<void>((resolve, reject) => {
 			const proc = spawn("git", ["reset", "HEAD", "--", relativePath], {
-				cwd: workspaceRoot,
+				cwd: repoRoot,
 			});
 			let stderr = "";
 			proc.stderr.on("data", (data) => {

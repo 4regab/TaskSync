@@ -42,7 +42,7 @@
         ],
         "toolReferenceName": "askUser",
         "displayName": "Ask User",
-        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. ALWAYS include a 'summary' field describing your work so the user has full context. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable.",
+        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable.",
         "canBeReferencedInPrompt": true,
         "icon": "$(question)",
         "inputSchema": {
@@ -51,10 +51,6 @@
             "question": {
               "type": "string",
               "description": "The question or prompt to display to the user"
-            },
-            "summary": {
-              "type": "string",
-              "description": "A comprehensive summary of your work, reasoning, actions taken, code changes, and findings since the last ask_user call. Include enough detail so the user understands what happened without seeing the full chat. Use markdown formatting."
             }
           },
           "required": [
@@ -234,6 +230,12 @@
           "type": "boolean",
           "default": true,
           "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
+        },
+        "tasksync.askUserVerbosePayload": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Consistent mode: add an extra instruction prompt in ask_user tool output so Copilot consistently calls #askUser. Off by default for cleaner tool call Input/Output blocks."
         },
         "tasksync.sendWithCtrlEnter": {
           "type": "boolean",

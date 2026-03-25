@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	ASKUSER_LOOP_TEXT,
+	ASKUSER_VISIBILITY_TEXT,
+	buildAskUserFollowUpQuery,
+	buildAskUserRequestQuery,
 	CONFIG_SECTION,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
@@ -141,6 +145,27 @@ describe("remoteConstants", () => {
 	describe("default remote session query", () => {
 		it("is a non-empty string", () => {
 			expect(DEFAULT_REMOTE_SESSION_QUERY.length).toBeGreaterThan(0);
+		});
+
+		it("includes shared askUser guidance fragments", () => {
+			expect(DEFAULT_REMOTE_SESSION_QUERY).toContain(ASKUSER_VISIBILITY_TEXT);
+			expect(DEFAULT_REMOTE_SESSION_QUERY).toContain("#askUser");
+		});
+	});
+
+	describe("askUser prompt builders", () => {
+		it("buildAskUserRequestQuery includes request and loop instruction", () => {
+			const query = buildAskUserRequestQuery("fix login bug");
+			expect(query).toContain("fix login bug");
+			expect(query).toContain(ASKUSER_VISIBILITY_TEXT);
+			expect(query).toContain(ASKUSER_LOOP_TEXT);
+		});
+
+		it("buildAskUserFollowUpQuery includes follow-up and askUser requirement", () => {
+			const query = buildAskUserFollowUpQuery("add tests too");
+			expect(query).toContain("add tests too");
+			expect(query).toContain(ASKUSER_VISIBILITY_TEXT);
+			expect(query).toContain("Call #askUser to respond");
 		});
 	});
 });

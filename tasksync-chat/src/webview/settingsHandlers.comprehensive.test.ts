@@ -29,6 +29,7 @@ import {
 	handleSearchSlashCommands,
 	handleUpdateAutopilotSetting,
 	handleUpdateAutopilotText,
+	handleUpdateAskUserVerbosePayloadSetting,
 	handleUpdateHumanDelayMax,
 	handleUpdateHumanDelayMin,
 	handleUpdateHumanDelaySetting,
@@ -53,6 +54,7 @@ function createMockP(overrides: Partial<any> = {}) {
 	return {
 		_soundEnabled: true,
 		_interactiveApprovalEnabled: true,
+		_askUserVerbosePayloadEnabled: false,
 		_sendWithCtrlEnter: false,
 		_autopilotEnabled: false,
 		_autopilotText: "Continue",
@@ -191,6 +193,7 @@ describe("loadSettings", () => {
 		const config = createMockConfig({
 			notificationSound: false,
 			interactiveApproval: false,
+			askUserVerbosePayload: true,
 			sendWithCtrlEnter: true,
 			humanLikeDelay: false,
 			humanLikeDelayMin: 5,
@@ -207,6 +210,7 @@ describe("loadSettings", () => {
 
 		expect(p._soundEnabled).toBe(false);
 		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(p._askUserVerbosePayloadEnabled).toBe(true);
 		expect(p._sendWithCtrlEnter).toBe(true);
 		expect(p._humanLikeDelayEnabled).toBe(false);
 	});
@@ -424,6 +428,7 @@ describe("buildSettingsPayload", () => {
 
 		const payload = buildSettingsPayload(p);
 		expect(payload.soundEnabled).toBe(false);
+		expect(payload.askUserVerbosePayloadEnabled).toBe(false);
 		expect(payload.autopilotEnabled).toBe(true);
 		expect(payload.autopilotText).toBe("Go ahead");
 		expect(payload.autopilotPrompts).toEqual(["p1"]);
@@ -525,6 +530,28 @@ describe("handleUpdateInteractiveApprovalSetting", () => {
 		await handleUpdateInteractiveApprovalSetting(p, false);
 		expect(p._interactiveApprovalEnabled).toBe(false);
 		expect(config.update).toHaveBeenCalled();
+	});
+});
+
+describe("handleUpdateAskUserVerbosePayloadSetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates askUserVerbosePayload setting", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateAskUserVerbosePayloadSetting(p, true);
+		expect(p._askUserVerbosePayloadEnabled).toBe(true);
+		expect(config.update).toHaveBeenCalledWith(
+			"askUserVerbosePayload",
+			true,
+			vscode.ConfigurationTarget.Workspace,
+		);
 	});
 });
 
@@ -1367,7 +1394,7 @@ describe("config guard error handling", () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
 
 		const p = createMockP();
 		await handleUpdateSoundSetting(p, false);

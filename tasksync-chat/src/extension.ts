@@ -63,13 +63,17 @@ export function activate(context: vscode.ExtensionContext): void {
 	const newSessionCmd = vscode.commands.registerCommand(
 		"tasksync.newSession",
 		async () => {
+			if (provider.openNewSessionModal()) {
+				return;
+			}
+
 			const answer = await vscode.window.showWarningMessage(
 				"Are you sure you want to start a new session? This will clear the current session history.",
 				{ modal: true },
 				"Start New Session",
 			);
 			if (answer === "Start New Session") {
-				provider.startNewSession();
+				await provider.startNewSessionAndResetCopilotChat();
 			}
 		},
 	);

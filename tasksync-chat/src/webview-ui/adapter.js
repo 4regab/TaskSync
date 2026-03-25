@@ -194,6 +194,7 @@ function mapToRemoteMessage(msg) {
 		// VS Code-only settings/UI messages — not applicable to remote
 		case "updateSoundSetting":
 		case "updateInteractiveApprovalSetting":
+		case "updateAskUserVerbosePayloadSetting":
 		case "updateSendWithCtrlEnterSetting":
 		case "updateHumanDelaySetting":
 		case "updateHumanDelayMin":
@@ -252,6 +253,10 @@ if (isRemoteMode) {
 	window.addEventListener("beforeunload", function () {
 		clearTimeout(wsReconnectTimer);
 		clearTimeout(processingCheckTimer);
+		if (remoteSessionTimerInterval) {
+			clearInterval(remoteSessionTimerInterval);
+			remoteSessionTimerInterval = null;
+		}
 		serverShutdown = true; // Prevent reconnection
 	});
 }
@@ -397,13 +402,22 @@ function handleRemoteMessage(msg) {
 				"isApproval:",
 				msg.data.isApproval,
 			);
+			if (typeof updateRemoteSessionTimerState === "function") {
+				updateRemoteSessionTimerState(
+					typeof msg.data.sessionStartTime === "number"
+						? msg.data.sessionStartTime
+						: remoteSessionStartTime,
+					typeof msg.data.sessionFrozenElapsed === "number"
+						? msg.data.sessionFrozenElapsed
+						: remoteSessionFrozenElapsed,
+				);
+			}
 			clearTimeout(processingCheckTimer);
 			showPendingToolCall(
 				msg.data.id,
 				msg.data.prompt,
 				msg.data.isApproval,
 				msg.data.choices,
-				msg.data.summary,
 			);
 			if (typeof playNotificationSound === "function") playNotificationSound();
 			break;
@@ -483,6 +497,7 @@ function handleRemoteMessage(msg) {
 			clearTimeout(processingCheckTimer);
 			currentSessionCalls = [];
 			pendingToolCall = null;
+			lastPendingContentHtml = "";
 			isProcessingResponse = false;
 			if (chatStreamArea) {
 				chatStreamArea.innerHTML = "";
@@ -518,15 +533,29 @@ function handleRemoteMessage(msg) {
 			if (msg.data) applyServerState(msg.data);
 			break;
 		case "changes":
+			if (typeof applyChangesState === "function") {
+				applyChangesState(msg.data || { staged: [], unstaged: [] });
+			}
+			break;
+		case "changesUpdated":
+			if (typeof applyChangesState === "function") {
+				applyChangesState(msg.data || { staged: [], unstaged: [] });
+			}
+			break;
 		case "diff":
+			if (typeof applyChangeDiff === "function") {
+				applyChangeDiff(msg.file || "", msg.data || "");
+			}
+			break;
 		case "staged":
 		case "unstaged":
 		case "stagedAll":
 		case "discarded":
 		case "committed":
 		case "pushed":
-		case "changesUpdated":
-			// Git responses handled silently
+			if (typeof refreshChangesState === "function") {
+				refreshChangesState();
+			}
 			break;
 		case "error":
 			// Error messages can come from broadcast (wrapped in {type, data}) or sendWsError (top-level)
@@ -536,6 +565,12 @@ function handleRemoteMessage(msg) {
 			if (errMsg === "Not authenticated") {
 				sessionStorage.removeItem(SESSION_KEYS.CONNECTED);
 				window.location.href = "index.html";
+			} else if (
+				changesPanelVisible &&
+				typeof renderChangesPanel === "function"
+			) {
+				changesError = errMsg || "Operation failed";
+				renderChangesPanel();
 			} else if (
 				errCode === "ALREADY_ANSWERED" ||
 				errCode === "ITEM_NOT_FOUND" ||
@@ -556,6 +591,9 @@ function applySettingsData(s) {
 	if (s.queueEnabled !== undefined) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
+	}
+	if (s.askUserVerbosePayloadEnabled !== undefined) {
+		askUserVerbosePayloadEnabled = s.askUserVerbosePayloadEnabled;
 	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
@@ -605,6 +643,16 @@ function applyServerState(state) {
 		renderCurrentSession();
 	}
 	if (state.settings) applySettingsData(state.settings);
+	if (state.session && typeof updateRemoteSessionTimerState === "function") {
+		updateRemoteSessionTimerState(
+			typeof state.session.startTime === "number"
+				? state.session.startTime
+				: null,
+			typeof state.session.frozenElapsed === "number"
+				? state.session.frozenElapsed
+				: null,
+		);
+	}
 	updatePendingUI();
 	if (typeof updateCardSelection === "function") updateCardSelection();
 	if (typeof updateWelcomeSectionVisibility === "function")
@@ -615,10 +663,6 @@ function handlePendingToolCall(data) {
 	debugLog(
 		"handlePendingToolCall — id:",
 		data.id,
-		"hasSummary:",
-		!!data.summary,
-		"summaryLength:",
-		data.summary ? data.summary.length : 0,
 		"promptLength:",
 		data.prompt ? data.prompt.length : 0,
 	);
@@ -628,7 +672,6 @@ function handlePendingToolCall(data) {
 			data.prompt,
 			data.isApproval,
 			data.choices,
-			data.summary,
 		);
 	} else {
 		pendingToolCall = data;
@@ -648,30 +691,14 @@ function updatePendingUI() {
 	if (pendingToolCall) {
 		wasProcessing = false;
 		pendingMessage.classList.remove("hidden");
-		let pendingHtml = "";
-		if (pendingToolCall.summary) {
-			debugLog(
-				"Rendering summary in remote pending view — length:",
-				pendingToolCall.summary.length,
-				"preview:",
-				pendingToolCall.summary.slice(0, 80),
-			);
-			pendingHtml +=
-				'<div class="pending-ai-summary">' +
-				(typeof formatMarkdown === "function"
-					? formatMarkdown(pendingToolCall.summary)
-					: escapeHtml(pendingToolCall.summary)) +
-				"</div>";
-		} else {
-			debugLog("No summary to render in remote pending view");
-		}
-		pendingHtml +=
+		let pendingHtml =
 			'<div class="pending-ai-question">' +
 			(typeof formatMarkdown === "function"
 				? formatMarkdown(pendingToolCall.prompt || "")
 				: escapeHtml(pendingToolCall.prompt || "")) +
 			"</div>";
 		debugLog("Remote pending HTML set — totalLength:", pendingHtml.length);
+		lastPendingContentHtml = pendingHtml;
 		pendingMessage.innerHTML = pendingHtml;
 	} else if (isProcessingResponse) {
 		wasProcessing = true;
@@ -696,6 +723,7 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
+	updateAskUserVerbosePayloadToggleUI();
 	updateSendWithCtrlEnterToggleUI();
 	updateAutopilotToggleUI();
 	updateResponseTimeoutUI();

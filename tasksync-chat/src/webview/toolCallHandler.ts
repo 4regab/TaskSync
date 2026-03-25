@@ -69,7 +69,6 @@ export function cancelSupersededPendingRequest(p: P): void {
 export async function waitForUserResponse(
 	p: P,
 	question: string,
-	summary?: string,
 ): Promise<UserResponseResult> {
 	debugLog(
 		"[TaskSync] waitForUserResponse — question:",
@@ -154,7 +153,6 @@ export async function waitForUserResponse(
 				const entry: ToolCallEntry = {
 					id: toolCallId,
 					prompt: question,
-					summary: summary || undefined,
 					response: effectiveText,
 					timestamp: Date.now(),
 					isFromQueue: false,
@@ -228,7 +226,6 @@ export async function waitForUserResponse(
 				const entry: ToolCallEntry = {
 					id: toolCallId,
 					prompt: question,
-					summary: summary || undefined,
 					response: queuedPrompt.prompt,
 					timestamp: Date.now(),
 					isFromQueue: true,
@@ -260,7 +257,6 @@ export async function waitForUserResponse(
 	const pendingEntry: ToolCallEntry = {
 		id: toolCallId,
 		prompt: question,
-		summary: summary || undefined,
 		response: "",
 		timestamp: Date.now(),
 		isFromQueue: false,
@@ -286,7 +282,7 @@ export async function waitForUserResponse(
 
 	if (p._webviewReady && p._view) {
 		debugLog(
-			`[TaskSync] waitForUserResponse — posting toolCallPending to webview, id: ${toolCallId}, summary: ${summary ? summary.slice(0, 40) : "(none)"}`,
+			`[TaskSync] waitForUserResponse — posting toolCallPending to webview, id: ${toolCallId}`,
 		);
 		p._view.webview.postMessage({
 			type: "toolCallPending",
@@ -294,7 +290,6 @@ export async function waitForUserResponse(
 			prompt: question,
 			isApproval,
 			choices: choices.length > 0 ? choices : undefined,
-			summary: summary || undefined,
 		} satisfies ToWebviewMessage);
 		p.playNotificationSound();
 	} else {
@@ -304,7 +299,6 @@ export async function waitForUserResponse(
 		p._pendingToolCallMessage = {
 			id: toolCallId,
 			prompt: question,
-			summary: summary || undefined,
 		};
 	}
 
@@ -317,16 +311,17 @@ export async function waitForUserResponse(
 		prompt: question,
 		isApproval,
 		timestamp: Date.now(),
-		summary: summary || undefined,
+		sessionStartTime: p._sessionStartTime,
+		sessionFrozenElapsed: p._sessionFrozenElapsed,
 		choices:
 			choices.length > 0
 				? choices.map(
-						(c: { label: string; value: string; shortLabel?: string }) => ({
-							label: c.label,
-							value: c.value,
-							shortLabel: c.shortLabel,
-						}),
-					)
+					(c: { label: string; value: string; shortLabel?: string }) => ({
+						label: c.label,
+						value: c.value,
+						shortLabel: c.shortLabel,
+					}),
+				)
 				: undefined,
 	});
 

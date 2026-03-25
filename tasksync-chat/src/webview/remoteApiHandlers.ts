@@ -47,7 +47,6 @@ export function getRemoteState(p: P): {
 	pending: {
 		id: string;
 		prompt: string;
-		summary?: string;
 		choices?: Array<{ label: string; value: string; shortLabel?: string }>;
 		isApproval: boolean;
 		timestamp: number;
@@ -57,7 +56,6 @@ export function getRemoteState(p: P): {
 	history: Array<{
 		id: string;
 		prompt: string;
-		summary?: string;
 		response: string;
 		timestamp: number;
 		status: "pending" | "completed" | "cancelled";
@@ -65,7 +63,11 @@ export function getRemoteState(p: P): {
 		attachments: AttachmentInfo[];
 	}>;
 	settings: ReturnType<typeof settingsH.buildSettingsPayload>;
-	session: { startTime: number | null; toolCallCount: number };
+	session: {
+		startTime: number | null;
+		frozenElapsed: number | null;
+		toolCallCount: number;
+	};
 	isProcessing: boolean;
 	model: string;
 } {
@@ -77,17 +79,16 @@ export function getRemoteState(p: P): {
 		pending:
 			pendingEntry && pendingEntry.status === "pending"
 				? {
-						id: pendingEntry.id,
-						prompt: pendingEntry.prompt,
-						summary: pendingEntry.summary,
-						choices: parseChoices(pendingEntry.prompt).map((c) => ({
-							label: c.label,
-							value: c.value,
-							shortLabel: c.shortLabel,
-						})),
-						isApproval: isApprovalQuestion(pendingEntry.prompt),
-						timestamp: pendingEntry.timestamp,
-					}
+					id: pendingEntry.id,
+					prompt: pendingEntry.prompt,
+					choices: parseChoices(pendingEntry.prompt).map((c) => ({
+						label: c.label,
+						value: c.value,
+						shortLabel: c.shortLabel,
+					})),
+					isApproval: isApprovalQuestion(pendingEntry.prompt),
+					timestamp: pendingEntry.timestamp,
+				}
 				: null,
 		queue: p._promptQueue.map(
 			(q: { id: string; prompt: string; attachments?: AttachmentInfo[] }) => ({
@@ -103,7 +104,6 @@ export function getRemoteState(p: P): {
 				(c: {
 					id: string;
 					prompt: string;
-					summary?: string;
 					response: string;
 					timestamp: number;
 					status: "pending" | "completed" | "cancelled";
@@ -112,7 +112,6 @@ export function getRemoteState(p: P): {
 				}) => ({
 					id: c.id,
 					prompt: c.prompt,
-					summary: c.summary,
 					response: c.response,
 					timestamp: c.timestamp,
 					status: c.status,
@@ -123,6 +122,7 @@ export function getRemoteState(p: P): {
 		settings: settingsH.buildSettingsPayload(p),
 		session: {
 			startTime: p._sessionStartTime,
+			frozenElapsed: p._sessionFrozenElapsed,
 			toolCallCount: p._currentSessionCalls.length,
 		},
 		// True when AI is actively working (between user response and next askUser call)

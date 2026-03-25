@@ -122,6 +122,10 @@ export function loadSettings(p: P): void {
 		"interactiveApproval",
 		true,
 	);
+	p._askUserVerbosePayloadEnabled = config.get<boolean>(
+		"askUserVerbosePayload",
+		false,
+	);
 
 	// Backward-compatible migration: read old 'autoAnswer'/'autoAnswerText' keys
 	const inspectedAutopilot = config.inspect<boolean>("autopilot");
@@ -222,9 +226,9 @@ export function loadSettings(p: P): void {
 	);
 	p._sessionWarningHours = Number.isFinite(configuredWarningHours)
 		? Math.min(
-				SESSION_WARNING_HOURS_MAX,
-				Math.max(SESSION_WARNING_HOURS_MIN, Math.floor(configuredWarningHours)),
-			)
+			SESSION_WARNING_HOURS_MAX,
+			Math.max(SESSION_WARNING_HOURS_MIN, Math.floor(configuredWarningHours)),
+		)
 		: DEFAULT_SESSION_WARNING_HOURS;
 	p._sendWithCtrlEnter = config.get<boolean>("sendWithCtrlEnter", false);
 	// Ensure min <= max
@@ -252,6 +256,7 @@ export async function saveReusablePrompts(p: P): Promise<void> {
 export function buildSettingsPayload(p: P): {
 	soundEnabled: boolean;
 	interactiveApprovalEnabled: boolean;
+	askUserVerbosePayloadEnabled: boolean;
 	sendWithCtrlEnter: boolean;
 	autopilotEnabled: boolean;
 	autopilotText: string;
@@ -270,6 +275,7 @@ export function buildSettingsPayload(p: P): {
 	return {
 		soundEnabled: p._soundEnabled,
 		interactiveApprovalEnabled: p._interactiveApprovalEnabled,
+		askUserVerbosePayloadEnabled: p._askUserVerbosePayloadEnabled,
 		sendWithCtrlEnter: p._sendWithCtrlEnter,
 		autopilotEnabled: p._autopilotEnabled,
 		autopilotText: p._autopilotText,
@@ -342,6 +348,21 @@ export async function handleUpdateInteractiveApprovalSetting(
 			"interactiveApproval",
 			enabled,
 			vscode.ConfigurationTarget.Global,
+		);
+	});
+}
+
+export async function handleUpdateAskUserVerbosePayloadSetting(
+	p: P,
+	enabled: boolean,
+): Promise<void> {
+	p._askUserVerbosePayloadEnabled = enabled;
+	await withConfigGuard(p, async () => {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		await config.update(
+			"askUserVerbosePayload",
+			enabled,
+			vscode.ConfigurationTarget.Workspace,
 		);
 	});
 }

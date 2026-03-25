@@ -633,3 +633,633 @@ function renderAttachmentsHtml(attachments) {
 		"</div>"
 	);
 }
+
+function initChangesPanel() {
+	if (!changesSection) return;
+	changesSection.classList.toggle("hidden", !changesPanelVisible);
+	updateChangesHeaderButton();
+	renderChangesPanel();
+}
+
+function toggleChangesPanel(forceVisible) {
+	changesPanelVisible =
+		typeof forceVisible === "boolean" ? forceVisible : !changesPanelVisible;
+	if (changesSection) {
+		changesSection.classList.toggle("hidden", !changesPanelVisible);
+	}
+	updateChangesHeaderButton();
+	if (changesPanelVisible) {
+		requestChangesRefresh();
+	}
+}
+
+function updateChangesHeaderButton() {
+	var remoteChangesBtn = document.getElementById("remote-changes-btn");
+	if (remoteChangesBtn) {
+		remoteChangesBtn.classList.toggle("active", changesPanelVisible);
+	}
+	if (changesRefreshBtn) {
+		changesRefreshBtn.disabled = !changesPanelVisible;
+	}
+	if (changesCloseBtn) {
+		changesCloseBtn.disabled = !changesPanelVisible;
+	}
+}
+
+function getRemoteGitHeaders() {
+	var headers = { "Content-Type": "application/json" };
+	try {
+		var sessionToken = sessionStorage.getItem(SESSION_KEYS.SESSION_TOKEN) || "";
+		if (sessionToken) headers["x-tasksync-session"] = sessionToken;
+		var pin = sessionStorage.getItem(SESSION_KEYS.PIN) || "";
+		if (pin) headers["x-tasksync-pin"] = pin;
+	} catch {
+		// Ignore storage access issues and let server enforce auth.
+	}
+	return headers;
+}
+
+async function callRemoteGitApi(method, endpoint, payload) {
+	var req = {
+		method: method,
+		headers: getRemoteGitHeaders(),
+	};
+	if (payload !== undefined) {
+		req.body = JSON.stringify(payload);
+	}
+
+	var res = await fetch(endpoint, req);
+	var data = {};
+	try {
+		data = await res.json();
+	} catch {
+		data = {};
+	}
+
+	if (!res.ok) {
+		throw new Error(data.error || "Operation failed");
+	}
+
+	return data;
+}
+
+async function requestChangesRefresh() {
+	changesLoading = true;
+	changesError = "";
+	renderChangesPanel();
+
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi("GET", "/api/changes");
+			applyChangesState(data);
+		} catch (err) {
+			changesLoading = false;
+			changesError =
+				err && err.message ? err.message : "Failed to load git changes.";
+			renderChangesPanel();
+		}
+		return;
+	}
+
+	vscode.postMessage({ type: "getChanges" });
+}
+
+function refreshChangesState() {
+	if (changesPanelVisible) {
+		void requestChangesRefresh();
+	}
+}
+
+function applyChangesState(state) {
+	changesState = {
+		staged: Array.isArray(state && state.staged) ? state.staged : [],
+		unstaged: Array.isArray(state && state.unstaged) ? state.unstaged : [],
+	};
+	pruneCachedChangeStats();
+	changeStatsRequestToken += 1;
+	changesLoading = false;
+	changesError = "";
+	if (!hasSelectedChangeFile()) {
+		selectedChangeFile = firstChangeFilePath();
+		selectedChangeDiff = "";
+	}
+	renderChangesPanel();
+	if (isRemoteMode && changesPanelVisible) {
+		void prefetchChangeStats(changeStatsRequestToken);
+	}
+	if (changesPanelVisible && selectedChangeFile) {
+		void requestChangeDiff(selectedChangeFile);
+	}
+}
+
+function applyChangeDiff(filePath, diff) {
+	if (filePath && selectedChangeFile && filePath !== selectedChangeFile) {
+		return;
+	}
+	selectedChangeFile = filePath || selectedChangeFile;
+	selectedChangeDiff = typeof diff === "string" ? diff : "";
+	if (filePath) {
+		changeStatsByFile[filePath] = extractDiffStats(selectedChangeDiff);
+	}
+	changesLoading = false;
+	changesError = "";
+	renderChangesPanel();
+}
+
+async function requestChangeDiff(filePath) {
+	if (!filePath) return;
+	selectedChangeFile = filePath;
+	selectedChangeDiff = "";
+	changesLoading = true;
+	changesError = "";
+	renderChangesPanel();
+
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi(
+				"GET",
+				"/api/diff?file=" + encodeURIComponent(filePath),
+			);
+			applyChangeDiff(filePath, data.diff || "");
+		} catch (err) {
+			changesLoading = false;
+			changesError =
+				err && err.message ? err.message : "Failed to load diff.";
+			renderChangesPanel();
+		}
+		return;
+	}
+
+	vscode.postMessage({ type: "getDiff", file: filePath });
+}
+
+function handleChangeFileSelect(filePath) {
+	void requestChangeDiff(filePath);
+}
+
+function hasSelectedChangeFile() {
+	if (!selectedChangeFile) return false;
+	return (
+		changesState.staged.some(function (item) {
+			return item.path === selectedChangeFile;
+		}) ||
+		changesState.unstaged.some(function (item) {
+			return item.path === selectedChangeFile;
+		})
+	);
+}
+
+function firstChangeFilePath() {
+	if (changesState.unstaged.length > 0) return changesState.unstaged[0].path;
+	if (changesState.staged.length > 0) return changesState.staged[0].path;
+	return "";
+}
+
+function formatChangeStatusLabel(statusText) {
+	if (typeof statusText !== "string") return "";
+	var trimmedStatus = statusText.trim();
+	if (!trimmedStatus) return "";
+	if (trimmedStatus.toLowerCase() === "modified") return "";
+	return trimmedStatus;
+}
+
+function renderChangesPanel() {
+	if (!changesSection) return;
+
+	if (changesSummary) {
+		var summaryText;
+		if (changesLoading && !changesState.staged.length && !changesState.unstaged.length) {
+			summaryText = "Loading git changes...";
+		} else {
+			var totalChanges =
+				changesState.unstaged.length + changesState.staged.length;
+			summaryText =
+				totalChanges +
+				" changes (" +
+				changesState.unstaged.length +
+				" unstaged, " +
+				changesState.staged.length +
+				" staged)";
+		}
+		changesSummary.textContent = summaryText;
+	}
+
+	if (changesStatus) {
+		if (changesError) {
+			changesStatus.textContent = changesError;
+		} else if (changesLoading) {
+			changesStatus.textContent = "Loading...";
+		} else {
+			changesStatus.textContent = "";
+		}
+	}
+
+	if (changesDiffTitle) {
+		changesDiffTitle.textContent = selectedChangeFile
+			? selectedChangeFile
+			: "Select a file to preview its diff";
+	}
+
+	if (changesDiffMeta) {
+		var metaText = "";
+		if (selectedChangeFile) {
+			var selectedItem = findChangeItem(selectedChangeFile);
+			metaText = selectedItem
+				? formatChangeStatusLabel(selectedItem.status)
+				: "";
+		}
+		changesDiffMeta.textContent = metaText;
+	}
+
+	if (changesDiffOutput) {
+		if (selectedChangeDiff) {
+			changesDiffOutput.innerHTML = formatGitDiffHtml(selectedChangeDiff);
+			changesDiffOutput.classList.remove("empty");
+		} else if (changesLoading && selectedChangeFile) {
+			changesDiffOutput.textContent = "Loading diff...";
+			changesDiffOutput.classList.add("empty");
+		} else {
+			changesDiffOutput.textContent =
+				"Open the panel, then select a file to inspect the diff.";
+			changesDiffOutput.classList.add("empty");
+		}
+	}
+
+	renderChangeGroups();
+	bindChangePanelEvents();
+	updateChangesHeaderButton();
+}
+
+function renderChangeGroups() {
+	if (changesUnstagedList) {
+		var allChanges = changesState.unstaged
+			.map(function (item) {
+				return { ...item, section: "unstaged" };
+			})
+			.concat(
+				changesState.staged.map(function (item) {
+					return { ...item, section: "staged" };
+				}),
+			);
+		renderChangeGroup(changesUnstagedList, allChanges);
+	}
+	if (changesUnstagedGroup) {
+		changesUnstagedGroup.classList.remove("hidden");
+	}
+}
+
+function renderChangeGroup(container, items) {
+	if (!container) return;
+	if (!items || items.length === 0) {
+		container.innerHTML = '<div class="changes-empty">No changes</div>';
+		return;
+	}
+
+	container.innerHTML = items
+		.map(function (item) {
+			var isSelected = item.path === selectedChangeFile;
+			var section = item.section || "unstaged";
+			var statusText = formatChangeStatusLabel(item.status || section);
+			var statusHtml = statusText
+				? '<span class="change-item-status ' +
+				escapeHtml(section) +
+				'">' +
+				escapeHtml(statusText) +
+				"</span>"
+				: "";
+			var stats = resolveChangeStats(item);
+			var additions = stats ? Math.max(0, Number(stats.additions) || 0) : null;
+			var deletions = stats ? Math.max(0, Number(stats.deletions) || 0) : null;
+			var statsLabel =
+				additions !== null && deletions !== null
+					? '<span class="change-item-lines" aria-label="' +
+					escapeHtml(
+						additions +
+						" additions and " +
+						deletions +
+						" deletions",
+					) +
+					'">' +
+					'<span class="plus">+' +
+					escapeHtml(String(additions)) +
+					"</span>" +
+					'<span class="minus">-' +
+					escapeHtml(String(deletions)) +
+					"</span></span>"
+					: '<span class="change-item-lines pending" aria-hidden="true">+? -?</span>';
+			return (
+				'<div class="change-item' +
+				(isSelected ? " selected" : "") +
+				'" data-change-file="' +
+				escapeHtml(item.path) +
+				'">' +
+				'<button type="button" class="change-item-main" data-select-change-file="' +
+				escapeHtml(item.path) +
+				'">' +
+				'<span class="change-item-top"><span class="change-item-path">' +
+				escapeHtml(item.path) +
+				"</span>" +
+				statsLabel +
+				"</span>" +
+				statusHtml +
+				"</button></div>"
+			);
+		})
+		.join("");
+}
+
+function resolveChangeStats(item) {
+	if (!item || !item.path) return null;
+	if (
+		typeof item.additions === "number" ||
+		typeof item.deletions === "number"
+	) {
+		return {
+			additions: Math.max(0, Number(item.additions) || 0),
+			deletions: Math.max(0, Number(item.deletions) || 0),
+		};
+	}
+	return changeStatsByFile[item.path] || null;
+}
+
+function pruneCachedChangeStats() {
+	var activeFiles = {};
+	changesState.unstaged.forEach(function (item) {
+		if (item && item.path) activeFiles[item.path] = true;
+	});
+	changesState.staged.forEach(function (item) {
+		if (item && item.path) activeFiles[item.path] = true;
+	});
+
+	var nextStats = {};
+	Object.keys(changeStatsByFile).forEach(function (filePath) {
+		if (activeFiles[filePath]) {
+			nextStats[filePath] = changeStatsByFile[filePath];
+		}
+	});
+	changeStatsByFile = nextStats;
+
+	var nextInFlight = {};
+	Object.keys(changeStatsInFlight).forEach(function (filePath) {
+		if (activeFiles[filePath]) {
+			nextInFlight[filePath] = true;
+		}
+	});
+	changeStatsInFlight = nextInFlight;
+}
+
+async function prefetchChangeStats(requestToken) {
+	if (!isRemoteMode) return;
+
+	var filePaths = changesState.unstaged
+		.concat(changesState.staged)
+		.map(function (item) {
+			return item.path;
+		})
+		.filter(function (filePath) {
+			return (
+				!!filePath &&
+				!changeStatsByFile[filePath] &&
+				!changeStatsInFlight[filePath]
+			);
+		})
+		.slice(0, 40);
+
+	if (filePaths.length === 0) return;
+
+	var cursor = 0;
+	var maxConcurrent = 3;
+
+	async function worker() {
+		while (cursor < filePaths.length) {
+			var currentIndex = cursor;
+			cursor += 1;
+			var filePath = filePaths[currentIndex];
+			if (!filePath) continue;
+			await fetchAndCacheChangeStats(filePath, requestToken);
+		}
+	}
+
+	await Promise.all(
+		Array.from({ length: Math.min(maxConcurrent, filePaths.length) }, function () {
+			return worker();
+		}),
+	);
+
+	if (requestToken === changeStatsRequestToken && changesPanelVisible) {
+		renderChangesPanel();
+	}
+}
+
+async function fetchAndCacheChangeStats(filePath, requestToken) {
+	if (
+		!filePath ||
+		changeStatsByFile[filePath] ||
+		changeStatsInFlight[filePath]
+	)
+		return;
+
+	changeStatsInFlight[filePath] = true;
+	try {
+		var data = await callRemoteGitApi(
+			"GET",
+			"/api/diff?file=" + encodeURIComponent(filePath),
+		);
+		if (requestToken !== changeStatsRequestToken) return;
+		changeStatsByFile[filePath] = extractDiffStats(data && data.diff ? data.diff : "");
+	} catch {
+		// Keep placeholder stats when diff cannot be loaded.
+	} finally {
+		delete changeStatsInFlight[filePath];
+	}
+}
+
+function extractDiffStats(diffText) {
+	if (!diffText || typeof diffText !== "string") {
+		return { additions: 0, deletions: 0 };
+	}
+
+	var additions = 0;
+	var deletions = 0;
+	diffText.split("\n").forEach(function (line) {
+		if (line.startsWith("+++") || line.startsWith("---")) return;
+		if (line.startsWith("+") && !line.startsWith("+++")) {
+			additions += 1;
+		} else if (line.startsWith("-") && !line.startsWith("---")) {
+			deletions += 1;
+		}
+	});
+
+	return { additions: additions, deletions: deletions };
+}
+
+function formatGitDiffHtml(diffText) {
+	if (!diffText) return "";
+
+	var oldLine = 0;
+	var newLine = 0;
+	var inHunk = false;
+	var renderedBinaryNotice = false;
+
+	var rows = diffText
+		.split("\n")
+		.map(function (line) {
+			if (line.startsWith("@@")) {
+				var parsed = parseDiffHunkHeader(line);
+				if (parsed) {
+					oldLine = parsed.oldLine;
+					newLine = parsed.newLine;
+					inHunk = true;
+				}
+				return renderDiffMetaRow("diff-hunk", line);
+			}
+
+			if (line.startsWith("diff --git")) {
+				inHunk = false;
+				return "";
+			}
+
+			if (
+				line.startsWith("index ") ||
+				line.startsWith("new file mode") ||
+				line.startsWith("deleted file mode") ||
+				line.startsWith("similarity index") ||
+				line.startsWith("rename from") ||
+				line.startsWith("rename to") ||
+				line.startsWith("+++") ||
+				line.startsWith("---") ||
+				line.startsWith("\\ No newline at end of file")
+			) {
+				return "";
+			}
+
+			if (line.startsWith("Binary files") && !renderedBinaryNotice) {
+				renderedBinaryNotice = true;
+				return renderDiffMetaRow(
+					"diff-meta",
+					"Binary file changed (text diff unavailable).",
+				);
+			}
+
+			if (inHunk) {
+				if (line.startsWith("+") && !line.startsWith("+++")) {
+					var addRow = renderDiffCodeRow(
+						"",
+						String(newLine),
+						"+",
+						line.slice(1),
+						"diff-addition",
+					);
+					newLine += 1;
+					return addRow;
+				}
+
+				if (line.startsWith("-") && !line.startsWith("---")) {
+					var delRow = renderDiffCodeRow(
+						String(oldLine),
+						"",
+						"-",
+						line.slice(1),
+						"diff-deletion",
+					);
+					oldLine += 1;
+					return delRow;
+				}
+
+				var contextRow = renderDiffCodeRow(
+					String(oldLine),
+					String(newLine),
+					" ",
+					line.startsWith(" ") ? line.slice(1) : line,
+					"diff-context",
+				);
+				oldLine += 1;
+				newLine += 1;
+				return contextRow;
+			}
+
+			return "";
+		})
+		.filter(Boolean)
+		.join("");
+
+	if (rows.length > 0) {
+		return rows;
+	}
+
+	return renderDiffMetaRow("diff-meta", "No textual diff to display.");
+}
+
+function parseDiffHunkHeader(hunkLine) {
+	var match = /^@@\s-(\d+)(?:,\d+)?\s\+(\d+)(?:,\d+)?\s@@/.exec(hunkLine);
+	if (!match) return null;
+	return {
+		oldLine: Number(match[1]),
+		newLine: Number(match[2]),
+	};
+}
+
+function renderDiffMetaRow(extraClass, line) {
+	return (
+		'<span class="diff-line ' +
+		extraClass +
+		'">' +
+		'<span class="diff-line-code">' +
+		escapeHtml(line.length > 0 ? line : " ") +
+		"</span></span>"
+	);
+}
+
+function renderDiffCodeRow(oldNumber, newNumber, sign, content, extraClass) {
+	return (
+		'<span class="diff-line ' +
+		extraClass +
+		'">' +
+		'<span class="diff-line-number old">' +
+		escapeHtml(oldNumber) +
+		"</span>" +
+		'<span class="diff-line-number new">' +
+		escapeHtml(newNumber) +
+		"</span>" +
+		'<span class="diff-line-sign">' +
+		escapeHtml(sign) +
+		"</span>" +
+		'<span class="diff-line-code">' +
+		escapeHtml(content.length > 0 ? content : " ") +
+		"</span></span>"
+	);
+}
+
+function findChangeItem(filePath) {
+	if (!filePath) return null;
+	var staged = changesState.staged.find(function (item) {
+		return item.path === filePath;
+	});
+	if (staged) return staged;
+	var unstaged = changesState.unstaged.find(function (item) {
+		return item.path === filePath;
+	});
+	return unstaged || null;
+}
+
+function bindChangePanelEvents() {
+	if (!changesSection) return;
+
+	if (changesRefreshBtn) {
+		changesRefreshBtn.onclick = function () {
+			void requestChangesRefresh();
+		};
+	}
+	if (changesCloseBtn) {
+		changesCloseBtn.onclick = function () {
+			toggleChangesPanel(false);
+		};
+	}
+
+	changesSection.querySelectorAll("[data-select-change-file]").forEach(function (btn) {
+		btn.onclick = function () {
+			var filePath = btn.getAttribute("data-select-change-file");
+			if (filePath) handleChangeFileSelect(filePath);
+		};
+	});
+}

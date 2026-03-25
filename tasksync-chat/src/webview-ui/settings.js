@@ -45,6 +45,27 @@ function updateInteractiveApprovalToggleUI() {
 	);
 }
 
+function toggleAskUserVerbosePayloadSetting() {
+	askUserVerbosePayloadEnabled = !askUserVerbosePayloadEnabled;
+	updateAskUserVerbosePayloadToggleUI();
+	vscode.postMessage({
+		type: "updateAskUserVerbosePayloadSetting",
+		enabled: askUserVerbosePayloadEnabled,
+	});
+}
+
+function updateAskUserVerbosePayloadToggleUI() {
+	if (!askUserVerbosePayloadToggle) return;
+	askUserVerbosePayloadToggle.classList.toggle(
+		"active",
+		askUserVerbosePayloadEnabled,
+	);
+	askUserVerbosePayloadToggle.setAttribute(
+		"aria-checked",
+		askUserVerbosePayloadEnabled ? "true" : "false",
+	);
+}
+
 function toggleSendWithCtrlEnterSetting() {
 	sendWithCtrlEnter = !sendWithCtrlEnter;
 	updateSendWithCtrlEnterToggleUI();

@@ -19,7 +19,6 @@ function handleExtensionMessage(event) {
 				message.prompt,
 				message.isApproval,
 				message.choices,
-				message.summary,
 			);
 			break;
 		case "toolCallCompleted":
@@ -43,9 +42,14 @@ function handleExtensionMessage(event) {
 		case "openSettingsModal":
 			openSettingsModal();
 			break;
+		case "openNewSessionModal":
+			openNewSessionModal();
+			break;
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+			askUserVerbosePayloadEnabled =
+				message.askUserVerbosePayloadEnabled === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -82,6 +86,7 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
+			updateAskUserVerbosePayloadToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();
@@ -120,6 +125,7 @@ function handleExtensionMessage(event) {
 			promptQueue = [];
 			currentSessionCalls = [];
 			pendingToolCall = null;
+			lastPendingContentHtml = "";
 			isProcessingResponse = false;
 			renderQueue();
 			renderCurrentSession();
@@ -133,8 +139,12 @@ function handleExtensionMessage(event) {
 			updateWelcomeSectionVisibility();
 			break;
 		case "updateSessionTimer":
-			// Timer is displayed in the view title bar by the extension host
-			// No webview UI to update
+			updateRemoteSessionTimerState(
+				typeof message.startTime === "number" ? message.startTime : null,
+				typeof message.frozenElapsed === "number"
+					? message.frozenElapsed
+					: null,
+			);
 			break;
 		case "triggerSendFromShortcut":
 			handleSendFromShortcut();
@@ -142,8 +152,58 @@ function handleExtensionMessage(event) {
 	}
 }
 
-function showPendingToolCall(id, prompt, isApproval, choices, summary) {
-	pendingToolCall = { id: id, prompt: prompt, summary: summary || "" };
+function updateRemoteSessionTimerState(startTime, frozenElapsed) {
+	remoteSessionStartTime = typeof startTime === "number" ? startTime : null;
+	remoteSessionFrozenElapsed =
+		typeof frozenElapsed === "number" ? frozenElapsed : null;
+
+	if (remoteSessionTimerInterval) {
+		clearInterval(remoteSessionTimerInterval);
+		remoteSessionTimerInterval = null;
+	}
+
+	renderRemoteSessionTimer();
+
+	if (remoteSessionStartTime !== null && remoteSessionFrozenElapsed === null) {
+		remoteSessionTimerInterval = setInterval(function () {
+			renderRemoteSessionTimer();
+		}, 1000);
+	}
+}
+
+function renderRemoteSessionTimer() {
+	if (!remoteSessionTimerEl) return;
+
+	var timerText = "0s";
+	var timerStateClass = "inactive";
+
+	if (remoteSessionFrozenElapsed !== null) {
+		timerText = formatRemoteElapsed(remoteSessionFrozenElapsed);
+		timerStateClass = "frozen";
+	} else if (remoteSessionStartTime !== null) {
+		timerText = formatRemoteElapsed(Date.now() - remoteSessionStartTime);
+		timerStateClass = "active";
+	}
+
+	remoteSessionTimerEl.textContent = timerText;
+	remoteSessionTimerEl.classList.remove("inactive", "active", "frozen");
+	remoteSessionTimerEl.classList.add(timerStateClass);
+	remoteSessionTimerEl.title =
+		timerStateClass === "inactive" ? "Session timer (idle)" : "Session timer";
+}
+
+function formatRemoteElapsed(ms) {
+	var seconds = Math.max(0, Math.floor(ms / 1000));
+	var h = Math.floor(seconds / 3600);
+	var m = Math.floor((seconds % 3600) / 60);
+	var s = seconds % 60;
+	if (h > 0) return h + "h " + m + "m " + s + "s";
+	if (m > 0) return m + "m " + s + "s";
+	return s + "s";
+}
+
+function showPendingToolCall(id, prompt, isApproval, choices) {
+	pendingToolCall = { id: id, prompt: prompt };
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];
@@ -155,16 +215,12 @@ function showPendingToolCall(id, prompt, isApproval, choices, summary) {
 	// Add pending class to disable session switching UI
 	document.body.classList.add("has-pending-toolcall");
 
-	// Show AI question (and summary if present) as rendered markdown
+	// Show AI question as rendered markdown
 	if (pendingMessage) {
 		pendingMessage.classList.remove("hidden");
-		let pendingHtml = "";
-		if (summary) {
-			pendingHtml +=
-				'<div class="pending-ai-summary">' + formatMarkdown(summary) + "</div>";
-		}
-		pendingHtml +=
+		let pendingHtml =
 			'<div class="pending-ai-question">' + formatMarkdown(prompt) + "</div>";
+		lastPendingContentHtml = pendingHtml;
 		pendingMessage.innerHTML = pendingHtml;
 	} else {
 		console.error("[TaskSync Webview] pendingMessage element is null!");

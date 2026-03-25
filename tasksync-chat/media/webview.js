@@ -233,6 +233,7 @@ function mapToRemoteMessage(msg) {
 		// VS Code-only settings/UI messages — not applicable to remote
 		case "updateSoundSetting":
 		case "updateInteractiveApprovalSetting":
+		case "updateAskUserVerbosePayloadSetting":
 		case "updateSendWithCtrlEnterSetting":
 		case "updateHumanDelaySetting":
 		case "updateHumanDelayMin":
@@ -291,6 +292,10 @@ if (isRemoteMode) {
 	window.addEventListener("beforeunload", function () {
 		clearTimeout(wsReconnectTimer);
 		clearTimeout(processingCheckTimer);
+		if (remoteSessionTimerInterval) {
+			clearInterval(remoteSessionTimerInterval);
+			remoteSessionTimerInterval = null;
+		}
 		serverShutdown = true; // Prevent reconnection
 	});
 }
@@ -436,13 +441,22 @@ function handleRemoteMessage(msg) {
 				"isApproval:",
 				msg.data.isApproval,
 			);
+			if (typeof updateRemoteSessionTimerState === "function") {
+				updateRemoteSessionTimerState(
+					typeof msg.data.sessionStartTime === "number"
+						? msg.data.sessionStartTime
+						: remoteSessionStartTime,
+					typeof msg.data.sessionFrozenElapsed === "number"
+						? msg.data.sessionFrozenElapsed
+						: remoteSessionFrozenElapsed,
+				);
+			}
 			clearTimeout(processingCheckTimer);
 			showPendingToolCall(
 				msg.data.id,
 				msg.data.prompt,
 				msg.data.isApproval,
 				msg.data.choices,
-				msg.data.summary,
 			);
 			if (typeof playNotificationSound === "function") playNotificationSound();
 			break;
@@ -522,6 +536,7 @@ function handleRemoteMessage(msg) {
 			clearTimeout(processingCheckTimer);
 			currentSessionCalls = [];
 			pendingToolCall = null;
+			lastPendingContentHtml = "";
 			isProcessingResponse = false;
 			if (chatStreamArea) {
 				chatStreamArea.innerHTML = "";
@@ -557,15 +572,29 @@ function handleRemoteMessage(msg) {
 			if (msg.data) applyServerState(msg.data);
 			break;
 		case "changes":
+			if (typeof applyChangesState === "function") {
+				applyChangesState(msg.data || { staged: [], unstaged: [] });
+			}
+			break;
+		case "changesUpdated":
+			if (typeof applyChangesState === "function") {
+				applyChangesState(msg.data || { staged: [], unstaged: [] });
+			}
+			break;
 		case "diff":
+			if (typeof applyChangeDiff === "function") {
+				applyChangeDiff(msg.file || "", msg.data || "");
+			}
+			break;
 		case "staged":
 		case "unstaged":
 		case "stagedAll":
 		case "discarded":
 		case "committed":
 		case "pushed":
-		case "changesUpdated":
-			// Git responses handled silently
+			if (typeof refreshChangesState === "function") {
+				refreshChangesState();
+			}
 			break;
 		case "error":
 			// Error messages can come from broadcast (wrapped in {type, data}) or sendWsError (top-level)
@@ -575,6 +604,12 @@ function handleRemoteMessage(msg) {
 			if (errMsg === "Not authenticated") {
 				sessionStorage.removeItem(SESSION_KEYS.CONNECTED);
 				window.location.href = "index.html";
+			} else if (
+				changesPanelVisible &&
+				typeof renderChangesPanel === "function"
+			) {
+				changesError = errMsg || "Operation failed";
+				renderChangesPanel();
 			} else if (
 				errCode === "ALREADY_ANSWERED" ||
 				errCode === "ITEM_NOT_FOUND" ||
@@ -595,6 +630,9 @@ function applySettingsData(s) {
 	if (s.queueEnabled !== undefined) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
+	}
+	if (s.askUserVerbosePayloadEnabled !== undefined) {
+		askUserVerbosePayloadEnabled = s.askUserVerbosePayloadEnabled;
 	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
@@ -644,6 +682,16 @@ function applyServerState(state) {
 		renderCurrentSession();
 	}
 	if (state.settings) applySettingsData(state.settings);
+	if (state.session && typeof updateRemoteSessionTimerState === "function") {
+		updateRemoteSessionTimerState(
+			typeof state.session.startTime === "number"
+				? state.session.startTime
+				: null,
+			typeof state.session.frozenElapsed === "number"
+				? state.session.frozenElapsed
+				: null,
+		);
+	}
 	updatePendingUI();
 	if (typeof updateCardSelection === "function") updateCardSelection();
 	if (typeof updateWelcomeSectionVisibility === "function")
@@ -654,10 +702,6 @@ function handlePendingToolCall(data) {
 	debugLog(
 		"handlePendingToolCall — id:",
 		data.id,
-		"hasSummary:",
-		!!data.summary,
-		"summaryLength:",
-		data.summary ? data.summary.length : 0,
 		"promptLength:",
 		data.prompt ? data.prompt.length : 0,
 	);
@@ -667,7 +711,6 @@ function handlePendingToolCall(data) {
 			data.prompt,
 			data.isApproval,
 			data.choices,
-			data.summary,
 		);
 	} else {
 		pendingToolCall = data;
@@ -687,30 +730,14 @@ function updatePendingUI() {
 	if (pendingToolCall) {
 		wasProcessing = false;
 		pendingMessage.classList.remove("hidden");
-		let pendingHtml = "";
-		if (pendingToolCall.summary) {
-			debugLog(
-				"Rendering summary in remote pending view — length:",
-				pendingToolCall.summary.length,
-				"preview:",
-				pendingToolCall.summary.slice(0, 80),
-			);
-			pendingHtml +=
-				'<div class="pending-ai-summary">' +
-				(typeof formatMarkdown === "function"
-					? formatMarkdown(pendingToolCall.summary)
-					: escapeHtml(pendingToolCall.summary)) +
-				"</div>";
-		} else {
-			debugLog("No summary to render in remote pending view");
-		}
-		pendingHtml +=
+		let pendingHtml =
 			'<div class="pending-ai-question">' +
 			(typeof formatMarkdown === "function"
 				? formatMarkdown(pendingToolCall.prompt || "")
 				: escapeHtml(pendingToolCall.prompt || "")) +
 			"</div>";
 		debugLog("Remote pending HTML set — totalLength:", pendingHtml.length);
+		lastPendingContentHtml = pendingHtml;
 		pendingMessage.innerHTML = pendingHtml;
 	} else if (isProcessingResponse) {
 		wasProcessing = true;
@@ -735,6 +762,7 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
+	updateAskUserVerbosePayloadToggleUI();
 	updateSendWithCtrlEnterToggleUI();
 	updateAutopilotToggleUI();
 	updateResponseTimeoutUI();
@@ -757,9 +785,9 @@ const RESPONSE_TIMEOUT_ALLOWED_VALUES =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_ALLOWED !== "undefined"
 		? new Set(TASKSYNC_RESPONSE_TIMEOUT_ALLOWED)
 		: new Set([
-				0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
-				240,
-			]);
+			0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
+			240,
+		]);
 const RESPONSE_TIMEOUT_DEFAULT =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_DEFAULT !== "undefined"
 		? TASKSYNC_RESPONSE_TIMEOUT_DEFAULT
@@ -822,6 +850,18 @@ let queueEnabled = true; // Default to true (Queue mode ON by default)
 let dropdownOpen = false;
 let currentAttachments = previousState.attachments || []; // Restore attachments
 let selectedCard = "queue";
+let changesPanelVisible = false;
+let changesLoading = false;
+let changesError = "";
+let selectedChangeFile = "";
+let selectedChangeDiff = "";
+let changesState = { staged: [], unstaged: [] };
+let changeStatsByFile = {};
+let changeStatsRequestToken = 0;
+let changeStatsInFlight = {};
+let remoteSessionStartTime = null;
+let remoteSessionFrozenElapsed = null;
+let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
@@ -830,10 +870,12 @@ let pendingToolCall = null;
 let isProcessingResponse = false; // True when AI is processing user's response
 let isApprovalQuestion = false; // True when current pending question is an approval-type question
 let currentChoices = []; // Parsed choices from multi-choice questions
+let lastPendingContentHtml = "";
 
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
+let askUserVerbosePayloadEnabled = false;
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -886,6 +928,17 @@ let chatContainer,
 	autocompleteEmpty;
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
+let changesSection,
+	changesRefreshBtn,
+	changesCloseBtn,
+	changesSummary,
+	changesStatus,
+	changesUnstagedGroup,
+	changesUnstagedList,
+	changesDiffTitle,
+	changesDiffMeta,
+	changesDiffOutput,
+	remoteSessionTimerEl;
 let chatStreamArea; // DOM container for remote user message bubbles
 let historyModal,
 	historyModalOverlay,
@@ -907,6 +960,7 @@ let slashDropdown, slashList, slashEmpty;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
+	askUserVerbosePayloadToggle,
 	sendShortcutToggle,
 	autopilotToggle,
 	promptsList,
@@ -937,6 +991,12 @@ function init() {
 
 		// Remote mode: bind header buttons and hide VS Code-only UI
 		if (isRemoteMode) {
+			var changesBtn = document.getElementById("remote-changes-btn");
+			if (changesBtn)
+				changesBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					toggleChangesPanel();
+				});
 			var newSessionBtn = document.getElementById("remote-new-session-btn");
 			if (newSessionBtn)
 				newSessionBtn.addEventListener("click", function (e) {
@@ -956,6 +1016,7 @@ function init() {
 		updateModeUI();
 		updateQueueVisibility();
 		initCardSelection();
+		initChangesPanel();
 
 		// Restore persisted input value (when user switches sidebar tabs and comes back)
 		if (chatInput && persistedInputValue) {
@@ -1015,6 +1076,29 @@ function cacheDOMElements() {
 	welcomeSection = document.getElementById("welcome-section");
 	cardVibe = document.getElementById("card-vibe");
 	cardSpec = document.getElementById("card-spec");
+	changesSection = document.getElementById("changes-section");
+	changesRefreshBtn = document.getElementById("changes-refresh-btn");
+	changesCloseBtn = document.getElementById("changes-close-btn");
+	changesSummary = document.getElementById("changes-summary");
+	changesStatus = document.getElementById("changes-status");
+	changesUnstagedGroup = document.getElementById("changes-unstaged-group");
+	changesUnstagedList = document.getElementById("changes-unstaged-list");
+	changesDiffTitle = document.getElementById("changes-diff-title");
+	changesDiffMeta = document.getElementById("changes-diff-meta");
+	changesDiffOutput = document.getElementById("changes-diff-output");
+	remoteSessionTimerEl = document.getElementById("remote-session-timer");
+	if (!remoteSessionTimerEl && isRemoteMode) {
+		var remoteHeaderLeft = document.querySelector(".remote-header-left");
+		if (remoteHeaderLeft) {
+			var timerSpan = document.createElement("span");
+			timerSpan.id = "remote-session-timer";
+			timerSpan.className = "remote-session-timer inactive";
+			timerSpan.textContent = "0s";
+			timerSpan.title = "Session timer (idle)";
+			remoteHeaderLeft.appendChild(timerSpan);
+			remoteSessionTimerEl = timerSpan;
+		}
+	}
 	autopilotToggle = document.getElementById("autopilot-toggle");
 	toolHistoryArea = document.getElementById("tool-history-area");
 	chatStreamArea = document.getElementById("chat-stream-area");
@@ -1258,6 +1342,20 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(sendShortcutSection);
 
+	// Consistent mode section - adds a reminder instruction for consistent #askUser usage
+	let askUserVerbosePayloadSection = document.createElement("div");
+	askUserVerbosePayloadSection.className = "settings-section";
+	askUserVerbosePayloadSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-symbol-structure"></span> Consistent mode' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync adds an extra instruction prompt in ask_user output so Copilot consistently calls #askUser.\n\nDisabled by default for cleaner Input/Output blocks.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch" id="askuser-verbose-payload-toggle" role="switch" aria-checked="false" aria-label="Enable Consistent mode prompt" tabindex="0"></div>' +
+		"</div>";
+	modalContent.appendChild(askUserVerbosePayloadSection);
+
 	// Autopilot section with cycling prompts list
 	let autopilotSection = document.createElement("div");
 	autopilotSection.className = "settings-section";
@@ -1445,6 +1543,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
+	askUserVerbosePayloadToggle = document.getElementById(
+		"askuser-verbose-payload-toggle",
+	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
 	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
 	autopilotAddBtn = document.getElementById("autopilot-add-btn");
@@ -1517,7 +1618,7 @@ function createNewSessionModal() {
 	var warning = document.createElement("p");
 	warning.className = "new-session-warning";
 	warning.textContent =
-		"This will clear the current session history and start fresh.";
+		"This will clear the current session history and start a fresh Copilot chat session.";
 	content.appendChild(warning);
 
 	// Button row
@@ -1679,6 +1780,18 @@ function bindEventListeners() {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
 				toggleInteractiveApprovalSetting();
+			}
+		});
+	}
+	if (askUserVerbosePayloadToggle) {
+		askUserVerbosePayloadToggle.addEventListener(
+			"click",
+			toggleAskUserVerbosePayloadSetting,
+		);
+		askUserVerbosePayloadToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAskUserVerbosePayloadSetting();
 			}
 		});
 	}
@@ -2298,7 +2411,6 @@ function handleExtensionMessage(event) {
 				message.prompt,
 				message.isApproval,
 				message.choices,
-				message.summary,
 			);
 			break;
 		case "toolCallCompleted":
@@ -2322,9 +2434,14 @@ function handleExtensionMessage(event) {
 		case "openSettingsModal":
 			openSettingsModal();
 			break;
+		case "openNewSessionModal":
+			openNewSessionModal();
+			break;
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+			askUserVerbosePayloadEnabled =
+				message.askUserVerbosePayloadEnabled === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -2361,6 +2478,7 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
+			updateAskUserVerbosePayloadToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();
@@ -2399,6 +2517,7 @@ function handleExtensionMessage(event) {
 			promptQueue = [];
 			currentSessionCalls = [];
 			pendingToolCall = null;
+			lastPendingContentHtml = "";
 			isProcessingResponse = false;
 			renderQueue();
 			renderCurrentSession();
@@ -2412,8 +2531,12 @@ function handleExtensionMessage(event) {
 			updateWelcomeSectionVisibility();
 			break;
 		case "updateSessionTimer":
-			// Timer is displayed in the view title bar by the extension host
-			// No webview UI to update
+			updateRemoteSessionTimerState(
+				typeof message.startTime === "number" ? message.startTime : null,
+				typeof message.frozenElapsed === "number"
+					? message.frozenElapsed
+					: null,
+			);
 			break;
 		case "triggerSendFromShortcut":
 			handleSendFromShortcut();
@@ -2421,8 +2544,58 @@ function handleExtensionMessage(event) {
 	}
 }
 
-function showPendingToolCall(id, prompt, isApproval, choices, summary) {
-	pendingToolCall = { id: id, prompt: prompt, summary: summary || "" };
+function updateRemoteSessionTimerState(startTime, frozenElapsed) {
+	remoteSessionStartTime = typeof startTime === "number" ? startTime : null;
+	remoteSessionFrozenElapsed =
+		typeof frozenElapsed === "number" ? frozenElapsed : null;
+
+	if (remoteSessionTimerInterval) {
+		clearInterval(remoteSessionTimerInterval);
+		remoteSessionTimerInterval = null;
+	}
+
+	renderRemoteSessionTimer();
+
+	if (remoteSessionStartTime !== null && remoteSessionFrozenElapsed === null) {
+		remoteSessionTimerInterval = setInterval(function () {
+			renderRemoteSessionTimer();
+		}, 1000);
+	}
+}
+
+function renderRemoteSessionTimer() {
+	if (!remoteSessionTimerEl) return;
+
+	var timerText = "0s";
+	var timerStateClass = "inactive";
+
+	if (remoteSessionFrozenElapsed !== null) {
+		timerText = formatRemoteElapsed(remoteSessionFrozenElapsed);
+		timerStateClass = "frozen";
+	} else if (remoteSessionStartTime !== null) {
+		timerText = formatRemoteElapsed(Date.now() - remoteSessionStartTime);
+		timerStateClass = "active";
+	}
+
+	remoteSessionTimerEl.textContent = timerText;
+	remoteSessionTimerEl.classList.remove("inactive", "active", "frozen");
+	remoteSessionTimerEl.classList.add(timerStateClass);
+	remoteSessionTimerEl.title =
+		timerStateClass === "inactive" ? "Session timer (idle)" : "Session timer";
+}
+
+function formatRemoteElapsed(ms) {
+	var seconds = Math.max(0, Math.floor(ms / 1000));
+	var h = Math.floor(seconds / 3600);
+	var m = Math.floor((seconds % 3600) / 60);
+	var s = seconds % 60;
+	if (h > 0) return h + "h " + m + "m " + s + "s";
+	if (m > 0) return m + "m " + s + "s";
+	return s + "s";
+}
+
+function showPendingToolCall(id, prompt, isApproval, choices) {
+	pendingToolCall = { id: id, prompt: prompt };
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];
@@ -2434,16 +2607,12 @@ function showPendingToolCall(id, prompt, isApproval, choices, summary) {
 	// Add pending class to disable session switching UI
 	document.body.classList.add("has-pending-toolcall");
 
-	// Show AI question (and summary if present) as rendered markdown
+	// Show AI question as rendered markdown
 	if (pendingMessage) {
 		pendingMessage.classList.remove("hidden");
-		let pendingHtml = "";
-		if (summary) {
-			pendingHtml +=
-				'<div class="pending-ai-summary">' + formatMarkdown(summary) + "</div>";
-		}
-		pendingHtml +=
+		let pendingHtml =
 			'<div class="pending-ai-question">' + formatMarkdown(prompt) + "</div>";
+		lastPendingContentHtml = pendingHtml;
 		pendingMessage.innerHTML = pendingHtml;
 	} else {
 		console.error("[TaskSync Webview] pendingMessage element is null!");
@@ -2701,19 +2870,11 @@ function renderCurrentSession() {
 
 	let cardsHtml = sortedCalls
 		.map(function (tc, index) {
-			let truncatedTitle;
-			if (tc.summary) {
-				truncatedTitle =
-					tc.summary.length > 120
-						? tc.summary.substring(0, 120) + "..."
-						: tc.summary;
-			} else {
-				let firstSentence = tc.prompt.split(/[.!?]/)[0];
-				truncatedTitle =
-					firstSentence.length > 120
-						? firstSentence.substring(0, 120) + "..."
-						: firstSentence;
-			}
+			let firstSentence = tc.prompt.split(/[.!?]/)[0];
+			let truncatedTitle =
+				firstSentence.length > 120
+					? firstSentence.substring(0, 120) + "..."
+					: firstSentence;
 			let queueBadge = tc.isFromQueue
 				? '<span class="tool-call-badge queue">Queue</span>'
 				: "";
@@ -2784,19 +2945,11 @@ function renderHistoryModal() {
 
 	if (historyModalClearAll) historyModalClearAll.classList.remove("hidden");
 	function renderToolCallCard(tc) {
-		let truncatedTitle;
-		if (tc.summary) {
-			truncatedTitle =
-				tc.summary.length > 80
-					? tc.summary.substring(0, 80) + "..."
-					: tc.summary;
-		} else {
-			let firstSentence = tc.prompt.split(/[.!?]/)[0];
-			truncatedTitle =
-				firstSentence.length > 80
-					? firstSentence.substring(0, 80) + "..."
-					: firstSentence;
-		}
+		let firstSentence = tc.prompt.split(/[.!?]/)[0];
+		let truncatedTitle =
+			firstSentence.length > 80
+				? firstSentence.substring(0, 80) + "..."
+				: firstSentence;
 		let queueBadge = tc.isFromQueue
 			? '<span class="tool-call-badge queue">Queue</span>'
 			: "";
@@ -3748,6 +3901,27 @@ function updateInteractiveApprovalToggleUI() {
 	interactiveApprovalToggle.setAttribute(
 		"aria-checked",
 		interactiveApprovalEnabled ? "true" : "false",
+	);
+}
+
+function toggleAskUserVerbosePayloadSetting() {
+	askUserVerbosePayloadEnabled = !askUserVerbosePayloadEnabled;
+	updateAskUserVerbosePayloadToggleUI();
+	vscode.postMessage({
+		type: "updateAskUserVerbosePayloadSetting",
+		enabled: askUserVerbosePayloadEnabled,
+	});
+}
+
+function updateAskUserVerbosePayloadToggleUI() {
+	if (!askUserVerbosePayloadToggle) return;
+	askUserVerbosePayloadToggle.classList.toggle(
+		"active",
+		askUserVerbosePayloadEnabled,
+	);
+	askUserVerbosePayloadToggle.setAttribute(
+		"aria-checked",
+		askUserVerbosePayloadEnabled ? "true" : "false",
 	);
 }
 
@@ -5112,6 +5286,636 @@ function renderAttachmentsHtml(attachments) {
 		items +
 		"</div>"
 	);
+}
+
+function initChangesPanel() {
+	if (!changesSection) return;
+	changesSection.classList.toggle("hidden", !changesPanelVisible);
+	updateChangesHeaderButton();
+	renderChangesPanel();
+}
+
+function toggleChangesPanel(forceVisible) {
+	changesPanelVisible =
+		typeof forceVisible === "boolean" ? forceVisible : !changesPanelVisible;
+	if (changesSection) {
+		changesSection.classList.toggle("hidden", !changesPanelVisible);
+	}
+	updateChangesHeaderButton();
+	if (changesPanelVisible) {
+		requestChangesRefresh();
+	}
+}
+
+function updateChangesHeaderButton() {
+	var remoteChangesBtn = document.getElementById("remote-changes-btn");
+	if (remoteChangesBtn) {
+		remoteChangesBtn.classList.toggle("active", changesPanelVisible);
+	}
+	if (changesRefreshBtn) {
+		changesRefreshBtn.disabled = !changesPanelVisible;
+	}
+	if (changesCloseBtn) {
+		changesCloseBtn.disabled = !changesPanelVisible;
+	}
+}
+
+function getRemoteGitHeaders() {
+	var headers = { "Content-Type": "application/json" };
+	try {
+		var sessionToken = sessionStorage.getItem(SESSION_KEYS.SESSION_TOKEN) || "";
+		if (sessionToken) headers["x-tasksync-session"] = sessionToken;
+		var pin = sessionStorage.getItem(SESSION_KEYS.PIN) || "";
+		if (pin) headers["x-tasksync-pin"] = pin;
+	} catch {
+		// Ignore storage access issues and let server enforce auth.
+	}
+	return headers;
+}
+
+async function callRemoteGitApi(method, endpoint, payload) {
+	var req = {
+		method: method,
+		headers: getRemoteGitHeaders(),
+	};
+	if (payload !== undefined) {
+		req.body = JSON.stringify(payload);
+	}
+
+	var res = await fetch(endpoint, req);
+	var data = {};
+	try {
+		data = await res.json();
+	} catch {
+		data = {};
+	}
+
+	if (!res.ok) {
+		throw new Error(data.error || "Operation failed");
+	}
+
+	return data;
+}
+
+async function requestChangesRefresh() {
+	changesLoading = true;
+	changesError = "";
+	renderChangesPanel();
+
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi("GET", "/api/changes");
+			applyChangesState(data);
+		} catch (err) {
+			changesLoading = false;
+			changesError =
+				err && err.message ? err.message : "Failed to load git changes.";
+			renderChangesPanel();
+		}
+		return;
+	}
+
+	vscode.postMessage({ type: "getChanges" });
+}
+
+function refreshChangesState() {
+	if (changesPanelVisible) {
+		void requestChangesRefresh();
+	}
+}
+
+function applyChangesState(state) {
+	changesState = {
+		staged: Array.isArray(state && state.staged) ? state.staged : [],
+		unstaged: Array.isArray(state && state.unstaged) ? state.unstaged : [],
+	};
+	pruneCachedChangeStats();
+	changeStatsRequestToken += 1;
+	changesLoading = false;
+	changesError = "";
+	if (!hasSelectedChangeFile()) {
+		selectedChangeFile = firstChangeFilePath();
+		selectedChangeDiff = "";
+	}
+	renderChangesPanel();
+	if (isRemoteMode && changesPanelVisible) {
+		void prefetchChangeStats(changeStatsRequestToken);
+	}
+	if (changesPanelVisible && selectedChangeFile) {
+		void requestChangeDiff(selectedChangeFile);
+	}
+}
+
+function applyChangeDiff(filePath, diff) {
+	if (filePath && selectedChangeFile && filePath !== selectedChangeFile) {
+		return;
+	}
+	selectedChangeFile = filePath || selectedChangeFile;
+	selectedChangeDiff = typeof diff === "string" ? diff : "";
+	if (filePath) {
+		changeStatsByFile[filePath] = extractDiffStats(selectedChangeDiff);
+	}
+	changesLoading = false;
+	changesError = "";
+	renderChangesPanel();
+}
+
+async function requestChangeDiff(filePath) {
+	if (!filePath) return;
+	selectedChangeFile = filePath;
+	selectedChangeDiff = "";
+	changesLoading = true;
+	changesError = "";
+	renderChangesPanel();
+
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi(
+				"GET",
+				"/api/diff?file=" + encodeURIComponent(filePath),
+			);
+			applyChangeDiff(filePath, data.diff || "");
+		} catch (err) {
+			changesLoading = false;
+			changesError =
+				err && err.message ? err.message : "Failed to load diff.";
+			renderChangesPanel();
+		}
+		return;
+	}
+
+	vscode.postMessage({ type: "getDiff", file: filePath });
+}
+
+function handleChangeFileSelect(filePath) {
+	void requestChangeDiff(filePath);
+}
+
+function hasSelectedChangeFile() {
+	if (!selectedChangeFile) return false;
+	return (
+		changesState.staged.some(function (item) {
+			return item.path === selectedChangeFile;
+		}) ||
+		changesState.unstaged.some(function (item) {
+			return item.path === selectedChangeFile;
+		})
+	);
+}
+
+function firstChangeFilePath() {
+	if (changesState.unstaged.length > 0) return changesState.unstaged[0].path;
+	if (changesState.staged.length > 0) return changesState.staged[0].path;
+	return "";
+}
+
+function formatChangeStatusLabel(statusText) {
+	if (typeof statusText !== "string") return "";
+	var trimmedStatus = statusText.trim();
+	if (!trimmedStatus) return "";
+	if (trimmedStatus.toLowerCase() === "modified") return "";
+	return trimmedStatus;
+}
+
+function renderChangesPanel() {
+	if (!changesSection) return;
+
+	if (changesSummary) {
+		var summaryText;
+		if (changesLoading && !changesState.staged.length && !changesState.unstaged.length) {
+			summaryText = "Loading git changes...";
+		} else {
+			var totalChanges =
+				changesState.unstaged.length + changesState.staged.length;
+			summaryText =
+				totalChanges +
+				" changes (" +
+				changesState.unstaged.length +
+				" unstaged, " +
+				changesState.staged.length +
+				" staged)";
+		}
+		changesSummary.textContent = summaryText;
+	}
+
+	if (changesStatus) {
+		if (changesError) {
+			changesStatus.textContent = changesError;
+		} else if (changesLoading) {
+			changesStatus.textContent = "Loading...";
+		} else {
+			changesStatus.textContent = "";
+		}
+	}
+
+	if (changesDiffTitle) {
+		changesDiffTitle.textContent = selectedChangeFile
+			? selectedChangeFile
+			: "Select a file to preview its diff";
+	}
+
+	if (changesDiffMeta) {
+		var metaText = "";
+		if (selectedChangeFile) {
+			var selectedItem = findChangeItem(selectedChangeFile);
+			metaText = selectedItem
+				? formatChangeStatusLabel(selectedItem.status)
+				: "";
+		}
+		changesDiffMeta.textContent = metaText;
+	}
+
+	if (changesDiffOutput) {
+		if (selectedChangeDiff) {
+			changesDiffOutput.innerHTML = formatGitDiffHtml(selectedChangeDiff);
+			changesDiffOutput.classList.remove("empty");
+		} else if (changesLoading && selectedChangeFile) {
+			changesDiffOutput.textContent = "Loading diff...";
+			changesDiffOutput.classList.add("empty");
+		} else {
+			changesDiffOutput.textContent =
+				"Open the panel, then select a file to inspect the diff.";
+			changesDiffOutput.classList.add("empty");
+		}
+	}
+
+	renderChangeGroups();
+	bindChangePanelEvents();
+	updateChangesHeaderButton();
+}
+
+function renderChangeGroups() {
+	if (changesUnstagedList) {
+		var allChanges = changesState.unstaged
+			.map(function (item) {
+				return { ...item, section: "unstaged" };
+			})
+			.concat(
+				changesState.staged.map(function (item) {
+					return { ...item, section: "staged" };
+				}),
+			);
+		renderChangeGroup(changesUnstagedList, allChanges);
+	}
+	if (changesUnstagedGroup) {
+		changesUnstagedGroup.classList.remove("hidden");
+	}
+}
+
+function renderChangeGroup(container, items) {
+	if (!container) return;
+	if (!items || items.length === 0) {
+		container.innerHTML = '<div class="changes-empty">No changes</div>';
+		return;
+	}
+
+	container.innerHTML = items
+		.map(function (item) {
+			var isSelected = item.path === selectedChangeFile;
+			var section = item.section || "unstaged";
+			var statusText = formatChangeStatusLabel(item.status || section);
+			var statusHtml = statusText
+				? '<span class="change-item-status ' +
+				escapeHtml(section) +
+				'">' +
+				escapeHtml(statusText) +
+				"</span>"
+				: "";
+			var stats = resolveChangeStats(item);
+			var additions = stats ? Math.max(0, Number(stats.additions) || 0) : null;
+			var deletions = stats ? Math.max(0, Number(stats.deletions) || 0) : null;
+			var statsLabel =
+				additions !== null && deletions !== null
+					? '<span class="change-item-lines" aria-label="' +
+					escapeHtml(
+						additions +
+						" additions and " +
+						deletions +
+						" deletions",
+					) +
+					'">' +
+					'<span class="plus">+' +
+					escapeHtml(String(additions)) +
+					"</span>" +
+					'<span class="minus">-' +
+					escapeHtml(String(deletions)) +
+					"</span></span>"
+					: '<span class="change-item-lines pending" aria-hidden="true">+? -?</span>';
+			return (
+				'<div class="change-item' +
+				(isSelected ? " selected" : "") +
+				'" data-change-file="' +
+				escapeHtml(item.path) +
+				'">' +
+				'<button type="button" class="change-item-main" data-select-change-file="' +
+				escapeHtml(item.path) +
+				'">' +
+				'<span class="change-item-top"><span class="change-item-path">' +
+				escapeHtml(item.path) +
+				"</span>" +
+				statsLabel +
+				"</span>" +
+				statusHtml +
+				"</button></div>"
+			);
+		})
+		.join("");
+}
+
+function resolveChangeStats(item) {
+	if (!item || !item.path) return null;
+	if (
+		typeof item.additions === "number" ||
+		typeof item.deletions === "number"
+	) {
+		return {
+			additions: Math.max(0, Number(item.additions) || 0),
+			deletions: Math.max(0, Number(item.deletions) || 0),
+		};
+	}
+	return changeStatsByFile[item.path] || null;
+}
+
+function pruneCachedChangeStats() {
+	var activeFiles = {};
+	changesState.unstaged.forEach(function (item) {
+		if (item && item.path) activeFiles[item.path] = true;
+	});
+	changesState.staged.forEach(function (item) {
+		if (item && item.path) activeFiles[item.path] = true;
+	});
+
+	var nextStats = {};
+	Object.keys(changeStatsByFile).forEach(function (filePath) {
+		if (activeFiles[filePath]) {
+			nextStats[filePath] = changeStatsByFile[filePath];
+		}
+	});
+	changeStatsByFile = nextStats;
+
+	var nextInFlight = {};
+	Object.keys(changeStatsInFlight).forEach(function (filePath) {
+		if (activeFiles[filePath]) {
+			nextInFlight[filePath] = true;
+		}
+	});
+	changeStatsInFlight = nextInFlight;
+}
+
+async function prefetchChangeStats(requestToken) {
+	if (!isRemoteMode) return;
+
+	var filePaths = changesState.unstaged
+		.concat(changesState.staged)
+		.map(function (item) {
+			return item.path;
+		})
+		.filter(function (filePath) {
+			return (
+				!!filePath &&
+				!changeStatsByFile[filePath] &&
+				!changeStatsInFlight[filePath]
+			);
+		})
+		.slice(0, 40);
+
+	if (filePaths.length === 0) return;
+
+	var cursor = 0;
+	var maxConcurrent = 3;
+
+	async function worker() {
+		while (cursor < filePaths.length) {
+			var currentIndex = cursor;
+			cursor += 1;
+			var filePath = filePaths[currentIndex];
+			if (!filePath) continue;
+			await fetchAndCacheChangeStats(filePath, requestToken);
+		}
+	}
+
+	await Promise.all(
+		Array.from({ length: Math.min(maxConcurrent, filePaths.length) }, function () {
+			return worker();
+		}),
+	);
+
+	if (requestToken === changeStatsRequestToken && changesPanelVisible) {
+		renderChangesPanel();
+	}
+}
+
+async function fetchAndCacheChangeStats(filePath, requestToken) {
+	if (
+		!filePath ||
+		changeStatsByFile[filePath] ||
+		changeStatsInFlight[filePath]
+	)
+		return;
+
+	changeStatsInFlight[filePath] = true;
+	try {
+		var data = await callRemoteGitApi(
+			"GET",
+			"/api/diff?file=" + encodeURIComponent(filePath),
+		);
+		if (requestToken !== changeStatsRequestToken) return;
+		changeStatsByFile[filePath] = extractDiffStats(data && data.diff ? data.diff : "");
+	} catch {
+		// Keep placeholder stats when diff cannot be loaded.
+	} finally {
+		delete changeStatsInFlight[filePath];
+	}
+}
+
+function extractDiffStats(diffText) {
+	if (!diffText || typeof diffText !== "string") {
+		return { additions: 0, deletions: 0 };
+	}
+
+	var additions = 0;
+	var deletions = 0;
+	diffText.split("\n").forEach(function (line) {
+		if (line.startsWith("+++") || line.startsWith("---")) return;
+		if (line.startsWith("+") && !line.startsWith("+++")) {
+			additions += 1;
+		} else if (line.startsWith("-") && !line.startsWith("---")) {
+			deletions += 1;
+		}
+	});
+
+	return { additions: additions, deletions: deletions };
+}
+
+function formatGitDiffHtml(diffText) {
+	if (!diffText) return "";
+
+	var oldLine = 0;
+	var newLine = 0;
+	var inHunk = false;
+	var renderedBinaryNotice = false;
+
+	var rows = diffText
+		.split("\n")
+		.map(function (line) {
+			if (line.startsWith("@@")) {
+				var parsed = parseDiffHunkHeader(line);
+				if (parsed) {
+					oldLine = parsed.oldLine;
+					newLine = parsed.newLine;
+					inHunk = true;
+				}
+				return renderDiffMetaRow("diff-hunk", line);
+			}
+
+			if (line.startsWith("diff --git")) {
+				inHunk = false;
+				return "";
+			}
+
+			if (
+				line.startsWith("index ") ||
+				line.startsWith("new file mode") ||
+				line.startsWith("deleted file mode") ||
+				line.startsWith("similarity index") ||
+				line.startsWith("rename from") ||
+				line.startsWith("rename to") ||
+				line.startsWith("+++") ||
+				line.startsWith("---") ||
+				line.startsWith("\\ No newline at end of file")
+			) {
+				return "";
+			}
+
+			if (line.startsWith("Binary files") && !renderedBinaryNotice) {
+				renderedBinaryNotice = true;
+				return renderDiffMetaRow(
+					"diff-meta",
+					"Binary file changed (text diff unavailable).",
+				);
+			}
+
+			if (inHunk) {
+				if (line.startsWith("+") && !line.startsWith("+++")) {
+					var addRow = renderDiffCodeRow(
+						"",
+						String(newLine),
+						"+",
+						line.slice(1),
+						"diff-addition",
+					);
+					newLine += 1;
+					return addRow;
+				}
+
+				if (line.startsWith("-") && !line.startsWith("---")) {
+					var delRow = renderDiffCodeRow(
+						String(oldLine),
+						"",
+						"-",
+						line.slice(1),
+						"diff-deletion",
+					);
+					oldLine += 1;
+					return delRow;
+				}
+
+				var contextRow = renderDiffCodeRow(
+					String(oldLine),
+					String(newLine),
+					" ",
+					line.startsWith(" ") ? line.slice(1) : line,
+					"diff-context",
+				);
+				oldLine += 1;
+				newLine += 1;
+				return contextRow;
+			}
+
+			return "";
+		})
+		.filter(Boolean)
+		.join("");
+
+	if (rows.length > 0) {
+		return rows;
+	}
+
+	return renderDiffMetaRow("diff-meta", "No textual diff to display.");
+}
+
+function parseDiffHunkHeader(hunkLine) {
+	var match = /^@@\s-(\d+)(?:,\d+)?\s\+(\d+)(?:,\d+)?\s@@/.exec(hunkLine);
+	if (!match) return null;
+	return {
+		oldLine: Number(match[1]),
+		newLine: Number(match[2]),
+	};
+}
+
+function renderDiffMetaRow(extraClass, line) {
+	return (
+		'<span class="diff-line ' +
+		extraClass +
+		'">' +
+		'<span class="diff-line-code">' +
+		escapeHtml(line.length > 0 ? line : " ") +
+		"</span></span>"
+	);
+}
+
+function renderDiffCodeRow(oldNumber, newNumber, sign, content, extraClass) {
+	return (
+		'<span class="diff-line ' +
+		extraClass +
+		'">' +
+		'<span class="diff-line-number old">' +
+		escapeHtml(oldNumber) +
+		"</span>" +
+		'<span class="diff-line-number new">' +
+		escapeHtml(newNumber) +
+		"</span>" +
+		'<span class="diff-line-sign">' +
+		escapeHtml(sign) +
+		"</span>" +
+		'<span class="diff-line-code">' +
+		escapeHtml(content.length > 0 ? content : " ") +
+		"</span></span>"
+	);
+}
+
+function findChangeItem(filePath) {
+	if (!filePath) return null;
+	var staged = changesState.staged.find(function (item) {
+		return item.path === filePath;
+	});
+	if (staged) return staged;
+	var unstaged = changesState.unstaged.find(function (item) {
+		return item.path === filePath;
+	});
+	return unstaged || null;
+}
+
+function bindChangePanelEvents() {
+	if (!changesSection) return;
+
+	if (changesRefreshBtn) {
+		changesRefreshBtn.onclick = function () {
+			void requestChangesRefresh();
+		};
+	}
+	if (changesCloseBtn) {
+		changesCloseBtn.onclick = function () {
+			toggleChangesPanel(false);
+		};
+	}
+
+	changesSection.querySelectorAll("[data-select-change-file]").forEach(function (btn) {
+		btn.onclick = function () {
+			var filePath = btn.getAttribute("data-select-change-file");
+			if (filePath) handleChangeFileSelect(filePath);
+		};
+	});
 }
 
     if (document.readyState === 'loading') {

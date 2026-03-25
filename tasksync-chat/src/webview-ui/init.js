@@ -11,6 +11,12 @@ function init() {
 
 		// Remote mode: bind header buttons and hide VS Code-only UI
 		if (isRemoteMode) {
+			var changesBtn = document.getElementById("remote-changes-btn");
+			if (changesBtn)
+				changesBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					toggleChangesPanel();
+				});
 			var newSessionBtn = document.getElementById("remote-new-session-btn");
 			if (newSessionBtn)
 				newSessionBtn.addEventListener("click", function (e) {
@@ -30,6 +36,7 @@ function init() {
 		updateModeUI();
 		updateQueueVisibility();
 		initCardSelection();
+		initChangesPanel();
 
 		// Restore persisted input value (when user switches sidebar tabs and comes back)
 		if (chatInput && persistedInputValue) {
@@ -89,6 +96,29 @@ function cacheDOMElements() {
 	welcomeSection = document.getElementById("welcome-section");
 	cardVibe = document.getElementById("card-vibe");
 	cardSpec = document.getElementById("card-spec");
+	changesSection = document.getElementById("changes-section");
+	changesRefreshBtn = document.getElementById("changes-refresh-btn");
+	changesCloseBtn = document.getElementById("changes-close-btn");
+	changesSummary = document.getElementById("changes-summary");
+	changesStatus = document.getElementById("changes-status");
+	changesUnstagedGroup = document.getElementById("changes-unstaged-group");
+	changesUnstagedList = document.getElementById("changes-unstaged-list");
+	changesDiffTitle = document.getElementById("changes-diff-title");
+	changesDiffMeta = document.getElementById("changes-diff-meta");
+	changesDiffOutput = document.getElementById("changes-diff-output");
+	remoteSessionTimerEl = document.getElementById("remote-session-timer");
+	if (!remoteSessionTimerEl && isRemoteMode) {
+		var remoteHeaderLeft = document.querySelector(".remote-header-left");
+		if (remoteHeaderLeft) {
+			var timerSpan = document.createElement("span");
+			timerSpan.id = "remote-session-timer";
+			timerSpan.className = "remote-session-timer inactive";
+			timerSpan.textContent = "0s";
+			timerSpan.title = "Session timer (idle)";
+			remoteHeaderLeft.appendChild(timerSpan);
+			remoteSessionTimerEl = timerSpan;
+		}
+	}
 	autopilotToggle = document.getElementById("autopilot-toggle");
 	toolHistoryArea = document.getElementById("tool-history-area");
 	chatStreamArea = document.getElementById("chat-stream-area");
@@ -332,6 +362,20 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(sendShortcutSection);
 
+	// Consistent mode section - adds a reminder instruction for consistent #askUser usage
+	let askUserVerbosePayloadSection = document.createElement("div");
+	askUserVerbosePayloadSection.className = "settings-section";
+	askUserVerbosePayloadSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-symbol-structure"></span> Consistent mode' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync adds an extra instruction prompt in ask_user output so Copilot consistently calls #askUser.\n\nDisabled by default for cleaner Input/Output blocks.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch" id="askuser-verbose-payload-toggle" role="switch" aria-checked="false" aria-label="Enable Consistent mode prompt" tabindex="0"></div>' +
+		"</div>";
+	modalContent.appendChild(askUserVerbosePayloadSection);
+
 	// Autopilot section with cycling prompts list
 	let autopilotSection = document.createElement("div");
 	autopilotSection.className = "settings-section";
@@ -519,6 +563,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
+	askUserVerbosePayloadToggle = document.getElementById(
+		"askuser-verbose-payload-toggle",
+	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
 	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
 	autopilotAddBtn = document.getElementById("autopilot-add-btn");
@@ -591,7 +638,7 @@ function createNewSessionModal() {
 	var warning = document.createElement("p");
 	warning.className = "new-session-warning";
 	warning.textContent =
-		"This will clear the current session history and start fresh.";
+		"This will clear the current session history and start a fresh Copilot chat session.";
 	content.appendChild(warning);
 
 	// Button row

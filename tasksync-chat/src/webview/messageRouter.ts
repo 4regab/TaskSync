@@ -72,7 +72,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 			p._updatePersistedHistoryUI();
 			break;
 		case "newSession":
-			p.startNewSession();
+			void p.startNewSessionAndResetCopilotChat().catch((err: unknown) => {
+				console.error("[TaskSync] Failed to start fresh Copilot chat:", err);
+			});
 			break;
 		case "searchFiles":
 			fileH.handleSearchFiles(p, message.query);
@@ -94,6 +96,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 			break;
 		case "updateInteractiveApprovalSetting":
 			settingsH.handleUpdateInteractiveApprovalSetting(p, message.enabled);
+			break;
+		case "updateAskUserVerbosePayloadSetting":
+			settingsH.handleUpdateAskUserVerbosePayloadSetting(p, message.enabled);
 			break;
 		case "updateAutopilotSetting":
 			settingsH.handleUpdateAutopilotSetting(p, message.enabled);
@@ -215,7 +220,6 @@ export function handleWebviewReady(p: P): void {
 			prompt: prompt,
 			isApproval,
 			choices: choices.length > 0 ? choices : undefined,
-			summary: p._pendingToolCallMessage.summary,
 		} satisfies ToWebviewMessage);
 		p._pendingToolCallMessage = null;
 	}
@@ -240,7 +244,6 @@ export function handleWebviewReady(p: P): void {
 				prompt: prompt,
 				isApproval,
 				choices: choices.length > 0 ? choices : undefined,
-				summary: pendingEntry.summary,
 			} satisfies ToWebviewMessage);
 		}
 	}

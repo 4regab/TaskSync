@@ -4,6 +4,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { WebSocket, WebSocketServer } from "ws";
 import {
+	buildAskUserFollowUpQuery,
+	buildAskUserRequestQuery,
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_CHAT_COMMAND,
 	DEFAULT_REMOTE_PORT,
@@ -34,6 +36,7 @@ import {
 	sendWsError,
 	type TlsCert,
 } from "./serverUtils";
+import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 
 function getDebugEnabled(): boolean {
 	return vscode.workspace
@@ -53,8 +56,11 @@ function getRemoteChatCommand(): string {
 
 /** Start a fresh chat session and send a query via Agent Mode. */
 async function openNewChatWithQuery(query: string): Promise<void> {
-	await vscode.commands.executeCommand("workbench.action.chat.newChat");
-	await vscode.commands.executeCommand(getRemoteChatCommand(), { query });
+	await startFreshCopilotChatWithQuery(
+		getRemoteChatCommand(),
+		query,
+		DEFAULT_REMOTE_CHAT_COMMAND,
+	);
 }
 
 export interface RemoteServerUrls {
@@ -565,7 +571,7 @@ export class RemoteServer {
 						? msg.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH)
 						: "";
 				const prompt = rawPrompt
-					? `The user is connected remotely via TaskSync and can ONLY see messages you send via the #askUser tool. Their request: "${rawPrompt}". Do the work, then call #askUser to report results. NEVER end your turn without calling #askUser.`
+					? buildAskUserRequestQuery(rawPrompt)
 					: DEFAULT_REMOTE_SESSION_QUERY;
 				debugLog(
 					"startSession:",
@@ -607,7 +613,7 @@ export class RemoteServer {
 
 				// Send follow-up to configured chat mode with askUser context
 				const userMessage = chatContent.slice(0, MAX_QUEUE_PROMPT_LENGTH);
-				const fullQuery = `The remote user sent this follow-up via TaskSync: "${userMessage}". The user can ONLY see messages sent via the #askUser tool — your chat responses are invisible to them. Call #askUser to respond. NEVER end your turn without calling #askUser.`;
+				const fullQuery = buildAskUserFollowUpQuery(userMessage);
 				debugLog(
 					"chatMessage/chatFollowUp: sending to Agent Mode, length:",
 					fullQuery.length,
@@ -634,7 +640,7 @@ export class RemoteServer {
 					notifyQueueChanged(this.provider);
 				}
 				const chatQuery = query
-					? `The user is connected remotely via TaskSync and can ONLY see messages you send via the #askUser tool. Their request: "${query}". Do the work, then call #askUser to report results. NEVER end your turn without calling #askUser.`
+					? buildAskUserRequestQuery(query)
 					: DEFAULT_REMOTE_SESSION_QUERY;
 				debugLog("newSession:", query ? "queue query" : "default greeting");
 				void openNewChatWithQuery(chatQuery).catch((e) =>

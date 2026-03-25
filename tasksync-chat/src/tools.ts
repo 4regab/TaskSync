@@ -1,12 +1,12 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
+import { CONFIG_SECTION } from "./constants/remoteConstants";
 import { getImageMimeType } from "./utils/imageUtils";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
 import { debugLog } from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
-	summary?: string;
 }
 
 export interface AskUserToolResult {
@@ -61,9 +61,6 @@ export async function askUser(
 	debugLog(
 		"[TaskSync] askUser invoked — question:",
 		params.question.slice(0, 80),
-		params.summary
-			? `summary: ${params.summary.slice(0, 60)}...`
-			: "(no summary)",
 	);
 	// Check if already cancelled before starting
 	if (token.isCancellationRequested) {
@@ -77,7 +74,7 @@ export async function askUser(
 	try {
 		// Race the user response against cancellation
 		const result = await Promise.race([
-			provider.waitForUserResponse(params.question, params.summary),
+			provider.waitForUserResponse(params.question),
 			cancellation.promise,
 		]);
 
@@ -201,27 +198,42 @@ export function registerTools(
 				safeQuestion.slice(0, 60),
 			);
 			try {
-				const safeParams: Input = {
-					question: safeQuestion,
-					summary:
-						typeof params?.summary === "string" ? params.summary : undefined,
+				const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+				const includeVerbosePayload = config.get<boolean>(
+					"askUserVerbosePayload",
+					false,
+				);
+
+				const result = await askUser({ question: safeQuestion }, provider, token);
+
+				const resultPayload: {
+					response: string;
+					queued?: boolean;
+					attachmentCount?: number;
+					instruction?: string;
+				} = {
+					response: result.response,
 				};
-				const result = await askUser(safeParams, provider, token);
+
+				if (result.queue) {
+					resultPayload.queued = true;
+				}
+
+				if (result.attachments.length > 0) {
+					resultPayload.attachmentCount = result.attachments.length;
+				}
+
+				if (includeVerbosePayload) {
+					resultPayload.instruction =
+						"Do the task, then call the askUser tool; keep this workflow.";
+				}
 
 				// Build result parts - text first, then images
 				const resultParts: (
 					| vscode.LanguageModelTextPart
 					| vscode.LanguageModelDataPart
 				)[] = [
-					new vscode.LanguageModelTextPart(
-						JSON.stringify({
-							response: result.response,
-							queued: result.queue,
-							attachmentCount: result.attachments.length,
-							instruction:
-								"The user can ONLY see messages sent via this tool. After processing this response, you MUST call askUser again to report results. NEVER end your turn without calling askUser.",
-						}),
-					),
+					new vscode.LanguageModelTextPart(JSON.stringify(resultPayload)),
 				];
 
 				// Add image attachments as LanguageModelDataPart for vision models

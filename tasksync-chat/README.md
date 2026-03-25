@@ -170,11 +170,17 @@ Control TaskSync from your phone while away from your desk. Never miss an AI pro
 - Remove items by tapping ×
 
 **Changes Tab (Code Review)**
-- View all uncommitted changes
-- Tap a file to see the diff
-- Stage or discard changes
-- Commit with a message
-- Push to remote
+- Read-only view of current git status
+
+**Quick Git Test**
+1. Open the remote URL in your browser and sign in with the OTP if prompted.
+2. Open the **Changes** tab.
+3. Click any modified file to load its diff.
+4. Verify the panel reflects current staged/unstaged status.
+
+If you want to test the backend routes directly, the remote server exposes:
+- `GET /api/changes`
+- `GET /api/diff?file=src/file.ts`
 
 **Settings Tab**
 - Toggle Autopilot on/off

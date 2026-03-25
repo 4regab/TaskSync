@@ -1,8 +1,12 @@
 import * as vscode from "vscode";
 import {
+	buildAskUserRequestQuery,
 	CONFIG_SECTION,
+	DEFAULT_REMOTE_CHAT_COMMAND,
+	DEFAULT_REMOTE_SESSION_QUERY,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
+	MAX_QUEUE_PROMPT_LENGTH,
 	DEFAULT_SESSION_WARNING_HOURS,
 } from "../constants/remoteConstants";
 import { ContextManager, ContextReferenceType } from "../context";
@@ -15,6 +19,7 @@ import * as remote from "./remoteApiHandlers";
 import * as session from "./sessionManager";
 import * as settingsH from "./settingsHandlers";
 import * as toolCall from "./toolCallHandler";
+import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import {
 	type AttachmentInfo,
 	type FileSearchResult,
@@ -26,7 +31,7 @@ import {
 	type UserResponseResult,
 	VIEW_TYPE,
 } from "./webviewTypes";
-import { debugLog, mergeAndDedup } from "./webviewUtils";
+import { debugLog, mergeAndDedup, notifyQueueChanged } from "./webviewUtils";
 
 // Re-export types for external consumers
 export type {
@@ -40,8 +45,7 @@ export type {
 } from "./webviewTypes";
 
 export class TaskSyncWebviewProvider
-	implements vscode.WebviewViewProvider, vscode.Disposable
-{
+	implements vscode.WebviewViewProvider, vscode.Disposable {
 	public static readonly viewType = VIEW_TYPE;
 
 	// All underscore-prefixed members are "internal" by convention but public
@@ -76,7 +80,6 @@ export class TaskSyncWebviewProvider
 	_pendingToolCallMessage: {
 		id: string;
 		prompt: string;
-		summary?: string;
 	} | null = null;
 
 	// Debounce timer for queue persistence
@@ -114,6 +117,8 @@ export class TaskSyncWebviewProvider
 
 	// Interactive approval buttons enabled (loaded from VS Code settings)
 	_interactiveApprovalEnabled: boolean = true;
+	// When enabled, include ask_user instruction metadata in tool payloads
+	_askUserVerbosePayloadEnabled: boolean = false;
 
 	readonly _AUTOPILOT_DEFAULT_TEXT =
 		"You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.";
@@ -209,6 +214,7 @@ export class TaskSyncWebviewProvider
 				if (
 					e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
+					e.affectsConfiguration(`${CONFIG_SECTION}.askUserVerbosePayload`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilot`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotText`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotPrompts`) ||
@@ -290,9 +296,35 @@ export class TaskSyncWebviewProvider
 		lifecycle.startNewSession(this);
 	}
 
+	public async startNewSessionAndResetCopilotChat(): Promise<void> {
+		lifecycle.startNewSession(this);
+
+		const first = this._promptQueue[0];
+		const queuedPrompt = first?.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH);
+		if (first) {
+			this._promptQueue.shift();
+			notifyQueueChanged(this);
+		}
+
+		const chatQuery = queuedPrompt
+			? buildAskUserRequestQuery(queuedPrompt)
+			: DEFAULT_REMOTE_SESSION_QUERY;
+
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		const chatCommand = config.get<string>(
+			"remoteChatCommand",
+			DEFAULT_REMOTE_CHAT_COMMAND,
+		);
+
+		await startFreshCopilotChatWithQuery(
+			chatCommand,
+			chatQuery,
+			DEFAULT_REMOTE_CHAT_COMMAND,
+		);
+	}
+
 	public playNotificationSound(): void {
 		if (this._soundEnabled) {
-			session.playSystemSound();
 			this._view?.webview.postMessage({
 				type: "playNotificationSound",
 			} satisfies ToWebviewMessage);
@@ -301,6 +333,14 @@ export class TaskSyncWebviewProvider
 
 	async _applyHumanLikeDelay(label?: string): Promise<void> {
 		return session.applyHumanLikeDelay(this, label);
+	}
+
+	public openNewSessionModal(): boolean {
+		if (!this._view) return false;
+		this._view.webview.postMessage({
+			type: "openNewSessionModal",
+		} satisfies ToWebviewMessage);
+		return true;
 	}
 
 	_updateViewTitle(): void {
@@ -432,9 +472,8 @@ export class TaskSyncWebviewProvider
 
 	public async waitForUserResponse(
 		question: string,
-		summary?: string,
 	): Promise<UserResponseResult> {
-		return toolCall.waitForUserResponse(this, question, summary);
+		return toolCall.waitForUserResponse(this, question);
 	}
 
 	/**

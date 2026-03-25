@@ -57,9 +57,25 @@ export const HUMAN_DELAY_MIN_UPPER = 30; // maximum allowed for "min delay" inpu
 export const HUMAN_DELAY_MAX_LOWER = 2; // minimum allowed for "max delay" input
 export const HUMAN_DELAY_MAX_UPPER = 60; // maximum allowed for "max delay" input
 
+// Shared askUser prompt fragments (used by both local and remote session starts)
+export const ASKUSER_VISIBILITY_TEXT =
+	"The user can ONLY see messages you send via the #askUser tool — your normal chat responses are invisible to them.";
+export const ASKUSER_LOOP_TEXT =
+	"Do the work, then call #askUser to report results. NEVER end your turn without calling #askUser.";
+
 // Default query when a remote session starts without an explicit prompt
 export const DEFAULT_REMOTE_SESSION_QUERY =
-	"The user is connected remotely via TaskSync and can ONLY see messages you send via the #askUser tool — your chat responses are invisible to them. Start by calling #askUser to greet the user and ask what they need. After receiving their response, do the work, then call #askUser again with results. Continue this loop indefinitely — NEVER end your turn without calling #askUser.";
+	`${ASKUSER_VISIBILITY_TEXT} Start by calling #askUser to greet the user and ask what they need. After receiving their response, do the work, then call #askUser again with results. Continue this loop indefinitely — NEVER end your turn without calling #askUser.`;
+
+/** Build a session-start query when an explicit user request is available. */
+export function buildAskUserRequestQuery(request: string): string {
+	return `${ASKUSER_VISIBILITY_TEXT} Their request: "${request}". ${ASKUSER_LOOP_TEXT}`;
+}
+
+/** Build a follow-up query after a user sends another message. */
+export function buildAskUserFollowUpQuery(message: string): string {
+	return `The user sent this follow-up: "${message}". ${ASKUSER_VISIBILITY_TEXT} Call #askUser to respond. NEVER end your turn without calling #askUser.`;
+}
 
 // Default VS Code command for opening chat from remote sessions
 export const DEFAULT_REMOTE_CHAT_COMMAND = "workbench.action.chat.openagent";

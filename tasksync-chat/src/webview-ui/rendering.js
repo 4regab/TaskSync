@@ -60,19 +60,11 @@ function renderCurrentSession() {
 
 	let cardsHtml = sortedCalls
 		.map(function (tc, index) {
-			let truncatedTitle;
-			if (tc.summary) {
-				truncatedTitle =
-					tc.summary.length > 120
-						? tc.summary.substring(0, 120) + "..."
-						: tc.summary;
-			} else {
-				let firstSentence = tc.prompt.split(/[.!?]/)[0];
-				truncatedTitle =
-					firstSentence.length > 120
-						? firstSentence.substring(0, 120) + "..."
-						: firstSentence;
-			}
+			let firstSentence = tc.prompt.split(/[.!?]/)[0];
+			let truncatedTitle =
+				firstSentence.length > 120
+					? firstSentence.substring(0, 120) + "..."
+					: firstSentence;
 			let queueBadge = tc.isFromQueue
 				? '<span class="tool-call-badge queue">Queue</span>'
 				: "";
@@ -143,19 +135,11 @@ function renderHistoryModal() {
 
 	if (historyModalClearAll) historyModalClearAll.classList.remove("hidden");
 	function renderToolCallCard(tc) {
-		let truncatedTitle;
-		if (tc.summary) {
-			truncatedTitle =
-				tc.summary.length > 80
-					? tc.summary.substring(0, 80) + "..."
-					: tc.summary;
-		} else {
-			let firstSentence = tc.prompt.split(/[.!?]/)[0];
-			truncatedTitle =
-				firstSentence.length > 80
-					? firstSentence.substring(0, 80) + "..."
-					: firstSentence;
-		}
+		let firstSentence = tc.prompt.split(/[.!?]/)[0];
+		let truncatedTitle =
+			firstSentence.length > 80
+				? firstSentence.substring(0, 80) + "..."
+				: firstSentence;
 		let queueBadge = tc.isFromQueue
 			? '<span class="tool-call-badge queue">Queue</span>'
 			: "";

@@ -75,14 +75,13 @@ export function broadcastToolCallCompleted(
 	sessionTerminated?: boolean,
 ): void {
 	debugLog(
-		`[TaskSync] broadcastToolCallCompleted — id: ${entry.id}, status: ${entry.status}, response: "${(entry.response || "").slice(0, 60)}", summary: ${entry.summary ? `"${entry.summary.slice(0, 40)}"` : "(none)"}, sessionTerminated: ${!!sessionTerminated}`,
+		`[TaskSync] broadcastToolCallCompleted — id: ${entry.id}, status: ${entry.status}, response: "${(entry.response || "").slice(0, 60)}", sessionTerminated: ${!!sessionTerminated}`,
 	);
 	p._remoteServer?.broadcast("toolCallCompleted", {
 		id: entry.id,
 		entry: {
 			id: entry.id,
 			prompt: entry.prompt,
-			summary: entry.summary,
 			response: entry.response,
 			timestamp: entry.timestamp,
 			status: entry.status,

@@ -16,7 +16,7 @@ export async function dispatchSettingsMessage(
 	ws: WebSocket,
 	provider: P,
 	broadcastFn: (type: string, data: unknown) => void,
-	msg: { type: string; [key: string]: unknown },
+	msg: { type: string;[key: string]: unknown },
 ): Promise<boolean> {
 	switch (msg.type) {
 		case "updateSoundSetting":
@@ -26,6 +26,14 @@ export async function dispatchSettingsMessage(
 
 		case "updateInteractiveApprovalSetting":
 			await settingsH.handleUpdateInteractiveApprovalSetting(
+				provider,
+				msg.enabled === true,
+			);
+			broadcastSettingsChanged(provider, broadcastFn);
+			return true;
+
+		case "updateAskUserVerbosePayloadSetting":
+			await settingsH.handleUpdateAskUserVerbosePayloadSetting(
 				provider,
 				msg.enabled === true,
 			);

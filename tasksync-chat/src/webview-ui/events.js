@@ -121,6 +121,18 @@ function bindEventListeners() {
 			}
 		});
 	}
+	if (askUserVerbosePayloadToggle) {
+		askUserVerbosePayloadToggle.addEventListener(
+			"click",
+			toggleAskUserVerbosePayloadSetting,
+		);
+		askUserVerbosePayloadToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAskUserVerbosePayloadSetting();
+			}
+		});
+	}
 	if (sendShortcutToggle) {
 		sendShortcutToggle.addEventListener(
 			"click",

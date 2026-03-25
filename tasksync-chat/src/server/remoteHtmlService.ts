@@ -42,6 +42,14 @@ function isPathWithin(basePath: string, candidatePath: string): boolean {
 	return candidate === base || candidate.startsWith(`${base}${path.sep}`);
 }
 
+function decodePathSafely(encodedPath: string): string | undefined {
+	try {
+		return decodeURIComponent(encodedPath);
+	} catch {
+		return undefined;
+	}
+}
+
 /**
  * Handles HTTP requests, file serving, and HTML generation for the remote server.
  */
@@ -127,7 +135,12 @@ export class RemoteHtmlService {
 
 		// Route: /media/* - serve from media folder (VS Code webview assets)
 		if (url.pathname.startsWith("/media/")) {
-			const decodedPath = decodeURIComponent(url.pathname.slice(7));
+			const decodedPath = decodePathSafely(url.pathname.slice(7));
+			if (decodedPath === undefined) {
+				res.writeHead(400);
+				res.end("Bad Request");
+				return;
+			}
 			const normalizedPath = path
 				.normalize(decodedPath)
 				.replace(/^(\.\.[\/\\])+/, "");
@@ -186,7 +199,12 @@ export class RemoteHtmlService {
 		// Default: serve from web folder (login page, etc)
 		let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 
-		const decodedPath = decodeURIComponent(filePath);
+		const decodedPath = decodePathSafely(filePath);
+		if (decodedPath === undefined) {
+			res.writeHead(400);
+			res.end("Bad Request");
+			return;
+		}
 		const normalizedPath = path
 			.normalize(decodedPath)
 			.replace(/^(\.\.[\/\\])+/, "");

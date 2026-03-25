@@ -59,10 +59,11 @@ export function isValidFilePath(filePath: string): boolean {
 		const workspaceFolders = vscode.workspace.workspaceFolders;
 		if (!workspaceFolders || workspaceFolders.length === 0) return false;
 		const resolved = path.resolve(filePath);
-		const root = path.resolve(workspaceFolders[0].uri.fsPath);
-		const rel = path.relative(root, resolved);
-		if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
-		return true;
+		return workspaceFolders.some((folder) => {
+			const root = path.resolve(folder.uri.fsPath);
+			const rel = path.relative(root, resolved);
+			return !!rel && !rel.startsWith("..") && !path.isAbsolute(rel);
+		});
 	}
 
 	// Relative paths: reject directory traversal that escapes
@@ -155,10 +156,12 @@ export class GitService {
 			? vscode.Uri.file(filePath)
 			: undefined;
 		const repo = this.getRepo(fileUri);
-		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const workspaceRoot = fileUri
+			? vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath
+			: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 		if (!workspaceRoot) throw new Error("No workspace folder");
 		const relativePath = path.isAbsolute(filePath)
-			? vscode.workspace.asRelativePath(filePath)
+			? path.relative(workspaceRoot, filePath)
 			: filePath;
 		if (!isValidFilePath(relativePath)) throw new Error("Invalid file path");
 		return { repo, workspaceRoot, relativePath };

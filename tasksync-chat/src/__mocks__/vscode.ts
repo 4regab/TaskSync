@@ -15,6 +15,14 @@ export const workspace = {
 		inspect: () => undefined,
 	}),
 	workspaceFolders: [],
+	getWorkspaceFolder: (uri: { fsPath: string }) => {
+		const folders = workspace.workspaceFolders as Array<{ uri: { fsPath: string } }>;
+		const match = folders.find((folder) => {
+			const root = folder.uri.fsPath;
+			return uri.fsPath === root || uri.fsPath.startsWith(`${root}/`);
+		});
+		return match;
+	},
 	asRelativePath: (pathOrUri: string | { fsPath: string }) => {
 		const p = typeof pathOrUri === "string" ? pathOrUri : pathOrUri.fsPath;
 		return p.replace(/^\/workspace\//, "");

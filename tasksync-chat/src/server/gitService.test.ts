@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import * as vscode from "vscode";
+import { afterEach, describe, expect, it } from "vitest";
 import { isValidFilePath } from "../server/gitService";
 
 describe("isValidFilePath", () => {
+	afterEach(() => {
+		(vscode.workspace as { workspaceFolders: unknown[] }).workspaceFolders = [];
+	});
+
 	describe("valid paths", () => {
 		it("accepts simple filenames", () => {
 			expect(isValidFilePath("file.txt")).toBe(true);
@@ -16,6 +21,16 @@ describe("isValidFilePath", () => {
 		it("rejects absolute paths (no workspace root in test)", () => {
 			expect(isValidFilePath("/home/user/file.txt")).toBe(false);
 			expect(isValidFilePath("/Users/dev/project/src/app.ts")).toBe(false);
+		});
+
+		it("accepts absolute paths under any workspace folder", () => {
+			(vscode.workspace as { workspaceFolders: Array<{ uri: { fsPath: string } }> })
+				.workspaceFolders = [
+				{ uri: { fsPath: "/workspace/root-a" } },
+				{ uri: { fsPath: "/workspace/root-b" } },
+			];
+			expect(isValidFilePath("/workspace/root-b/src/app.ts")).toBe(true);
+			expect(isValidFilePath("/workspace/root-a/README.md")).toBe(true);
 		});
 
 		it("accepts paths with dots (non-traversal)", () => {

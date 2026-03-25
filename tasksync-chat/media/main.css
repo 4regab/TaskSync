@@ -1097,7 +1097,9 @@ body:not(.remote-mode) .changes-section {
     align-items: stretch;
     border-left: 2px solid transparent;
     min-width: 100%;
-    width: max(100%, max-content);
+    width: 100%;
+    min-width: max-content;
+    box-sizing: border-box;
 }
 
 .diff-line-number,

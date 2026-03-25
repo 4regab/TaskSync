@@ -8,7 +8,7 @@ This file provides guidance for AI coding agents working on the TaskSync reposit
 
 TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. It provides two integration options:
 
-1. **TaskSync VS Code Extension** (`tasksync-chat/`) — A sidebar extension with smart prompt queuing, Autopilot, and remote access.
+1. **TaskSync VS Code Extension** (`tasksync-chat/`) — A sidebar extension with smart prompt queuing, Autopilot, Consistent mode for `ask_user` behavior, and remote access with read-only Code Review.
 2. **TaskSync Prompt** (`Prompt/`) — Terminal-based agent protocols (Markdown prompts for use as AI instructions).
 
 The primary active codebase is the VS Code extension in `tasksync-chat/`.
@@ -36,7 +36,7 @@ TaskSync/
     │   ├── constants/              # Shared constants (config keys, file exclusions)
     │   ├── context/                # Context providers (files, terminal, problems)
     │   ├── server/                 # Remote access server, auth, git, HTML service
-    │   ├── utils/                  # Shared utilities (ID generation, image handling)
+    │   ├── utils/                  # Shared utilities (ID generation, image handling, chat session helpers)
     │   └── webview/
     │       ├── webviewProvider.ts  # Sidebar webview provider (orchestrator)
     │       ├── webviewTypes.ts     # Shared types (P interface, message unions)
@@ -88,6 +88,8 @@ npm install
 >
 > Always run `npm run validate` after making changes. This runs build, tsc, vitest, lint, and the code quality scanner.
 
+> **Linting note:** This repo is Biome-first. `npx eslint` is not configured by default (no `eslint.config.*`), so use `npm run lint`.
+
 ---
 
 ## Code Conventions
@@ -122,12 +124,23 @@ These principles are mandatory for all changes:
 ## Key Architectural Notes
 
 - The `ask_user` VS Code language model tool is the core interaction primitive. It is registered in `tools.ts` and handled in `toolCallHandler.ts`.
+- The `ask_user` input schema only accepts `question`
+- The `ask_user` result payload is compact by design:
+    - `response` is always included
+    - `queued` is only included when `true`
+    - `attachmentCount` is only included when greater than `0`
+    - `instruction` is only included when Consistent mode is enabled
 - `webviewProvider.ts` is the orchestrator — it owns state, creates the webview, and delegates to handler modules.
 - Handler modules (`*Handlers.ts`) receive a `P` interface (defined in `webviewTypes.ts`) that exposes provider state and methods without circular imports.
 - Queue, history, and settings are **per-workspace** (workspace-scoped storage with global fallback).
+- Consistent mode is controlled by `tasksync.askUserVerbosePayload` and mirrored through `settingsHandlers.ts` + `webview-ui` toggle wiring.
 - Session state uses a boolean `sessionTerminated` flag — do not use string matching for termination detection.
 - Debounced history saves (2 s) are used for disk I/O performance.
-- The remote server (`server/`) uses plain WebSocket over HTTP. Auth is PIN-based with session tokens.
+- New Session now supports a modal-first flow and starts a fresh Copilot chat session via `startFreshCopilotChatWithQuery`.
+- Remote Code Review is read-only by design:
+    - Diff browsing is available (`/api/changes`, `/api/diff`)
+    - Write operations (stage/unstage/discard/commit/push) are blocked remotely
+- The remote server (`server/`) uses WebSocket + HTTP endpoints. Auth is OTP/PIN-based with session tokens, and API requests prefer `x-tasksync-session` token auth when available.
 
 ---
 
@@ -157,6 +170,7 @@ Follow OWASP Top 10 principles. Specific patterns enforced in this codebase:
 - **Timing-safe comparison:** Use `crypto.timingSafeEqual` with SHA-256 digests for PIN/secret comparison. See `remoteAuthService.ts`.
 - **Path traversal prevention:** Validate all remote file paths with `isValidFilePath()` in `gitService.ts`. Use `path.isAbsolute()` instead of `startsWith("/")`.
 - **Command injection prevention:** Use `child_process.spawn` with argument arrays — never `exec` or string interpolation.
+- **Remote git safety:** Keep remote Code Review endpoints read-only unless explicitly redesigning the threat model and permission model.
 - **Input validation at boundaries:** Validate all user/remote input at the entry point. Trust internal code deeper in call stacks.
 - **Security headers:** Set CSP, X-Content-Type-Options, X-Frame-Options, and X-XSS-Protection on all HTTP responses.
 - **Origin validation:** Check `Origin` and `Host` headers on WebSocket upgrade requests.

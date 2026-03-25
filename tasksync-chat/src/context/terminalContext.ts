@@ -197,13 +197,6 @@ export class TerminalContextProvider implements vscode.Disposable {
 	}
 
 	/**
-	 * Get all recent commands
-	 */
-	public getRecentCommands(): TerminalCommand[] {
-		return [...this._commands];
-	}
-
-	/**
 	 * Get command by ID
 	 */
 	public getCommandById(id: string): TerminalCommand | undefined {
@@ -251,7 +244,7 @@ export class TerminalContextProvider implements vscode.Disposable {
 		id: string;
 		detail: string;
 	}> {
-		return this._commands.map((cmd, index) => {
+		return this._commands.map((cmd) => {
 			const timeAgo = this._formatTimeAgo(cmd.timestamp);
 			const exitStatus =
 				cmd.exitCode === 0 ? "✓" : cmd.exitCode !== undefined ? "✗" : "⋯";

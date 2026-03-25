@@ -1,7 +1,6 @@
 /**
- * Session timer, sound, and human-like delay logic extracted from webviewProvider.ts.
+ * Session timer and human-like delay logic extracted from webviewProvider.ts.
  */
-import { execFile, spawn } from "child_process";
 import * as vscode from "vscode";
 
 import type { P, ToWebviewMessage } from "./webviewTypes";
@@ -22,7 +21,7 @@ export async function applyHumanLikeDelay(p: P, label?: string): Promise<void> {
 	if (delayMs > 0) {
 		const delaySec = (delayMs / 1000).toFixed(1);
 		debugLog(
-			`[TaskSync] applyHumanLikeDelay — ${label || ""} waiting ${delaySec}s`,
+			`[TaskSync] applyHumanLikeDelay â€” ${label || ""} waiting ${delaySec}s`,
 		);
 		if (label) {
 			vscode.window.setStatusBarMessage(
@@ -71,7 +70,7 @@ export function updateViewTitle(p: P): void {
 export function startSessionTimerInterval(p: P): void {
 	if (p._sessionTimerInterval) return; // Already running
 	debugLog(
-		`[TaskSync] startSessionTimerInterval — starting timer, sessionStartTime: ${p._sessionStartTime}`,
+		`[TaskSync] startSessionTimerInterval â€” starting timer, sessionStartTime: ${p._sessionStartTime}`,
 	);
 	p._sessionTimerInterval = setInterval(() => {
 		if (p._sessionStartTime !== null && p._sessionFrozenElapsed === null) {
@@ -109,50 +108,8 @@ export function startSessionTimerInterval(p: P): void {
  */
 export function stopSessionTimerInterval(p: P): void {
 	if (p._sessionTimerInterval) {
-		debugLog("[TaskSync] stopSessionTimerInterval — stopping timer");
+		debugLog("[TaskSync] stopSessionTimerInterval â€” stopping timer");
 		clearInterval(p._sessionTimerInterval);
 		p._sessionTimerInterval = null;
-	}
-}
-
-/**
- * Play a system notification sound using OS-native methods.
- */
-export function playSystemSound(): void {
-	const platform = process.platform;
-	const onErr = (err: Error | null) => {
-		if (err)
-			debugLog(
-				"[TaskSync] playSystemSound — sound playback error:",
-				err.message,
-			);
-	};
-
-	try {
-		if (platform === "win32") {
-			const child = spawn(
-				"powershell.exe",
-				["-Command", "[System.Media.SystemSounds]::Exclamation.Play()"],
-				{ stdio: "ignore", windowsHide: true },
-			);
-			child.on("error", onErr);
-			child.unref();
-		} else if (platform === "darwin") {
-			const child = execFile(
-				"afplay",
-				["/System/Library/Sounds/Tink.aiff"],
-				onErr,
-			);
-			child.unref();
-		} else {
-			const child = execFile(
-				"paplay",
-				["/usr/share/sounds/freedesktop/stereo/message.oga"],
-				onErr,
-			);
-			child.unref();
-		}
-	} catch (e) {
-		debugLog("[TaskSync] playSystemSound — sound playback error:", e);
 	}
 }

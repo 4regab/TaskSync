@@ -1,7 +1,6 @@
 import type { WebSocket } from "ws";
 import {
 	ErrorCode,
-	MAX_COMMIT_MESSAGE_LENGTH,
 	MAX_FILE_PATH_LENGTH,
 	MAX_SEARCH_QUERY_LENGTH,
 	truncateDiff,
@@ -67,151 +66,6 @@ export async function handleGetDiff(
 }
 
 /**
- * Handle stageFile request - stages a file and broadcasts update.
- */
-export async function handleStageFile(
-	ws: WebSocket,
-	gitService: GitService,
-	gitServiceAvailable: boolean,
-	broadcast: BroadcastFn,
-	filePath: string,
-): Promise<void> {
-	if (!requireGitService(ws, gitServiceAvailable)) return;
-	try {
-		await gitService.stage(filePath);
-		const changes = await gitService.getChanges();
-		broadcast("changesUpdated", changes);
-		ws.send(JSON.stringify({ type: "staged", file: filePath }));
-	} catch (err) {
-		console.error(
-			"[TaskSync Remote] stageFile error:",
-			getSafeErrorMessage(err),
-		);
-		sendWsError(ws, "Failed to stage file");
-	}
-}
-
-/**
- * Handle unstageFile request - unstages a file and broadcasts update.
- */
-export async function handleUnstageFile(
-	ws: WebSocket,
-	gitService: GitService,
-	gitServiceAvailable: boolean,
-	broadcast: BroadcastFn,
-	filePath: string,
-): Promise<void> {
-	if (!requireGitService(ws, gitServiceAvailable)) return;
-	try {
-		await gitService.unstage(filePath);
-		const changes = await gitService.getChanges();
-		broadcast("changesUpdated", changes);
-		ws.send(JSON.stringify({ type: "unstaged", file: filePath }));
-	} catch (err) {
-		console.error(
-			"[TaskSync Remote] unstageFile error:",
-			getSafeErrorMessage(err),
-		);
-		sendWsError(ws, "Failed to unstage file");
-	}
-}
-
-/**
- * Handle stageAll request - stages all files and broadcasts update.
- */
-export async function handleStageAll(
-	ws: WebSocket,
-	gitService: GitService,
-	gitServiceAvailable: boolean,
-	broadcast: BroadcastFn,
-): Promise<void> {
-	if (!requireGitService(ws, gitServiceAvailable)) return;
-	try {
-		await gitService.stageAll();
-		const changes = await gitService.getChanges();
-		broadcast("changesUpdated", changes);
-		ws.send(JSON.stringify({ type: "stagedAll" }));
-	} catch (err) {
-		console.error(
-			"[TaskSync Remote] stageAll error:",
-			getSafeErrorMessage(err),
-		);
-		sendWsError(ws, "Failed to stage files");
-	}
-}
-
-/**
- * Handle discardFile request - discards changes to a file and broadcasts update.
- */
-export async function handleDiscardFile(
-	ws: WebSocket,
-	gitService: GitService,
-	gitServiceAvailable: boolean,
-	broadcast: BroadcastFn,
-	filePath: string,
-): Promise<void> {
-	if (!requireGitService(ws, gitServiceAvailable)) return;
-	try {
-		await gitService.discard(filePath);
-		const changes = await gitService.getChanges();
-		broadcast("changesUpdated", changes);
-		ws.send(JSON.stringify({ type: "discarded", file: filePath }));
-	} catch (err) {
-		console.error(
-			"[TaskSync Remote] discardFile error:",
-			getSafeErrorMessage(err),
-		);
-		sendWsError(ws, "Failed to discard changes");
-	}
-}
-
-/**
- * Handle commit request - commits staged changes and broadcasts update.
- */
-export async function handleCommit(
-	ws: WebSocket,
-	gitService: GitService,
-	gitServiceAvailable: boolean,
-	broadcast: BroadcastFn,
-	message: string,
-): Promise<void> {
-	if (!requireGitService(ws, gitServiceAvailable)) return;
-	// Validate commit message
-	const trimmed = (message || "").trim();
-	if (!trimmed || trimmed.length > MAX_COMMIT_MESSAGE_LENGTH) {
-		sendWsError(ws, "Invalid commit message", ErrorCode.INVALID_INPUT);
-		return;
-	}
-	try {
-		await gitService.commit(trimmed);
-		const changes = await gitService.getChanges();
-		broadcast("changesUpdated", changes);
-		ws.send(JSON.stringify({ type: "committed" }));
-	} catch (err) {
-		console.error("[TaskSync Remote] commit error:", getSafeErrorMessage(err));
-		sendWsError(ws, "Failed to commit");
-	}
-}
-
-/**
- * Handle push request - pushes commits to remote.
- */
-export async function handlePush(
-	ws: WebSocket,
-	gitService: GitService,
-	gitServiceAvailable: boolean,
-): Promise<void> {
-	if (!requireGitService(ws, gitServiceAvailable)) return;
-	try {
-		await gitService.push();
-		ws.send(JSON.stringify({ type: "pushed" }));
-	} catch (err) {
-		console.error("[TaskSync Remote] push error:", getSafeErrorMessage(err));
-		sendWsError(ws, "Failed to push");
-	}
-}
-
-/**
  * Handle searchFiles request - searches workspace files.
  */
 export async function handleSearchFiles(
@@ -263,9 +117,9 @@ export async function dispatchGitMessage(
 	ws: WebSocket,
 	gitService: GitService,
 	gitServiceAvailable: boolean,
-	broadcast: BroadcastFn,
+	_broadcast: BroadcastFn,
 	searchFn: (query: string) => Promise<unknown[]>,
-	msg: { type: string;[key: string]: unknown },
+	msg: { type: string; [key: string]: unknown },
 ): Promise<boolean> {
 	const isWriteType =
 		msg.type === "stageFile" ||
@@ -290,57 +144,6 @@ export async function dispatchGitMessage(
 			await handleGetDiff(ws, gitService, gitServiceAvailable, file);
 			return true;
 		}
-		case "stageFile": {
-			const file = validateFilePath(ws, msg.file);
-			if (!file) return true;
-			await handleStageFile(
-				ws,
-				gitService,
-				gitServiceAvailable,
-				broadcast,
-				file,
-			);
-			return true;
-		}
-		case "unstageFile": {
-			const file = validateFilePath(ws, msg.file);
-			if (!file) return true;
-			await handleUnstageFile(
-				ws,
-				gitService,
-				gitServiceAvailable,
-				broadcast,
-				file,
-			);
-			return true;
-		}
-		case "stageAll":
-			await handleStageAll(ws, gitService, gitServiceAvailable, broadcast);
-			return true;
-		case "discardFile": {
-			const file = validateFilePath(ws, msg.file);
-			if (!file) return true;
-			await handleDiscardFile(
-				ws,
-				gitService,
-				gitServiceAvailable,
-				broadcast,
-				file,
-			);
-			return true;
-		}
-		case "commitChanges":
-			await handleCommit(
-				ws,
-				gitService,
-				gitServiceAvailable,
-				broadcast,
-				typeof msg.message === "string" ? msg.message : "",
-			);
-			return true;
-		case "pushChanges":
-			await handlePush(ws, gitService, gitServiceAvailable);
-			return true;
 		case "searchFiles":
 			await handleSearchFiles(
 				ws,

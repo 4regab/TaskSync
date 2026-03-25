@@ -111,11 +111,6 @@
           "default": false,
           "description": "Enable verbose debug logging for remote server (outputs to VS Code debug console)."
         },
-        "tasksync.remotePin": {
-          "type": "string",
-          "default": "",
-          "description": "Deprecated. Static custom PINs are no longer used — remote auth now generates a random PIN on each server start."
-        },
         "tasksync.autopilot": {
           "type": "boolean",
           "default": false,
@@ -263,14 +258,6 @@
               "name",
               "prompt"
             ]
-          }
-        },
-        "tasksync.remoteAllowedToolPrefixes": {
-          "type": "array",
-          "default": [],
-          "description": "Tool name prefixes to include in remote chat sessions. If empty, all tools are included (up to model limit). Example: [\"github_\", \"context_\"] to only include matching tools. The ask_user tool is always included regardless of this setting.",
-          "items": {
-            "type": "string"
           }
         },
         "tasksync.remoteChatCommand": {

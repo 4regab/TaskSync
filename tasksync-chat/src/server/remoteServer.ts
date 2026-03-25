@@ -284,7 +284,6 @@ export class RemoteServer {
 				this.gitService,
 				this.gitServiceAvailable,
 				this.provider,
-				this.broadcast.bind(this),
 			);
 		this.server = createServer(handler, this.tlsCert);
 		this.wss = new WebSocketServer({

@@ -126,64 +126,20 @@ export function loadSettings(p: P): void {
 		"askUserVerbosePayload",
 		false,
 	);
-
-	// Backward-compatible migration: read old 'autoAnswer'/'autoAnswerText' keys
-	const inspectedAutopilot = config.inspect<boolean>("autopilot");
-	const hasNewAutopilotKey =
-		inspectedAutopilot?.globalValue !== undefined ||
-		inspectedAutopilot?.workspaceValue !== undefined ||
-		inspectedAutopilot?.workspaceFolderValue !== undefined;
-
-	if (!hasNewAutopilotKey) {
-		const oldVal = config.inspect<boolean>("autoAnswer");
-		const hasOldKey =
-			oldVal?.globalValue !== undefined ||
-			oldVal?.workspaceValue !== undefined ||
-			oldVal?.workspaceFolderValue !== undefined;
-		if (hasOldKey) {
-			p._autopilotEnabled = config.get<boolean>("autoAnswer", false);
-		} else {
-			p._autopilotEnabled = false;
-		}
-	} else {
-		p._autopilotEnabled = config.get<boolean>("autopilot", false);
-	}
+	p._autopilotEnabled = config.get<boolean>("autopilot", false);
 
 	const defaultAutopilotText = getAutopilotDefaultText(p, config);
-	const inspectedAutopilotText = config.inspect<string>("autopilotText");
-	const hasNewAutopilotTextKey =
-		inspectedAutopilotText?.globalValue !== undefined ||
-		inspectedAutopilotText?.workspaceValue !== undefined ||
-		inspectedAutopilotText?.workspaceFolderValue !== undefined;
+	const configuredAutopilotText = config.get<string>(
+		"autopilotText",
+		defaultAutopilotText,
+	);
+	p._autopilotText = normalizeAutopilotText(
+		p,
+		configuredAutopilotText,
+		config,
+	);
 
-	if (!hasNewAutopilotTextKey) {
-		const oldTextVal = config.inspect<string>("autoAnswerText");
-		const hasOldTextKey =
-			oldTextVal?.globalValue !== undefined ||
-			oldTextVal?.workspaceValue !== undefined ||
-			oldTextVal?.workspaceFolderValue !== undefined;
-		if (hasOldTextKey) {
-			const oldText = config.get<string>(
-				"autoAnswerText",
-				defaultAutopilotText,
-			);
-			p._autopilotText = normalizeAutopilotText(p, oldText, config);
-		} else {
-			p._autopilotText = defaultAutopilotText;
-		}
-	} else {
-		const configuredAutopilotText = config.get<string>(
-			"autopilotText",
-			defaultAutopilotText,
-		);
-		p._autopilotText = normalizeAutopilotText(
-			p,
-			configuredAutopilotText,
-			config,
-		);
-	}
-
-	// Load autopilot prompts array (with fallback to autopilotText for migration)
+	// Load autopilot prompts array, falling back to autopilotText when empty.
 	const savedAutopilotPrompts = config.get<string[]>("autopilotPrompts", []);
 	if (savedAutopilotPrompts.length > 0) {
 		p._autopilotPrompts = savedAutopilotPrompts.filter(

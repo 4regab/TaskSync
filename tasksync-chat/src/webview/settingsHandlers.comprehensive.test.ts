@@ -215,24 +215,6 @@ describe("loadSettings", () => {
 		expect(p._humanLikeDelayEnabled).toBe(false);
 	});
 
-	it("migrates from old autoAnswer key", () => {
-		const config = createMockConfig({ autoAnswer: true });
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return undefined;
-			if (key === "autoAnswer") return { globalValue: true };
-			if (key === "autopilotText") return undefined;
-			if (key === "autoAnswerText") return undefined;
-			return undefined;
-		});
-		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
-			config as any,
-		);
-
-		const p = createMockP();
-		loadSettings(p);
-		expect(p._autopilotEnabled).toBe(true);
-	});
-
 	it("uses new autopilot key when set", () => {
 		const config = createMockConfig({ autopilot: true });
 		config.inspect.mockImplementation((key: string) => {
@@ -358,26 +340,6 @@ describe("loadSettings", () => {
 		const p = createMockP();
 		loadSettings(p);
 		expect(p._sessionWarningHours).toBe(DEFAULT_SESSION_WARNING_HOURS);
-	});
-
-	it("migrates old autoAnswerText to autopilotText", () => {
-		const config = createMockConfig({
-			autoAnswerText: "Old auto text",
-		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return undefined;
-			if (key === "autoAnswer") return undefined;
-			if (key === "autopilotText") return undefined;
-			if (key === "autoAnswerText") return { globalValue: "Old auto text" };
-			return undefined;
-		});
-		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
-			config as any,
-		);
-
-		const p = createMockP();
-		loadSettings(p);
-		expect(p._autopilotText).toBe("Old auto text");
 	});
 
 	it("falls back autopilotPrompts to autopilotText when no saved prompts", () => {

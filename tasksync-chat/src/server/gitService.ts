@@ -6,10 +6,6 @@ interface Repository {
 	state: RepositoryState;
 	rootUri?: vscode.Uri;
 	diffWithHEAD(path: string): Promise<string>;
-	add(paths: string[]): Promise<void>;
-	clean(paths: string[]): Promise<void>;
-	commit(message: string): Promise<void>;
-	push(): Promise<void>;
 }
 
 interface RepositoryState {
@@ -82,13 +78,6 @@ export class GitService {
 	private api: GitAPI | null = null;
 	private initialized: boolean = false;
 
-	/**
-	 * TaskSync remote Code Review operates in read-only mode.
-	 */
-	isReadOnlyMode(): boolean {
-		return true;
-	}
-
 	async initialize(): Promise<void> {
 		if (this.initialized) return;
 
@@ -103,10 +92,6 @@ export class GitService {
 
 		this.api = gitExt.exports.getAPI(1);
 		this.initialized = true;
-	}
-
-	isInitialized(): boolean {
-		return this.initialized && this.api !== null;
 	}
 
 	private getRepo(fileUri?: vscode.Uri): Repository {
@@ -231,67 +216,5 @@ export class GitService {
 			console.error("[TaskSync Git] Diff failed for", relativePath, err);
 			return "";
 		}
-	}
-
-	async stage(filePath: string): Promise<void> {
-		const { repo, relativePath } = this.resolveFilePath(filePath);
-		await repo.add([relativePath]);
-	}
-
-	async stageAll(): Promise<void> {
-		const repo = this.getRepo();
-		const repoRoot = repo.rootUri?.fsPath;
-		const paths = repo.state.workingTreeChanges.map((c) =>
-			this.toRepoRelativePath(repo, c.uri.fsPath, repoRoot),
-		);
-		if (paths.length > 0) {
-			await repo.add(paths);
-		}
-	}
-
-	async unstage(filePath: string): Promise<void> {
-		const { repoRoot, relativePath } = this.resolveFilePath(filePath);
-
-		// Use spawn with arguments array to completely avoid shell injection
-		const { spawn } = await import("node:child_process");
-		await new Promise<void>((resolve, reject) => {
-			const proc = spawn("git", ["reset", "HEAD", "--", relativePath], {
-				cwd: repoRoot,
-			});
-			let stderr = "";
-			proc.stderr.on("data", (data) => {
-				stderr += data;
-			});
-			proc.on("close", (code) => {
-				if (code === 0) resolve();
-				else reject(new Error(stderr || `git reset failed with code ${code}`));
-			});
-			proc.on("error", reject);
-		});
-	}
-
-	async discard(filePath: string): Promise<void> {
-		const { repo, relativePath } = this.resolveFilePath(filePath);
-		await repo.clean([relativePath]);
-	}
-
-	async commit(message: string): Promise<void> {
-		if (!message || !message.trim()) {
-			throw new Error("Commit message required");
-		}
-
-		const repo = this.getRepo();
-
-		// Check if there are staged changes
-		if (repo.state.indexChanges.length === 0) {
-			throw new Error("Nothing to commit");
-		}
-
-		await repo.commit(message.trim());
-	}
-
-	async push(): Promise<void> {
-		const repo = this.getRepo();
-		await repo.push();
 	}
 }

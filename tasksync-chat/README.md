@@ -28,7 +28,7 @@ Control TaskSync from your phone or any browser while away from your desk:
 - **LAN Mode**: Connect from any device on your network with a 4-6 digit PIN
 - **Internet Access via Tailscale**: Install [Tailscale](https://tailscale.com/download) on your Mac and phone for free — access TaskSync from anywhere over an encrypted mesh VPN, no port forwarding needed
 - **PWA**: Install as an app on your phone for quick access
-- **Code Review**: View diffs, stage/discard changes, commit and push from your phone
+- **Code Review**: View diffs and current git status from your phone
 - **Sound Notifications**: Get alerted when the AI needs your input
 - Never miss a prompt - respond from the couch, during lunch, or anywhere
 
@@ -204,7 +204,6 @@ In VS Code Settings (search "tasksync"):
 - `tasksync.remotePinEnabled`: Require PIN authentication for LAN mode (default: true)
 - `tasksync.remoteMaxDevices`: Maximum simultaneous connected devices (default: 2)
 - `tasksync.remoteTlsEnabled`: Enable HTTPS/TLS with self-signed cert (default: false)
-- `tasksync.remotePin`: Deprecated (static custom PIN is no longer used)
 - `tasksync.remoteDebugLogging`: Verbose remote server logging (default: false)
 
 **Debug:**

@@ -2,13 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
 import { GitService, isValidFilePath } from "../server/gitService";
 
-// Mock child_process.spawn
-vi.mock("node:child_process", () => ({
-	spawn: vi.fn(),
-}));
-
-// ─── Mock helpers ────────────────────────────────────────────
-
 function createMockRepo(overrides: Partial<any> = {}) {
 	return {
 		state: {
@@ -17,10 +10,6 @@ function createMockRepo(overrides: Partial<any> = {}) {
 			...overrides.state,
 		},
 		diffWithHEAD: vi.fn().mockResolvedValue("diff output"),
-		add: vi.fn().mockResolvedValue(undefined),
-		clean: vi.fn().mockResolvedValue(undefined),
-		commit: vi.fn().mockResolvedValue(undefined),
-		push: vi.fn().mockResolvedValue(undefined),
 		...overrides,
 	};
 }
@@ -42,8 +31,6 @@ function setupGitExtension(api: any, isActive = true) {
 	return ext;
 }
 
-// ─── isValidFilePath (already tested, but adding edge cases) ─
-
 describe("isValidFilePath edge cases", () => {
 	it("rejects null-byte injection", () => {
 		expect(isValidFilePath("file\x00.txt")).toBe(false);
@@ -54,12 +41,9 @@ describe("isValidFilePath edge cases", () => {
 	});
 
 	it("allows .. in middle of path that normalizes safely", () => {
-		// "a/b/../c" normalizes to "a/c" — does not start with ".."
 		expect(isValidFilePath("a/b/../c")).toBe(true);
 	});
 });
-
-// ─── GitService.initialize ──────────────────────────────────
 
 describe("GitService.initialize", () => {
 	let service: GitService;
@@ -70,20 +54,22 @@ describe("GitService.initialize", () => {
 	});
 
 	it("initializes successfully with active git extension", async () => {
-		const api = createMockGitAPI();
+		const repo = createMockRepo();
+		const api = createMockGitAPI([repo]);
 		setupGitExtension(api);
 
 		await service.initialize();
-		expect(service.isInitialized()).toBe(true);
+		const changes = await service.getChanges();
+		expect(changes).toEqual({ staged: [], unstaged: [] });
 	});
 
 	it("activates inactive git extension", async () => {
-		const api = createMockGitAPI();
+		const repo = createMockRepo();
+		const api = createMockGitAPI([repo]);
 		const ext = setupGitExtension(api, false);
 
 		await service.initialize();
 		expect(ext.activate).toHaveBeenCalled();
-		expect(service.isInitialized()).toBe(true);
 	});
 
 	it("throws when git extension is not found", async () => {
@@ -100,22 +86,10 @@ describe("GitService.initialize", () => {
 		setupGitExtension(api);
 
 		await service.initialize();
-		await service.initialize(); // second call
-		// getExtension should only be called once
+		await service.initialize();
 		expect(vscode.extensions.getExtension).toHaveBeenCalledTimes(1);
 	});
 });
-
-// ─── GitService.isInitialized ───────────────────────────────
-
-describe("GitService.isInitialized", () => {
-	it("returns false before initialization", () => {
-		const service = new GitService();
-		expect(service.isInitialized()).toBe(false);
-	});
-});
-
-// ─── GitService.getChanges ──────────────────────────────────
 
 describe("GitService.getChanges", () => {
 	let service: GitService;
@@ -185,8 +159,6 @@ describe("GitService.getChanges", () => {
 	});
 });
 
-// ─── GitService.getDiff ─────────────────────────────────────
-
 describe("GitService.getDiff", () => {
 	let service: GitService;
 	let repo: any;
@@ -199,7 +171,6 @@ describe("GitService.getDiff", () => {
 		const api = createMockGitAPI([repo]);
 		setupGitExtension(api);
 
-		// Set workspace folder
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/workspace" } },
 		];
@@ -238,192 +209,6 @@ describe("GitService.getDiff", () => {
 	});
 });
 
-// ─── GitService.stage ───────────────────────────────────────
-
-describe("GitService.stage", () => {
-	let service: GitService;
-	let repo: any;
-
-	beforeEach(async () => {
-		service = new GitService();
-		vi.restoreAllMocks();
-
-		repo = createMockRepo();
-		const api = createMockGitAPI([repo]);
-		setupGitExtension(api);
-
-		(vscode.workspace as any).workspaceFolders = [
-			{ uri: { fsPath: "/workspace" } },
-		];
-
-		await service.initialize();
-	});
-
-	it("stages a relative path", async () => {
-		await service.stage("src/file.ts");
-		expect(repo.add).toHaveBeenCalledWith(["src/file.ts"]);
-	});
-
-	it("converts absolute path to relative before staging", async () => {
-		await service.stage("/workspace/src/file.ts");
-		expect(repo.add).toHaveBeenCalled();
-	});
-
-	it("throws for invalid file path", async () => {
-		await expect(service.stage("file|bad")).rejects.toThrow(
-			"Invalid file path",
-		);
-	});
-
-	it("throws when no workspace folder", async () => {
-		(vscode.workspace as any).workspaceFolders = [];
-		await expect(service.stage("file.ts")).rejects.toThrow(
-			"No workspace folder",
-		);
-	});
-});
-
-// ─── GitService.stageAll ────────────────────────────────────
-
-describe("GitService.stageAll", () => {
-	let service: GitService;
-	let repo: any;
-
-	beforeEach(async () => {
-		service = new GitService();
-		vi.restoreAllMocks();
-
-		repo = createMockRepo({
-			state: {
-				indexChanges: [],
-				workingTreeChanges: [
-					{ uri: { fsPath: "/workspace/a.ts" } },
-					{ uri: { fsPath: "/workspace/b.ts" } },
-				],
-			},
-		});
-		const api = createMockGitAPI([repo]);
-		setupGitExtension(api);
-		await service.initialize();
-	});
-
-	it("stages all working tree changes", async () => {
-		await service.stageAll();
-		expect(repo.add).toHaveBeenCalledWith(["a.ts", "b.ts"]);
-	});
-
-	it("does nothing when no working tree changes", async () => {
-		repo.state.workingTreeChanges = [];
-		await service.stageAll();
-		expect(repo.add).not.toHaveBeenCalled();
-	});
-});
-
-// ─── GitService.discard ─────────────────────────────────────
-
-describe("GitService.discard", () => {
-	let service: GitService;
-	let repo: any;
-
-	beforeEach(async () => {
-		service = new GitService();
-		vi.restoreAllMocks();
-
-		repo = createMockRepo();
-		const api = createMockGitAPI([repo]);
-		setupGitExtension(api);
-		await service.initialize();
-
-		(vscode.workspace as any).workspaceFolders = [
-			{ uri: { fsPath: "/workspace" } },
-		];
-	});
-
-	it("discards changes for relative path", async () => {
-		await service.discard("src/file.ts");
-		expect(repo.clean).toHaveBeenCalledWith(["src/file.ts"]);
-	});
-
-	it("converts absolute path to relative", async () => {
-		await service.discard("/workspace/src/file.ts");
-		expect(repo.clean).toHaveBeenCalled();
-	});
-
-	it("throws for invalid file path", async () => {
-		await expect(service.discard("file`cmd`")).rejects.toThrow(
-			"Invalid file path",
-		);
-	});
-});
-
-// ─── GitService.commit ──────────────────────────────────────
-
-describe("GitService.commit", () => {
-	let service: GitService;
-	let repo: any;
-
-	beforeEach(async () => {
-		service = new GitService();
-		vi.restoreAllMocks();
-
-		repo = createMockRepo({
-			state: {
-				indexChanges: [{ uri: { fsPath: "/workspace/f.ts" }, status: 0 }],
-				workingTreeChanges: [],
-			},
-		});
-		const api = createMockGitAPI([repo]);
-		setupGitExtension(api);
-		await service.initialize();
-	});
-
-	it("commits with trimmed message", async () => {
-		await service.commit("  fix: bug  ");
-		expect(repo.commit).toHaveBeenCalledWith("fix: bug");
-	});
-
-	it("throws for empty message", async () => {
-		await expect(service.commit("")).rejects.toThrow("Commit message required");
-	});
-
-	it("throws for whitespace-only message", async () => {
-		await expect(service.commit("   ")).rejects.toThrow(
-			"Commit message required",
-		);
-	});
-
-	it("throws when nothing is staged", async () => {
-		repo.state.indexChanges = [];
-		await expect(service.commit("some message")).rejects.toThrow(
-			"Nothing to commit",
-		);
-	});
-});
-
-// ─── GitService.push ────────────────────────────────────────
-
-describe("GitService.push", () => {
-	let service: GitService;
-	let repo: any;
-
-	beforeEach(async () => {
-		service = new GitService();
-		vi.restoreAllMocks();
-
-		repo = createMockRepo();
-		const api = createMockGitAPI([repo]);
-		setupGitExtension(api);
-		await service.initialize();
-	});
-
-	it("delegates to repo.push", async () => {
-		await service.push();
-		expect(repo.push).toHaveBeenCalled();
-	});
-});
-
-// ─── GitService.getRepo (multi-root) ────────────────────────
-
 describe("GitService getRepo multi-root", () => {
 	let service: GitService;
 
@@ -442,7 +227,6 @@ describe("GitService getRepo multi-root", () => {
 		setupGitExtension(api);
 		await service.initialize();
 
-		// getDiff with absolute path under workspace triggers getRepo(fileUri)
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/project-a" } },
 		];
@@ -460,7 +244,6 @@ describe("GitService getRepo multi-root", () => {
 		setupGitExtension(api);
 		await service.initialize();
 
-		// Set active editor
 		(vscode.window as any).activeTextEditor = {
 			document: { uri: { fsPath: "/editor/file.ts" } },
 		};
@@ -489,102 +272,5 @@ describe("GitService getRepo multi-root", () => {
 		(vscode.window as any).activeTextEditor = undefined;
 
 		await expect(service.getChanges()).rejects.toThrow("No repository found");
-	});
-});
-
-// ─── GitService.unstage ─────────────────────────────────────
-
-describe("GitService.unstage", () => {
-	let service: GitService;
-
-	beforeEach(async () => {
-		service = new GitService();
-		vi.restoreAllMocks();
-
-		const repo = createMockRepo();
-		const api = createMockGitAPI([repo]);
-		setupGitExtension(api);
-
-		(vscode.workspace as any).workspaceFolders = [
-			{ uri: { fsPath: "/workspace" } },
-		];
-
-		await service.initialize();
-	});
-
-	it("spawns git reset HEAD for valid path", async () => {
-		const { spawn } = await import("node:child_process");
-		const mockProc = {
-			stderr: { on: vi.fn() },
-			on: vi.fn((event: string, cb: any) => {
-				if (event === "close") setTimeout(() => cb(0), 0);
-			}),
-		};
-		(spawn as any).mockReturnValue(mockProc);
-
-		await service.unstage("src/file.ts");
-		expect(spawn).toHaveBeenCalledWith(
-			"git",
-			["reset", "HEAD", "--", "src/file.ts"],
-			{ cwd: "/workspace" },
-		);
-	});
-
-	it("rejects when git reset fails", async () => {
-		const { spawn } = await import("node:child_process");
-		const mockProc = {
-			stderr: {
-				on: vi.fn((event: string, cb: any) => {
-					if (event === "data") cb("fatal: error");
-				}),
-			},
-			on: vi.fn((event: string, cb: any) => {
-				if (event === "close") setTimeout(() => cb(1), 0);
-			}),
-		};
-		(spawn as any).mockReturnValue(mockProc);
-
-		await expect(service.unstage("file.ts")).rejects.toThrow("fatal: error");
-	});
-
-	it("rejects when spawn emits error", async () => {
-		const { spawn } = await import("node:child_process");
-		const mockProc = {
-			stderr: { on: vi.fn() },
-			on: vi.fn((event: string, cb: any) => {
-				if (event === "error") setTimeout(() => cb(new Error("ENOENT")), 0);
-			}),
-		};
-		(spawn as any).mockReturnValue(mockProc);
-
-		await expect(service.unstage("file.ts")).rejects.toThrow("ENOENT");
-	});
-
-	it("throws for invalid file path", async () => {
-		await expect(service.unstage("file;rm -rf /")).rejects.toThrow(
-			"Invalid file path",
-		);
-	});
-
-	it("throws when no workspace folder", async () => {
-		(vscode.workspace as any).workspaceFolders = [];
-		await expect(service.unstage("file.ts")).rejects.toThrow(
-			"No workspace folder",
-		);
-	});
-
-	it("provides default error message when stderr is empty", async () => {
-		const { spawn } = await import("node:child_process");
-		const mockProc = {
-			stderr: { on: vi.fn() },
-			on: vi.fn((event: string, cb: any) => {
-				if (event === "close") setTimeout(() => cb(128), 0);
-			}),
-		};
-		(spawn as any).mockReturnValue(mockProc);
-
-		await expect(service.unstage("file.ts")).rejects.toThrow(
-			"git reset failed with code 128",
-		);
 	});
 });

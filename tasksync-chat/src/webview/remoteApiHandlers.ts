@@ -346,7 +346,7 @@ export async function setAutopilotEnabled(
  * Uses a glob pattern incorporating the query to avoid loading all workspace files.
  */
 export async function searchFilesForRemote(
-	p: P,
+	_p: P,
 	query: string,
 ): Promise<FileSearchResult[]> {
 	const queryLower = (query || "").toLowerCase();

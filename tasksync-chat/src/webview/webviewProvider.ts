@@ -128,7 +128,7 @@ export class TaskSyncWebviewProvider
 	// Autopilot enabled (loaded from VS Code settings)
 	_autopilotEnabled: boolean = false;
 
-	// Autopilot text (legacy, kept for backward compatibility)
+	// Autopilot fallback text used when no autopilot prompts are configured.
 	_autopilotText: string = "";
 
 	// Autopilot prompts array (cycles through in order)
@@ -218,8 +218,6 @@ export class TaskSyncWebviewProvider
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilot`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotText`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotPrompts`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autoAnswer`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autoAnswerText`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
@@ -476,13 +474,6 @@ export class TaskSyncWebviewProvider
 		return toolCall.waitForUserResponse(this, question);
 	}
 
-	/**
-	 * Check if queue is enabled
-	 */
-	public isQueueEnabled(): boolean {
-		return this._queueEnabled;
-	}
-
 	_handleWebviewMessage(message: FromWebviewMessage): void {
 		router.handleWebviewMessage(this, message);
 	}
@@ -561,20 +552,12 @@ export class TaskSyncWebviewProvider
 		persist.saveQueueToDisk(this);
 	}
 
-	private async _saveQueueToDiskAsync(): Promise<void> {
-		return persist.saveQueueToDiskAsync(this);
-	}
-
 	private async _loadPersistedHistoryFromDiskAsync(): Promise<void> {
 		return persist.loadPersistedHistoryFromDiskAsync(this);
 	}
 
 	_savePersistedHistoryToDisk(): void {
 		persist.savePersistedHistoryToDisk(this);
-	}
-
-	private async _savePersistedHistoryToDiskAsync(): Promise<void> {
-		return persist.savePersistedHistoryToDiskAsync(this);
 	}
 
 	private _savePersistedHistoryToDiskSync(): void {

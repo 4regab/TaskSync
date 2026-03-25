@@ -2,13 +2,12 @@ import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
 import {
-	MAX_COMMIT_MESSAGE_LENGTH,
 	MAX_FILE_PATH_LENGTH,
 	truncateDiff,
 } from "../constants/remoteConstants";
 import type { FileSearchResult } from "../webview/webviewProvider";
 import type { GitService } from "./gitService";
-import { GIT_READ_ONLY_MESSAGE, isValidFilePath } from "./gitService";
+import { isValidFilePath } from "./gitService";
 import type { RemoteAuthService } from "./remoteAuthService";
 import {
 	getSafeErrorMessage,
@@ -55,7 +54,6 @@ function decodePathSafely(encodedPath: string): string | undefined {
  */
 export class RemoteHtmlService {
 	private _cachedBodyTemplate: string | null = null;
-	private readonly MAX_BODY_SIZE = 1024 * 1024; // 1MB
 	/** Set by RemoteServer when TLS is active, enables HSTS header. */
 	public tlsEnabled = false;
 
@@ -95,7 +93,6 @@ export class RemoteHtmlService {
 		provider: {
 			searchFilesForRemote: (query: string) => Promise<FileSearchResult[]>;
 		},
-		broadcast?: (type: string, data: unknown) => void,
 	): void {
 		const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
@@ -109,7 +106,6 @@ export class RemoteHtmlService {
 				gitService,
 				gitServiceAvailable,
 				provider,
-				broadcast,
 			).catch((err) => {
 				console.error("[TaskSync Remote] API error:", err);
 				if (!res.headersSent) {
@@ -411,7 +407,6 @@ export class RemoteHtmlService {
 		provider: {
 			searchFilesForRemote: (query: string) => Promise<FileSearchResult[]>;
 		},
-		broadcast?: (type: string, data: unknown) => void,
 	): Promise<void> {
 		res.setHeader("Content-Type", "application/json");
 		setSecurityHeaders(res, this.tlsEnabled);
@@ -491,142 +486,7 @@ export class RemoteHtmlService {
 			return;
 		}
 
-		// POST endpoints need body parsing
-		if (req.method === "POST") {
-			const chunks: Buffer[] = [];
-			let bodyLength = 0;
-			let aborted = false;
-			req.on("data", (chunk: Buffer) => {
-				bodyLength += chunk.length;
-				if (bodyLength > this.MAX_BODY_SIZE) {
-					aborted = true;
-					res.writeHead(413);
-					res.end(JSON.stringify({ error: "Request body too large" }));
-					req.destroy();
-					return;
-				}
-				chunks.push(chunk);
-			});
-			req.on("end", async () => {
-				if (aborted) return;
-				try {
-					const body = Buffer.concat(chunks).toString("utf8");
-					const data = body ? JSON.parse(body) : {};
-					await this.handlePostApi(
-						url.pathname,
-						data,
-						res,
-						gitService,
-						broadcast,
-					);
-				} catch {
-					res.writeHead(400);
-					res.end(JSON.stringify({ error: "Invalid JSON" }));
-				}
-			});
-			return;
-		}
-
 		res.writeHead(404);
 		res.end(JSON.stringify({ error: "Not found" }));
-	}
-
-	/**
-	 * Handle POST API endpoints.
-	 */
-	private async handlePostApi(
-		pathname: string,
-		data: Record<string, unknown>,
-		res: http.ServerResponse,
-		gitService: GitService,
-		broadcast?: (type: string, data: unknown) => void,
-	): Promise<void> {
-		try {
-			if (
-				pathname === "/api/stage" ||
-				pathname === "/api/unstage" ||
-				pathname === "/api/discard" ||
-				pathname === "/api/stageAll" ||
-				pathname === "/api/commit" ||
-				pathname === "/api/push"
-			) {
-				res.writeHead(403);
-				res.end(JSON.stringify({ error: GIT_READ_ONLY_MESSAGE }));
-				return;
-			}
-
-			switch (pathname) {
-				case "/api/stage":
-				case "/api/unstage":
-				case "/api/discard": {
-					if (
-						typeof data.file !== "string" ||
-						!data.file.trim() ||
-						data.file.length > MAX_FILE_PATH_LENGTH ||
-						!isValidFilePath(data.file)
-					) {
-						res.writeHead(400);
-						res.end(JSON.stringify({ error: "Invalid file path" }));
-						return;
-					}
-					if (pathname === "/api/stage") await gitService.stage(data.file);
-					else if (pathname === "/api/unstage")
-						await gitService.unstage(data.file);
-					else await gitService.discard(data.file);
-					if (broadcast) {
-						const changes = await gitService.getChanges();
-						broadcast("changesUpdated", changes);
-					}
-					res.writeHead(200);
-					res.end(JSON.stringify({ success: true }));
-					break;
-				}
-				case "/api/stageAll":
-					await gitService.stageAll();
-					if (broadcast) {
-						const changes = await gitService.getChanges();
-						broadcast("changesUpdated", changes);
-					}
-					res.writeHead(200);
-					res.end(JSON.stringify({ success: true }));
-					break;
-
-				case "/api/commit": {
-					if (
-						typeof data.message !== "string" ||
-						!data.message.trim() ||
-						data.message.length > MAX_COMMIT_MESSAGE_LENGTH
-					) {
-						res.writeHead(400);
-						res.end(JSON.stringify({ error: "Invalid commit message" }));
-						return;
-					}
-					await gitService.commit(data.message);
-					if (broadcast) {
-						const changes = await gitService.getChanges();
-						broadcast("changesUpdated", changes);
-					}
-					res.writeHead(200);
-					res.end(JSON.stringify({ success: true }));
-					break;
-				}
-				case "/api/push":
-					await gitService.push();
-					res.writeHead(200);
-					res.end(JSON.stringify({ success: true }));
-					break;
-
-				default:
-					res.writeHead(404);
-					res.end(JSON.stringify({ error: "Not found" }));
-			}
-		} catch (err) {
-			console.error(
-				"[TaskSync Remote] POST API error:",
-				getSafeErrorMessage(err),
-			);
-			res.writeHead(500);
-			res.end(JSON.stringify({ error: "Operation failed" }));
-		}
 	}
 }

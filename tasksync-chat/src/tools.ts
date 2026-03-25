@@ -50,7 +50,7 @@ function createCancellationPromise(token: vscode.CancellationToken): {
 }
 
 /**
- * Core logic to ask user, reusable by MCP server
+	* Core logic to ask user, reusable by extension tool handlers.
  * Queue handling and history tracking is done in waitForUserResponse()
  */
 export async function askUser(

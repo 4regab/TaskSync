@@ -251,7 +251,7 @@ function handleApprovalContinue() {
 
 	// Send affirmative response
 	vscode.postMessage({ type: "submit", value: "yes", attachments: [] });
-	// In remote mode, show "Working…" optimistically while awaiting server round-trip
+	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;
 		isProcessingResponse = true;

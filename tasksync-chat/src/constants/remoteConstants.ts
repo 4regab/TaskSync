@@ -3,39 +3,11 @@
  * Used by both remoteServer.ts and webviewProvider.ts
  */
 
-import * as os from "os";
-import * as path from "path";
-
 // Extension configuration section name
 export const CONFIG_SECTION = "tasksync";
 
-// MCP server identity
-export const MCP_SERVER_NAME = "tasksync-chat";
-
-// MCP client config paths and registration info
-export const MCP_CLIENT_CONFIGS = [
-	{
-		name: "kiro",
-		path: path.join(os.homedir(), ".kiro", "settings", "mcp.json"),
-		serverUrlKey: "url",
-	},
-	{
-		name: "antigravity",
-		path: path.join(os.homedir(), ".gemini", "antigravity", "mcp_config.json"),
-		serverUrlKey: "serverUrl",
-	},
-] as const;
-
-// Additional client paths for config display only (not auto-registered)
-export const MCP_DISPLAY_CLIENT_PATHS = {
-	kiro: MCP_CLIENT_CONFIGS[0].path,
-	cursor: path.join(os.homedir(), ".cursor", "mcp.json"),
-	antigravity: MCP_CLIENT_CONFIGS[1].path,
-} as const;
-
 // Server configuration
 export const DEFAULT_REMOTE_PORT = 3580;
-export const DEFAULT_MCP_PORT = 3579;
 export const WS_MAX_PAYLOAD = 1024 * 1024; // 1MB WebSocket message limit
 export const WS_PROTOCOL_VERSION = 1; // Increment on breaking WS protocol changes
 
@@ -44,7 +16,6 @@ export const MAX_RESPONSE_LENGTH = 100000; // 100KB for tool call responses
 export const MAX_QUEUE_PROMPT_LENGTH = 100000; // 100KB max prompt length in queue
 export const MAX_QUEUE_SIZE = 100; // Maximum queue items
 export const MAX_DIFF_SIZE = 500000; // 500KB max git diff size (truncate large diffs)
-export const MAX_QUESTION_LENGTH = 500000; // 500KB max MCP question length
 export const MAX_COMMIT_MESSAGE_LENGTH = 5000;
 export const MAX_REMOTE_HISTORY_ITEMS = 20; // Max tool call history items sent to remote clients
 
@@ -68,7 +39,6 @@ export const MAX_SEARCH_QUERY_LENGTH = 200; // Max git search query length
 
 // Image size limits (intentionally different per entry point)
 export const MAX_IMAGE_PASTE_BYTES = 10 * 1024 * 1024; // 10MB — webview paste/drop
-export const MAX_IMAGE_MCP_BYTES = 4 * 1024 * 1024; // 4MB — MCP tool results (compact for clients)
 
 // Settings defaults
 export const DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES = 5;

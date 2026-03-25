@@ -388,7 +388,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-					(msg.reason || "The remote server has been stopped."),
+				(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -399,9 +399,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-						msg.protocolVersion +
-						" client=" +
-						TASKSYNC_PROTOCOL_VERSION,
+					msg.protocolVersion +
+					" client=" +
+					TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",
@@ -711,10 +711,10 @@ function updatePendingUI() {
 		pendingMessage.innerHTML = pendingHtml;
 	} else if (isProcessingResponse) {
 		wasProcessing = true;
-		// AI is processing the response — show working indicator
+		// AI is processing the response — show the same indicator as the main chat UI
 		pendingMessage.classList.remove("hidden");
 		pendingMessage.innerHTML =
-			'<div class="working-indicator">Working\u2026</div>';
+			'<div class="working-indicator">Processing your response</div>';
 	} else if (wasProcessing && currentSessionCalls.length > 0) {
 		wasProcessing = false;
 		// AI was working but stopped without calling askUser — show idle notice
@@ -2128,7 +2128,7 @@ function handleSend() {
 		debugLog("handleSend: → chatMessage");
 		addChatStreamUserBubble(text);
 		vscode.postMessage({ type: "chatMessage", content: text });
-		// Show "Working…" immediately so the user knows the AI received the message
+		// Show "Processing your response" immediately so the user sees the same state as the main UI
 		isProcessingResponse = true;
 		updatePendingUI();
 	} else {
@@ -2137,7 +2137,7 @@ function handleSend() {
 			value: text,
 			attachments: currentAttachments,
 		});
-		// In remote mode, show "Working…" optimistically while awaiting server round-trip
+		// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 		if (isRemoteMode && pendingToolCall) {
 			pendingToolCall = null;
 			isProcessingResponse = true;
@@ -3388,7 +3388,7 @@ function handleApprovalContinue() {
 
 	// Send affirmative response
 	vscode.postMessage({ type: "submit", value: "yes", attachments: [] });
-	// In remote mode, show "Working…" optimistically while awaiting server round-trip
+	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;
 		isProcessingResponse = true;
@@ -3605,7 +3605,7 @@ function handleChoicesSend() {
 
 	// Send the response
 	vscode.postMessage({ type: "submit", value: responseValue, attachments: [] });
-	// In remote mode, show "Working…" optimistically while awaiting server round-trip
+	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;
 		isProcessingResponse = true;

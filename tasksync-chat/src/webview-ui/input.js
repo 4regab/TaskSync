@@ -323,7 +323,7 @@ function handleSend() {
 		debugLog("handleSend: → chatMessage");
 		addChatStreamUserBubble(text);
 		vscode.postMessage({ type: "chatMessage", content: text });
-		// Show "Working…" immediately so the user knows the AI received the message
+		// Show "Processing your response" immediately so the user sees the same state as the main UI
 		isProcessingResponse = true;
 		updatePendingUI();
 	} else {
@@ -332,7 +332,7 @@ function handleSend() {
 			value: text,
 			attachments: currentAttachments,
 		});
-		// In remote mode, show "Working…" optimistically while awaiting server round-trip
+		// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 		if (isRemoteMode && pendingToolCall) {
 			pendingToolCall = null;
 			isProcessingResponse = true;

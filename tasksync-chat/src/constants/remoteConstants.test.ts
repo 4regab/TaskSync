@@ -4,7 +4,6 @@ import {
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
 	DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
-	DEFAULT_MCP_PORT,
 	DEFAULT_REMOTE_PORT,
 	DEFAULT_REMOTE_SESSION_QUERY,
 	DEFAULT_SESSION_WARNING_HOURS,
@@ -21,15 +20,12 @@ import {
 	MAX_CONSECUTIVE_AUTO_RESPONSES_LIMIT,
 	MAX_DIFF_SIZE,
 	MAX_FILE_PATH_LENGTH,
-	MAX_IMAGE_MCP_BYTES,
 	MAX_IMAGE_PASTE_BYTES,
-	MAX_QUESTION_LENGTH,
 	MAX_QUEUE_PROMPT_LENGTH,
 	MAX_QUEUE_SIZE,
 	MAX_REMOTE_HISTORY_ITEMS,
 	MAX_RESPONSE_LENGTH,
 	MAX_SEARCH_QUERY_LENGTH,
-	MCP_SERVER_NAME,
 	RESPONSE_TIMEOUT_ALLOWED_VALUES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
 	SESSION_WARNING_HOURS_MAX,
@@ -46,13 +42,8 @@ describe("remoteConstants", () => {
 			expect(CONFIG_SECTION).toBe("tasksync");
 		});
 
-		it("has expected MCP server name", () => {
-			expect(MCP_SERVER_NAME).toBe("tasksync-chat");
-		});
-
 		it("has sensible default ports", () => {
 			expect(DEFAULT_REMOTE_PORT).toBe(3580);
-			expect(DEFAULT_MCP_PORT).toBe(3579);
 		});
 
 		it("limits are positive numbers", () => {
@@ -62,7 +53,6 @@ describe("remoteConstants", () => {
 				MAX_QUEUE_PROMPT_LENGTH,
 				MAX_QUEUE_SIZE,
 				MAX_DIFF_SIZE,
-				MAX_QUESTION_LENGTH,
 				MAX_COMMIT_MESSAGE_LENGTH,
 				MAX_REMOTE_HISTORY_ITEMS,
 				MAX_ATTACHMENTS,
@@ -71,14 +61,9 @@ describe("remoteConstants", () => {
 				MAX_FILE_PATH_LENGTH,
 				MAX_SEARCH_QUERY_LENGTH,
 				MAX_IMAGE_PASTE_BYTES,
-				MAX_IMAGE_MCP_BYTES,
 			]) {
 				expect(limit).toBeGreaterThan(0);
 			}
-		});
-
-		it("MCP image limit <= paste image limit", () => {
-			expect(MAX_IMAGE_MCP_BYTES).toBeLessThanOrEqual(MAX_IMAGE_PASTE_BYTES);
 		});
 
 		it("has valid WS protocol version", () => {

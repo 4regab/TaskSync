@@ -15,12 +15,10 @@
   ],
   "keywords": [
     "tasksync",
-    "mcp",
     "ai",
     "chat",
     "copilot",
-    "agent",
-    "model-context-protocol"
+    "agent"
   ],
   "repository": {
     "type": "git",
@@ -86,26 +84,6 @@
     "configuration": {
       "title": "TaskSync",
       "properties": {
-        "tasksync.mcpEnabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Always start MCP server on activation. Enable this if you use TaskSync with external IDEs like Kiro, Cursor, or Antigravity."
-        },
-        "tasksync.mcpAutoStartIfClients": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically start MCP server if external client configurations are detected (Kiro, Cursor, Antigravity)."
-        },
-        "tasksync.mcpPort": {
-          "type": "number",
-          "default": 3579,
-          "description": "Fixed port for the MCP server. Set to 0 for dynamic port assignment."
-        },
-        "tasksync.autoRegisterMcp": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically register MCP server with Kiro and other supported clients."
-        },
         "tasksync.remotePort": {
           "type": "number",
           "default": 3580,
@@ -114,7 +92,7 @@
         "tasksync.remotePinEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Require PIN authentication for remote access. Recommended for LAN access."
+          "description": "Require rotating OTP authentication for remote access. Recommended for LAN access."
         },
         "tasksync.remoteTlsEnabled": {
           "type": "boolean",
@@ -134,7 +112,7 @@
         "tasksync.remotePin": {
           "type": "string",
           "default": "",
-          "description": "Custom 4-6 digit PIN for remote access. Leave empty to auto-generate."
+          "description": "Deprecated. Static custom PINs are no longer used because remote auth now uses rotating OTP."
         },
         "tasksync.autopilot": {
           "type": "boolean",
@@ -282,7 +260,7 @@
         "tasksync.remoteAllowedToolPrefixes": {
           "type": "array",
           "default": [],
-          "description": "Tool name prefixes to include in remote chat sessions. If empty, all tools are included (up to model limit). Example: [\"mcp_github_\", \"mcp_context-mode_\"] to only include GitHub and context-mode tools. The ask_user tool is always included regardless of this setting.",
+          "description": "Tool name prefixes to include in remote chat sessions. If empty, all tools are included (up to model limit). Example: [\"github_\", \"context_\"] to only include matching tools. The ask_user tool is always included regardless of this setting.",
           "items": {
             "type": "string"
           }
@@ -296,20 +274,8 @@
     },
     "commands": [
       {
-        "command": "tasksync.startMcp",
-        "title": "TaskSync: Start MCP Server"
-      },
-      {
         "command": "tasksync.sendMessage",
         "title": "TaskSync: Send Message"
-      },
-      {
-        "command": "tasksync.restartMcp",
-        "title": "TaskSync: Restart MCP Server"
-      },
-      {
-        "command": "tasksync.showMcpConfig",
-        "title": "TaskSync: Show MCP Configuration"
       },
       {
         "command": "tasksync.openHistory",
@@ -384,12 +350,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
     "@vscode/codicons": "^0.0.36",
     "mermaid": "^10.9.5",
     "selfsigned": "^5.5.0",
-    "ws": "^8.18.0",
-    "zod": "^3.23.8"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",

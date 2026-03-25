@@ -1,61 +1,18 @@
-import * as fs from "fs";
 import * as vscode from "vscode";
 import {
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_PORT,
-	MCP_CLIENT_CONFIGS,
-	MCP_DISPLAY_CLIENT_PATHS,
-	MCP_SERVER_NAME,
 } from "./constants/remoteConstants";
 import { ContextManager } from "./context";
-import { McpServerManager } from "./mcp/mcpServer";
 import { RemoteServer } from "./server/remoteServer";
 import { getSafeErrorMessage } from "./server/serverUtils";
 import { registerTools } from "./tools";
 import { preloadBodyTemplate } from "./webview/lifecycleHandlers";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
 
-let mcpServer: McpServerManager | undefined;
 let webviewProvider: TaskSyncWebviewProvider | undefined;
 let contextManager: ContextManager | undefined;
 let remoteServer: RemoteServer | undefined;
-
-// Memoized result for external MCP client check (only checked once per activation)
-let _hasExternalMcpClientsResult: boolean | undefined;
-
-/**
- * Check if external MCP client configs exist (Kiro, Cursor, Antigravity)
- * This indicates user has external tools that need the MCP server
- * Result is memoized to avoid repeated file system reads
- * Uses async I/O to avoid blocking the extension host thread
- */
-async function hasExternalMcpClientsAsync(): Promise<boolean> {
-	// Return cached result if available
-	if (_hasExternalMcpClientsResult !== undefined) {
-		return _hasExternalMcpClientsResult;
-	}
-
-	const configPaths = [
-		...MCP_CLIENT_CONFIGS.map((c) => c.path),
-		MCP_DISPLAY_CLIENT_PATHS.cursor,
-	];
-
-	for (const configPath of configPaths) {
-		try {
-			const content = await fs.promises.readFile(configPath, "utf8");
-			const config = JSON.parse(content);
-			// Check if our MCP server is registered
-			if (config.mcpServers?.[MCP_SERVER_NAME]) {
-				_hasExternalMcpClientsResult = true;
-				return true;
-			}
-		} catch {
-			// File doesn't exist or parse error - continue to next path
-		}
-	}
-	_hasExternalMcpClientsResult = false;
-	return false;
-}
 
 export function activate(context: vscode.ExtensionContext): void {
 	// Initialize context manager for #terminal, #problems features
@@ -86,127 +43,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Register VS Code LM Tools (always available for Copilot)
 	registerTools(context, provider);
 
-	// Initialize MCP server manager (but don't start yet)
-	mcpServer = new McpServerManager(provider);
-	context.subscriptions.push({
-		dispose: () => {
-			mcpServer?.dispose();
-		},
-	});
-
-	// Check if MCP should auto-start based on settings and external client configs
-	// Deferred to avoid blocking activation with file I/O
-	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-	const mcpEnabled = config.get<boolean>("mcpEnabled", false);
-	const autoStartIfClients = config.get<boolean>("mcpAutoStartIfClients", true);
-
-	// Start MCP server only if:
-	// 1. Explicitly enabled in settings, OR
-	// 2. Auto-start is enabled AND external clients are configured
-	// Note: Check is deferred to avoid blocking extension activation with file I/O
-	if (mcpEnabled) {
-		// Explicitly enabled - start immediately without checking external clients
-		mcpServer
-			.start()
-			.catch((err) => console.error("[TaskSync] MCP start failed:", err));
-	} else if (autoStartIfClients) {
-		// Defer the external client check to avoid blocking activation
-		hasExternalMcpClientsAsync()
-			.then((hasClients) => {
-				if (hasClients && mcpServer) {
-					mcpServer
-						.start()
-						.catch((err) => console.error("[TaskSync] MCP start failed:", err));
-				}
-			})
-			.catch((err) => {
-				console.error("[TaskSync] Failed to check external MCP clients:", err);
-			});
-	}
-
-	// Start MCP server command
-	const startMcpCmd = vscode.commands.registerCommand(
-		"tasksync.startMcp",
-		async () => {
-			if (mcpServer && !mcpServer.isRunning()) {
-				try {
-					await mcpServer.start();
-					if (mcpServer.isRunning()) {
-						vscode.window.showInformationMessage("TaskSync MCP Server started");
-					}
-				} catch (err) {
-					console.error("[TaskSync] MCP start failed:", err);
-				}
-			} else if (mcpServer?.isRunning()) {
-				vscode.window.showInformationMessage(
-					"TaskSync MCP Server is already running",
-				);
-			}
-		},
-	);
-
 	// Send current TaskSync input command (for Keyboard Shortcuts)
 	const sendMessageCmd = vscode.commands.registerCommand(
 		"tasksync.sendMessage",
 		() => {
 			provider.triggerSendFromShortcut();
-		},
-	);
-
-	// Restart MCP server command
-	const restartMcpCmd = vscode.commands.registerCommand(
-		"tasksync.restartMcp",
-		async () => {
-			if (mcpServer) {
-				await mcpServer.restart();
-			}
-		},
-	);
-
-	// Show MCP configuration command
-	const showMcpConfigCmd = vscode.commands.registerCommand(
-		"tasksync.showMcpConfig",
-		async () => {
-			const config = mcpServer?.getMcpConfig?.();
-			if (!config) {
-				vscode.window.showErrorMessage("MCP server not running");
-				return;
-			}
-
-			const selected = await vscode.window.showQuickPick(
-				[
-					{ label: "Kiro", description: "Kiro IDE", value: "kiro" },
-					{ label: "Cursor", description: "Cursor Editor", value: "cursor" },
-					{
-						label: "Antigravity",
-						description: "Gemini CLI",
-						value: "antigravity",
-					},
-				],
-				{ placeHolder: "Select MCP client to configure" },
-			);
-
-			if (!selected) return;
-
-			const cfg = config[selected.value as keyof typeof config];
-			const configJson = JSON.stringify(cfg.config, null, 2);
-
-			const message = `Add this to ${cfg.path}:\n\n${configJson}`;
-			const action = await vscode.window.showInformationMessage(
-				message,
-				"Copy to Clipboard",
-				"Open File",
-			);
-
-			if (action === "Copy to Clipboard") {
-				await vscode.env.clipboard.writeText(configJson);
-				vscode.window.showInformationMessage(
-					"Configuration copied to clipboard",
-				);
-			} else if (action === "Open File") {
-				const uri = vscode.Uri.file(cfg.path);
-				await vscode.commands.executeCommand("vscode.open", uri);
-			}
 		},
 	);
 
@@ -268,7 +109,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 				let message = `Remote Access: ${result.localUrl}`;
 				if (result.pin) {
-					message += ` (PIN: ${result.pin})`;
+					message += ` (OTP: ${result.pin}, rotates every 30s)`;
 				}
 
 				const action = await vscode.window.showInformationMessage(
@@ -314,7 +155,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			// If server is running, show current status
 			if (remoteServer?.isRunning()) {
 				const info = remoteServer.getConnectionInfo();
-				const directUrl = info.pin ? `${info.url}#pin=${info.pin}` : info.url;
+				const directUrl = info.pin ? `${info.url}/${info.pin}` : info.url;
 
 				const items: vscode.QuickPickItem[] = [
 					{
@@ -329,8 +170,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 				if (info.pin) {
 					items.unshift({
-						label: `$(key) PIN: ${info.pin}`,
-						description: "Tap to copy",
+						label: `$(key) OTP: ${info.pin}`,
+						description: "Tap to copy (rotates every 30s)",
 					});
 				}
 
@@ -342,9 +183,9 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (pick?.label.includes("Copy URL")) {
 					await vscode.env.clipboard.writeText(directUrl);
 					vscode.window.showInformationMessage("URL copied to clipboard");
-				} else if (pick?.label.includes("PIN:")) {
+				} else if (pick?.label.includes("OTP:")) {
 					await vscode.env.clipboard.writeText(info.pin || "");
-					vscode.window.showInformationMessage("PIN copied to clipboard");
+					vscode.window.showInformationMessage("OTP copied to clipboard");
 				} else if (pick?.label.includes("Stop")) {
 					remoteServer.stop();
 					vscode.window.showInformationMessage("Remote server stopped");
@@ -357,7 +198,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				[
 					{
 						label: "$(broadcast) Start Remote Access",
-						description: "LAN mode, PIN required",
+						description: "LAN mode, OTP required",
 						detail:
 							"Connect from any device on your local network. Use Tailscale for internet access.",
 					},
@@ -376,24 +217,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
 				const result = await remoteServer!.start(port);
 
-				// Generate URL with PIN embedded as fragment (not query param)
-				// Fragments are not sent in HTTP requests, preventing PIN leakage
 				const directUrl = result.pin
-					? `${result.localUrl}#pin=${result.pin}`
+					? `${result.localUrl}/${result.pin}`
 					: result.localUrl;
 
 				// Show connection info in a QuickPick for easy copying
 				const infoItems: vscode.QuickPickItem[] = [
 					{
 						label: `$(link) ${directUrl}`,
-						description: "Tap to copy (includes PIN)",
+						description: result.pin
+							? "Tap to copy (includes OTP)"
+							: "Tap to copy",
 					},
 				];
 
 				if (result.pin) {
 					infoItems.push({
-						label: `$(key) PIN: ${result.pin}`,
-						description: "Tap to copy PIN only",
+						label: `$(key) OTP: ${result.pin}`,
+						description: "Tap to copy OTP (rotates every 30s)",
 					});
 				}
 
@@ -416,9 +257,9 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (infoPick?.label.includes(directUrl)) {
 					await vscode.env.clipboard.writeText(directUrl);
 					vscode.window.showInformationMessage("URL copied!");
-				} else if (infoPick?.label.includes("PIN:")) {
+				} else if (infoPick?.label.includes("OTP:")) {
 					await vscode.env.clipboard.writeText(result.pin || "");
-					vscode.window.showInformationMessage("PIN copied!");
+					vscode.window.showInformationMessage("OTP copied!");
 				} else if (infoPick?.label.includes("Tailscale")) {
 					vscode.env.openExternal(
 						vscode.Uri.parse("https://tailscale.com/download"),
@@ -433,10 +274,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	);
 
 	context.subscriptions.push(
-		startMcpCmd,
 		sendMessageCmd,
-		restartMcpCmd,
-		showMcpConfigCmd,
 		openHistoryCmd,
 		newSessionCmd,
 		openSettingsCmd,
@@ -457,10 +295,5 @@ export async function deactivate(): Promise<void> {
 	if (webviewProvider) {
 		webviewProvider.saveCurrentSessionToHistory();
 		webviewProvider = undefined;
-	}
-
-	if (mcpServer) {
-		await mcpServer.dispose();
-		mcpServer = undefined;
 	}
 }

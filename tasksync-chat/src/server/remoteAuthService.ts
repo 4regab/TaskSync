@@ -2,7 +2,6 @@ import * as crypto from "crypto";
 import * as vscode from "vscode";
 import type { WebSocket } from "ws";
 import {
-	CONFIG_SECTION,
 	WS_PROTOCOL_VERSION,
 } from "../constants/remoteConstants";
 import { getSafeErrorMessage, sendWsError } from "./serverUtils";
@@ -16,18 +15,64 @@ export class RemoteAuthService {
 	pinEnabled: boolean = true;
 	pin: string = "";
 	readonly authenticatedClients: Set<WebSocket> = new Set();
+	private otpSecret: Buffer | null = null;
 
-	/** Timing-safe PIN comparison using SHA-256 digests to prevent timing attacks. */
+	private readonly OTP_DIGITS = 6;
+	private readonly OTP_STEP_MS = 30 * 1000; // 30 seconds
+	private readonly OTP_WINDOW_TOLERANCE = 1; // +/- one step for clock drift
+
+	/** Create or return the in-memory secret used for rotating OTP generation. */
+	private getOtpSecret(): Buffer {
+		if (!this.otpSecret) {
+			this.otpSecret = crypto.randomBytes(32);
+		}
+		return this.otpSecret;
+	}
+
+	/** Generate a 6-digit OTP for a given time step using RFC4226 dynamic truncation. */
+	private generateOtpForStep(step: number): string {
+		const counter = Buffer.alloc(8);
+		counter.writeBigUInt64BE(BigInt(step));
+		const hmac = crypto
+			.createHmac("sha1", this.getOtpSecret())
+			.update(counter)
+			.digest();
+		const offset = hmac[hmac.length - 1] & 0x0f;
+		const binaryCode =
+			((hmac[offset] & 0x7f) << 24) |
+			((hmac[offset + 1] & 0xff) << 16) |
+			((hmac[offset + 2] & 0xff) << 8) |
+			(hmac[offset + 3] & 0xff);
+		const mod = 10 ** this.OTP_DIGITS;
+		return (binaryCode % mod).toString().padStart(this.OTP_DIGITS, "0");
+	}
+
+	private getCurrentOtpStep(nowMs: number = Date.now()): number {
+		return Math.floor(nowMs / this.OTP_STEP_MS);
+	}
+
+	private digestCode(code: string): Buffer {
+		return crypto.createHash("sha256").update(code, "utf8").digest();
+	}
+
+	/** Timing-safe OTP comparison against current and adjacent time windows. */
 	private comparePinTimingSafe(input: string): boolean {
-		const pinDigest = crypto
-			.createHash("sha256")
-			.update(this.pin, "utf8")
-			.digest();
-		const inputDigest = crypto
-			.createHash("sha256")
-			.update(input, "utf8")
-			.digest();
-		return crypto.timingSafeEqual(pinDigest, inputDigest);
+		const inputDigest = this.digestCode(input);
+		const currentStep = this.getCurrentOtpStep();
+
+		for (
+			let delta = -this.OTP_WINDOW_TOLERANCE;
+			delta <= this.OTP_WINDOW_TOLERANCE;
+			delta++
+		) {
+			const expected = this.generateOtpForStep(currentStep + delta);
+			const expectedDigest = this.digestCode(expected);
+			if (crypto.timingSafeEqual(expectedDigest, inputDigest)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 	private failedAttempts: Map<
 		string,
@@ -72,7 +117,7 @@ export class RemoteAuthService {
 		return attempt;
 	}
 
-	constructor(private context: vscode.ExtensionContext) {}
+	constructor(_context: vscode.ExtensionContext) { }
 
 	/**
 	 * Handle PIN/session-token authentication for a WebSocket client.
@@ -178,7 +223,7 @@ export class RemoteAuthService {
 					type: "authFailed",
 					message: lockedOut
 						? `Too many failed attempts. Locked for ${Math.ceil(this.LOCKOUT_MS / 60000)}m.`
-						: `Wrong PIN. ${remainingAttempts} attempts left.`,
+						: `Wrong code. ${remainingAttempts} attempts left.`,
 				}),
 			);
 			this.onAuthFailure?.(clientIp, count, lockedOut);
@@ -268,23 +313,12 @@ export class RemoteAuthService {
 	}
 
 	/**
-	 * Get or create a persistent PIN for the remote server.
+	 * Get the current 6-digit OTP for display in VS Code UI.
 	 */
-	getOrCreatePin(): string {
-		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-		const customPin = config.get<string>("remotePin", "");
-
-		if (customPin && /^\d{4,6}$/.test(customPin)) {
-			return customPin;
-		}
-
-		// Use persisted PIN or generate new (upgrade short PINs to 6 digits)
-		let pin = this.context.globalState.get<string>("remotePin");
-		if (!pin || pin.length < 6) {
-			pin = crypto.randomInt(100000, 1000000).toString();
-			this.context.globalState.update("remotePin", pin);
-		}
-		return pin;
+	getCurrentOtp(): string {
+		const otp = this.generateOtpForStep(this.getCurrentOtpStep());
+		this.pin = otp;
+		return otp;
 	}
 
 	/**

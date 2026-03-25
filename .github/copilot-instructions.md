@@ -2,7 +2,7 @@
 
 ## What This Repository Does
 
-TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. The primary codebase is the VS Code extension in `tasksync-chat/`. It provides a sidebar with smart prompt queuing, Autopilot mode, an MCP server, and remote access via WebSocket.
+TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. The primary codebase is the VS Code extension in `tasksync-chat/`. It provides a sidebar with smart prompt queuing, Autopilot mode, and remote access via WebSocket.
 
 ## Project Layout
 
@@ -12,7 +12,6 @@ TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. Th
 - `tasksync-chat/src/webview/webviewTypes.ts` — Shared types (`P` interface, message unions)
 - `tasksync-chat/src/webview/webviewUtils.ts` — Shared helpers (`debugLog()`, `mergeAndDedup()`, `notifyQueueChanged()`)
 - `tasksync-chat/src/webview/*Handlers.ts` — Handler modules receive a `P` interface (no circular imports)
-- `tasksync-chat/src/mcp/mcpServer.ts` — MCP server (Streamable HTTP, port 3579)
 - `tasksync-chat/src/server/` — Remote server, auth, git operations, HTML service
 - `tasksync-chat/src/constants/` — Shared constants (config keys, file exclusions, remote constants)
 - `tasksync-chat/src/context/` — Context providers (files, terminal, problems)
@@ -98,5 +97,4 @@ Follow OWASP Top 10 principles. Specific patterns enforced in this codebase:
 - Session state uses a boolean `sessionTerminated` flag — do not use string matching for termination detection.
 - Debounced history saves (2 s) for disk I/O performance.
 - Remote server uses WebSocket over HTTP with PIN-based auth and session tokens.
-- MCP server uses Streamable HTTP transport with `/sse` backward-compat routing.
 - `esbuild.js` watch mode monitors `remoteConstants.ts` changes and rebuilds shared constants with 100ms debounce.

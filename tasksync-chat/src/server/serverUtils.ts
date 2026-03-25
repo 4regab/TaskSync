@@ -149,7 +149,8 @@ export function isPortAvailable(port: number): Promise<boolean> {
 			resolve(false);
 		});
 		server.once("listening", () => server.close(() => resolve(true)));
-		server.listen(port, "0.0.0.0");
+		// Use Node's default host binding to avoid false positives on dual-stack systems.
+		server.listen(port);
 	});
 }
 

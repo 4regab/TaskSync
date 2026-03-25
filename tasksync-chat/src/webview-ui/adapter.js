@@ -349,7 +349,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-					(msg.reason || "The remote server has been stopped."),
+				(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -360,9 +360,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-						msg.protocolVersion +
-						" client=" +
-						TASKSYNC_PROTOCOL_VERSION,
+					msg.protocolVersion +
+					" client=" +
+					TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",
@@ -672,10 +672,10 @@ function updatePendingUI() {
 		pendingMessage.innerHTML = pendingHtml;
 	} else if (isProcessingResponse) {
 		wasProcessing = true;
-		// AI is processing the response — show working indicator
+		// AI is processing the response — show the same indicator as the main chat UI
 		pendingMessage.classList.remove("hidden");
 		pendingMessage.innerHTML =
-			'<div class="working-indicator">Working\u2026</div>';
+			'<div class="working-indicator">Processing your response</div>';
 	} else if (wasProcessing && currentSessionCalls.length > 0) {
 		wasProcessing = false;
 		// AI was working but stopped without calling askUser — show idle notice

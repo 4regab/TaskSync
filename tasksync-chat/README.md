@@ -131,10 +131,12 @@ Control TaskSync from your phone while away from your desk. Never miss an AI pro
 **Option 1: LAN Mode (Same Network)**
 1. Open Command Palette (Cmd/Ctrl + Shift + P)
 2. Run `TaskSync: Start Remote Access (LAN)`
-3. Note the URL and 4-6 digit PIN shown in the notification
+3. Note the one-click URL and 6-digit OTP shown in VS Code (rotates every 30 seconds)
 4. On your phone, open the URL (e.g., `http://192.168.1.x:3580`)
-5. Enter the PIN when prompted
+5. Enter the OTP when prompted
 6. You're connected!
+
+   You can also use the one-click link format directly, for example `http://192.168.1.x:3580/123456`, which opens the login page and fills the OTP automatically.
 
 **Option 2: Internet Access via Tailscale (Anywhere)**
 1. Install [Tailscale](https://tailscale.com/download) on your Mac/PC and phone (free for personal use — 3 users, 100 devices)
@@ -146,7 +148,7 @@ Control TaskSync from your phone while away from your desk. Never miss an AI pro
    - **Linux**: Run `tailscale ip -4` in terminal
 5. Start Remote Access in LAN mode (Option 1 above)
 6. On your phone, replace the LAN IP with your Mac's **Tailscale IP** (e.g., `http://100.85.123.45:3580` instead of `http://192.168.1.5:3580`)
-7. Enter PIN as normal — works from anywhere with end-to-end encrypted WireGuard tunnel
+7. Enter the current OTP as normal — works from anywhere with end-to-end encrypted WireGuard tunnel
 
 > **No exit node needed** — Tailscale creates a direct peer-to-peer connection between your devices. Traffic never leaves the encrypted tunnel. Works across different Wi-Fi networks, cellular data, and even behind NAT/firewalls.
 
@@ -193,43 +195,15 @@ In VS Code Settings (search "tasksync"):
 
 **Remote Access:**
 - `tasksync.remotePort`: Server port (default: 3580)
-- `tasksync.remotePinEnabled`: Require PIN for LAN mode (default: true)
+- `tasksync.remotePinEnabled`: Require rotating OTP for LAN mode (default: true)
 - `tasksync.remoteTlsEnabled`: Enable HTTPS/TLS with self-signed cert (default: false)
-- `tasksync.remotePin`: Custom 4-6 digit PIN (auto-generated if empty)
+- `tasksync.remotePin`: Deprecated (static custom PIN is no longer used)
 - `tasksync.remoteDebugLogging`: Verbose remote server logging (default: false)
-
-**MCP Server:**
-- `tasksync.mcpEnabled`: Always start MCP server on activation (default: false)
-- `tasksync.mcpAutoStartIfClients`: Auto-start if client configs detected (default: true)
-- `tasksync.mcpPort`: MCP server port (default: 3579)
-- `tasksync.autoRegisterMcp`: Auto-register with Kiro/Antigravity (default: true)
 
 **Debug:**
 - `tasksync.debugLogging`: Verbose extension debug logging (default: false)
 
 All other settings (Autopilot, timeout, human-like delay, sound, etc.) are managed through the TaskSync Settings modal (gear icon).
-
-
-### MCP Server Integration
-TaskSync runs an MCP (Model Context Protocol) server that integrates with:
-- **Kiro** (auto-configured)
-- **Antigravity** (auto-configured)
-- **Cursor** and any MCP-compatible client (manual config)
-
-
-## MCP Configuration for other IDEs (Not needed with Copilot)
-
-TaskSync automatically registers with Kiro and Antigravity. For other clients, add this to your MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "tasksync": {
-      "url": "http://localhost:3579/sse"
-    }
-  }
-}
-```
 
 ## Requirements
 

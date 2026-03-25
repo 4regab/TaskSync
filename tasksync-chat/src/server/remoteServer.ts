@@ -95,8 +95,8 @@ export class RemoteServer {
 		this.authService.onAuthFailure = (ip, count, lockedOut) => {
 			if (!lockedOut && count < 3) return;
 			const msg = lockedOut
-				? `Client ${ip} locked out after ${count} failed PIN attempts.`
-				: `${count} failed PIN attempts from ${ip}.`;
+				? `Client ${ip} locked out after ${count} failed OTP attempts.`
+				: `${count} failed OTP attempts from ${ip}.`;
 			vscode.window.showWarningMessage(`[TaskSync Remote] ${msg}`);
 		};
 		this.htmlService = new RemoteHtmlService(webDir, mediaDir);
@@ -123,12 +123,16 @@ export class RemoteServer {
 		const url = `${this.protocol}://${getLocalIp()}:${this.port}`;
 		return {
 			url,
-			pin: this.authService.pinEnabled ? this.authService.pin : undefined,
+			pin: this.authService.pinEnabled
+				? this.authService.getCurrentOtp()
+				: undefined,
 		};
 	}
 
 	async start(port: number = DEFAULT_REMOTE_PORT): Promise<RemoteServerUrls> {
-		const pin = this.authService.pinEnabled ? this.authService.pin : undefined;
+		const pin = this.authService.pinEnabled
+			? this.authService.getCurrentOtp()
+			: undefined;
 		if (this.running) {
 			return {
 				localUrl: `${this.protocol}://${getLocalIp()}:${this.port}`,
@@ -145,7 +149,7 @@ export class RemoteServer {
 		this.htmlService.tlsEnabled = !!this.tlsCert;
 
 		if (this.authService.pinEnabled) {
-			this.authService.pin = this.authService.getOrCreatePin();
+			this.authService.pin = this.authService.getCurrentOtp();
 		}
 		this.configChangeDisposable?.dispose();
 		this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
@@ -158,7 +162,7 @@ export class RemoteServer {
 					true,
 				);
 				if (this.authService.pinEnabled) {
-					const newPin = this.authService.getOrCreatePin();
+					const newPin = this.authService.getCurrentOtp();
 					if (newPin !== this.authService.pin || !wasPinEnabled) {
 						this.authService.pin = newPin;
 						this.authService.authenticatedClients.clear();
@@ -185,7 +189,9 @@ export class RemoteServer {
 				this.markRunning();
 				resolve({
 					localUrl: `${this.protocol}://${getLocalIp()}:${this.port}`,
-					pin: this.authService.pinEnabled ? this.authService.pin : undefined,
+					pin: this.authService.pinEnabled
+						? this.authService.getCurrentOtp()
+						: undefined,
 				});
 			});
 		});
@@ -413,7 +419,7 @@ export class RemoteServer {
 	private async handleMessage(
 		ws: WebSocket,
 		clientIp: string,
-		msg: { type: string; [key: string]: unknown },
+		msg: { type: string;[key: string]: unknown },
 	): Promise<void> {
 		if (!msg || typeof msg.type !== "string") {
 			sendWsError(ws, "Invalid message format");

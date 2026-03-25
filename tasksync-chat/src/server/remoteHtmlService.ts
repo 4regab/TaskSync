@@ -31,6 +31,17 @@ const CONTENT_TYPES: Record<string, string> = {
 	".woff2": "font/woff2",
 };
 
+function normalizePathForComparison(inputPath: string): string {
+	const normalized = path.resolve(inputPath).replace(/[\\/]+$/, "");
+	return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isPathWithin(basePath: string, candidatePath: string): boolean {
+	const base = normalizePathForComparison(basePath);
+	const candidate = normalizePathForComparison(candidatePath);
+	return candidate === base || candidate.startsWith(`${base}${path.sep}`);
+}
+
 /**
  * Handles HTTP requests, file serving, and HTML generation for the remote server.
  */
@@ -124,12 +135,8 @@ export class RemoteHtmlService {
 				this.mediaDir,
 				normalizedPath.replace(/^[\/\\]+/, ""),
 			);
-			const canonicalMediaDir = path.resolve(this.mediaDir);
 
-			if (
-				!fullPath.startsWith(canonicalMediaDir + path.sep) &&
-				fullPath !== canonicalMediaDir
-			) {
+			if (!isPathWithin(this.mediaDir, fullPath)) {
 				res.writeHead(403);
 				res.end("Forbidden");
 				return;
@@ -167,6 +174,15 @@ export class RemoteHtmlService {
 			return;
 		}
 
+		// Route: /123456 - clean one-click OTP login link.
+		if (/^\/\d{4,6}\/?$/.test(url.pathname)) {
+			const requestHost = req.headers.host || "";
+			const cspHeader = this.buildLoginCsp(requestHost);
+			const loginPath = path.join(this.webDir, "index.html");
+			void this.serveFile(loginPath, res, undefined, cspHeader);
+			return;
+		}
+
 		// Default: serve from web folder (login page, etc)
 		let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 
@@ -178,12 +194,8 @@ export class RemoteHtmlService {
 			this.webDir,
 			normalizedPath.replace(/^[\/\\]+/, ""),
 		);
-		const canonicalWebDir = path.resolve(this.webDir);
 
-		if (
-			!fullPath.startsWith(canonicalWebDir + path.sep) &&
-			fullPath !== canonicalWebDir
-		) {
+		if (!isPathWithin(this.webDir, fullPath)) {
 			res.writeHead(403);
 			res.end("Forbidden");
 			return;
@@ -244,15 +256,9 @@ export class RemoteHtmlService {
 		}
 
 		// Verify resolved path is within allowed directories
-		const inWebDir =
-			resolvedPath.startsWith(canonicalWebDir + path.sep) ||
-			resolvedPath === canonicalWebDir;
-		const inMediaDir =
-			resolvedPath.startsWith(canonicalMediaDir + path.sep) ||
-			resolvedPath === canonicalMediaDir;
-		const inNodeModules = resolvedPath.startsWith(
-			canonicalNodeModules + path.sep,
-		);
+		const inWebDir = isPathWithin(canonicalWebDir, resolvedPath);
+		const inMediaDir = isPathWithin(canonicalMediaDir, resolvedPath);
+		const inNodeModules = isPathWithin(canonicalNodeModules, resolvedPath);
 		if (!inWebDir && !inMediaDir && !inNodeModules) {
 			res.writeHead(403);
 			res.end("Forbidden");
@@ -371,7 +377,7 @@ export class RemoteHtmlService {
 
     ${bodyHtml}
 
-    <script>window.__MERMAID_SRC__ = "/media/mermaid.min.js";</script>
+	<script src="/media/remote-bootstrap.js"></script>
     <script src="/shared-constants.js"></script>
     <script src="/media/markdownLinks.js"></script>
     <script src="/media/webview.js"></script>

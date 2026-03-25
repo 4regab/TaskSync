@@ -6,11 +6,10 @@ This file provides guidance for AI coding agents working on the TaskSync reposit
 
 ## Repository Overview
 
-TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. It provides three integration options:
+TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. It provides two integration options:
 
-1. **TaskSync VS Code Extension** (`tasksync-chat/`) — A sidebar extension with smart prompt queuing, Autopilot, and an MCP server.
+1. **TaskSync VS Code Extension** (`tasksync-chat/`) — A sidebar extension with smart prompt queuing, Autopilot, and remote access.
 2. **TaskSync Prompt** (`Prompt/`) — Terminal-based agent protocols (Markdown prompts for use as AI instructions).
-3. **TaskSync MCP Server** — An external MCP server ([tasksync-mcp](https://github.com/4regab/tasksync-mcp)).
 
 The primary active codebase is the VS Code extension in `tasksync-chat/`.
 
@@ -36,8 +35,6 @@ TaskSync/
     │   ├── tools.ts                # VS Code language model tool definitions
     │   ├── constants/              # Shared constants (config keys, file exclusions)
     │   ├── context/                # Context providers (files, terminal, problems)
-    │   ├── mcp/
-    │   │   └── mcpServer.ts        # MCP server (SSE transport)
     │   ├── server/                 # Remote access server, auth, git, HTML service
     │   ├── utils/                  # Shared utilities (ID generation, image handling)
     │   └── webview/
@@ -128,7 +125,6 @@ These principles are mandatory for all changes:
 - `webviewProvider.ts` is the orchestrator — it owns state, creates the webview, and delegates to handler modules.
 - Handler modules (`*Handlers.ts`) receive a `P` interface (defined in `webviewTypes.ts`) that exposes provider state and methods without circular imports.
 - Queue, history, and settings are **per-workspace** (workspace-scoped storage with global fallback).
-- The MCP server (`mcpServer.ts`) runs on a configurable port (default `3579`) using Streamable HTTP transport (with `/sse` backward-compat routing) and auto-registers with Kiro and Antigravity on activation.
 - Session state uses a boolean `sessionTerminated` flag — do not use string matching for termination detection.
 - Debounced history saves (2 s) are used for disk I/O performance.
 - The remote server (`server/`) uses plain WebSocket over HTTP. Auth is PIN-based with session tokens.

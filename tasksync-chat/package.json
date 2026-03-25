@@ -386,7 +386,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@vscode/codicons": "^0.0.36",
-    "mermaid": "10.9.3",
+    "mermaid": "^10.9.5",
     "selfsigned": "^5.5.0",
     "ws": "^8.18.0",
     "zod": "^3.23.8"

@@ -87,11 +87,7 @@ export async function askUser(
 				"[TaskSync] askUser — superseded/cancelled, response:",
 				result.value.slice(0, 80),
 			);
-			return {
-				response: result.value,
-				attachments: [],
-				queue: result.queue,
-			};
+			throw new vscode.CancellationError();
 		}
 		debugLog(
 			"[TaskSync] askUser — user responded:",
@@ -310,6 +306,9 @@ export function registerTools(
 				);
 				return new vscode.LanguageModelToolResult(resultParts);
 			} catch (err: unknown) {
+				if (err instanceof vscode.CancellationError) {
+					throw err;
+				}
 				const message = err instanceof Error ? err.message : "Unknown error";
 				console.error("[TaskSync] LM tool invoke error:", message);
 				return new vscode.LanguageModelToolResult([

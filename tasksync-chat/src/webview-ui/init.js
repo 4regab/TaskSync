@@ -6,6 +6,7 @@ function init() {
 		createApprovalModal();
 		createSettingsModal();
 		createNewSessionModal();
+		createResetSessionModal();
 		createTimeoutWarningModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
@@ -23,6 +24,12 @@ function init() {
 				newSessionBtn.addEventListener("click", function (e) {
 					e.stopPropagation();
 					openNewSessionModal();
+				});
+			var resetSessionBtn = document.getElementById("remote-reset-session-btn");
+			if (resetSessionBtn)
+				resetSessionBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					openResetSessionModal();
 				});
 			var settingsBtn = document.getElementById("remote-settings-btn");
 			if (settingsBtn)
@@ -607,24 +614,24 @@ function createSettingsModal() {
 // ===== NEW SESSION MODAL =====
 
 var newSessionModalOverlay = null;
+var resetSessionModalOverlay = null;
 
-function createNewSessionModal() {
-	newSessionModalOverlay = document.createElement("div");
-	newSessionModalOverlay.className = "settings-modal-overlay hidden";
-	newSessionModalOverlay.id = "new-session-modal-overlay";
+function createSessionActionModal(config) {
+	var overlay = document.createElement("div");
+	overlay.className = "settings-modal-overlay hidden";
+	overlay.id = config.overlayId;
 
 	var modal = document.createElement("div");
 	modal.className = "settings-modal new-session-modal";
 	modal.setAttribute("role", "dialog");
-	modal.setAttribute("aria-labelledby", "new-session-modal-title");
+	modal.setAttribute("aria-labelledby", config.titleId);
 
-	// Header
 	var header = document.createElement("div");
 	header.className = "settings-modal-header";
 	var title = document.createElement("span");
 	title.className = "settings-modal-title";
-	title.id = "new-session-modal-title";
-	title.textContent = "New Session";
+	title.id = config.titleId;
+	title.textContent = config.title;
 	header.appendChild(title);
 	var headerBtns = document.createElement("div");
 	headerBtns.className = "settings-modal-header-buttons";
@@ -633,66 +640,101 @@ function createNewSessionModal() {
 	closeBtn.innerHTML = '<span class="codicon codicon-close"></span>';
 	closeBtn.title = "Cancel";
 	closeBtn.setAttribute("aria-label", "Cancel");
-	closeBtn.addEventListener("click", closeNewSessionModal);
+	closeBtn.addEventListener("click", function () {
+		closeSessionActionModal(overlay);
+	});
 	headerBtns.appendChild(closeBtn);
 	header.appendChild(headerBtns);
 
-	// Content
 	var content = document.createElement("div");
 	content.className = "settings-modal-content new-session-modal-content";
 
-	// Model note
-	var modelNote = document.createElement("p");
-	modelNote.className = "new-session-note";
-	modelNote.innerHTML =
-		'<span class="codicon codicon-info"></span> Please check the model preselected in VS Code\'s Agent Mode before starting.';
-	content.appendChild(modelNote);
+	if (config.noteHtml) {
+		var note = document.createElement("p");
+		note.className = "new-session-note";
+		note.innerHTML = config.noteHtml;
+		content.appendChild(note);
+	}
 
-	// Warning message
 	var warning = document.createElement("p");
 	warning.className = "new-session-warning";
-	warning.textContent =
-		"This will clear the current session history and start a fresh Copilot chat session.";
+	warning.textContent = config.warningText;
 	content.appendChild(warning);
 
-	// Button row
 	var btnRow = document.createElement("div");
 	btnRow.className = "new-session-btn-row";
 	var cancelBtn = document.createElement("button");
 	cancelBtn.className = "form-btn form-btn-cancel";
 	cancelBtn.textContent = "Cancel";
-	cancelBtn.addEventListener("click", closeNewSessionModal);
+	cancelBtn.addEventListener("click", function () {
+		closeSessionActionModal(overlay);
+	});
 	btnRow.appendChild(cancelBtn);
 
 	var confirmBtn = document.createElement("button");
 	confirmBtn.className = "form-btn form-btn-save";
-	confirmBtn.textContent = "New Session";
+	confirmBtn.textContent = config.confirmLabel;
 	confirmBtn.addEventListener("click", function () {
-		closeNewSessionModal();
-		vscode.postMessage({ type: "newSession" });
+		closeSessionActionModal(overlay);
+		vscode.postMessage({ type: config.messageType });
 	});
 	btnRow.appendChild(confirmBtn);
 	content.appendChild(btnRow);
 
 	modal.appendChild(header);
 	modal.appendChild(content);
-	newSessionModalOverlay.appendChild(modal);
-	document.body.appendChild(newSessionModalOverlay);
+	overlay.appendChild(modal);
+	document.body.appendChild(overlay);
 
-	// Close on overlay click
-	newSessionModalOverlay.addEventListener("click", function (e) {
-		if (e.target === newSessionModalOverlay) closeNewSessionModal();
+	overlay.addEventListener("click", function (e) {
+		if (e.target === overlay) closeSessionActionModal(overlay);
+	});
+
+	return overlay;
+}
+
+function openSessionActionModal(overlay) {
+	if (!overlay) return;
+	overlay.classList.remove("hidden");
+}
+
+function closeSessionActionModal(overlay) {
+	if (!overlay) return;
+	overlay.classList.add("hidden");
+}
+
+function createNewSessionModal() {
+	newSessionModalOverlay = createSessionActionModal({
+		overlayId: "new-session-modal-overlay",
+		titleId: "new-session-modal-title",
+		title: "New Session",
+		noteHtml:
+			'<span class="codicon codicon-info"></span> Please check the model preselected in VS Code\'s Agent Mode before starting.',
+		warningText:
+			"This will clear the current session history and start a fresh Copilot chat session.",
+		confirmLabel: "New Session",
+		messageType: "newSession",
 	});
 }
 
 function openNewSessionModal() {
-	if (!newSessionModalOverlay) return;
-	newSessionModalOverlay.classList.remove("hidden");
+	openSessionActionModal(newSessionModalOverlay);
 }
 
-function closeNewSessionModal() {
-	if (!newSessionModalOverlay) return;
-	newSessionModalOverlay.classList.add("hidden");
+function createResetSessionModal() {
+	resetSessionModalOverlay = createSessionActionModal({
+		overlayId: "reset-session-modal-overlay",
+		titleId: "reset-session-modal-title",
+		title: "Reset Session",
+		warningText:
+			"This will clear the current session history without starting a fresh Copilot chat.",
+		confirmLabel: "Reset Session",
+		messageType: "resetSession",
+	});
+}
+
+function openResetSessionModal() {
+	openSessionActionModal(resetSessionModalOverlay);
 }
 
 // ==================== Timeout Warning Modal ====================

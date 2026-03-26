@@ -167,6 +167,8 @@ function mapToRemoteMessage(msg) {
 			return { type: "updateResponseTimeout", timeout: msg.value };
 		case "newSession":
 			return { type: "newSession" };
+		case "resetSession":
+			return { type: "resetSession" };
 		case "chatMessage":
 			return { type: "chatMessage", content: msg.content };
 		case "chatFollowUp":
@@ -495,29 +497,13 @@ function handleRemoteMessage(msg) {
 			break;
 		case "newSession":
 			debugLog("newSession received - clearing state");
-			clearTimeout(processingCheckTimer);
-			currentSessionCalls = [];
-			pendingToolCall = null;
-			lastPendingContentHtml = "";
-			isProcessingResponse = false;
-			if (chatStreamArea) {
-				chatStreamArea.innerHTML = "";
-				chatStreamArea.classList.add("hidden");
-			}
-			document.body.classList.remove("has-pending-toolcall");
-			if (typeof hideApprovalModal === "function") hideApprovalModal();
-			if (typeof hideChoicesBar === "function") hideChoicesBar();
-			renderCurrentSession();
-			if (pendingMessage) {
-				pendingMessage.classList.remove("hidden");
-				pendingMessage.innerHTML =
-					'<div class="session-started-notice">' +
-					'<span class="codicon codicon-check"></span> New session started \u2014 waiting for AI' +
-					"</div>";
-			}
-			if (typeof updateWelcomeSectionVisibility === "function")
-				updateWelcomeSectionVisibility();
+			clearRemoteSessionState(msg.data && msg.data.statusMessage);
 			debugLog("newSession complete - state cleared");
+			break;
+		case "resetSession":
+			debugLog("resetSession received - clearing state");
+			clearRemoteSessionState();
+			debugLog("resetSession complete - state cleared");
 			break;
 		case "fileSearchResults":
 			showAutocomplete(msg.files || []);
@@ -582,6 +568,43 @@ function handleRemoteMessage(msg) {
 			}
 			break;
 	}
+}
+
+function clearRemoteSessionState(statusMessage) {
+	clearTimeout(processingCheckTimer);
+	if (typeof updateRemoteSessionTimerState === "function") {
+		updateRemoteSessionTimerState(null, null);
+	}
+	pendingCriticalMessage = null;
+	currentSessionCalls = [];
+	pendingToolCall = null;
+	lastPendingContentHtml = "";
+	isProcessingResponse = false;
+	if (chatStreamArea) {
+		chatStreamArea.innerHTML = "";
+		chatStreamArea.classList.add("hidden");
+	}
+	document.body.classList.remove("has-pending-toolcall");
+	if (typeof hideApprovalModal === "function") hideApprovalModal();
+	if (typeof hideChoicesBar === "function") hideChoicesBar();
+	renderCurrentSession();
+	if (pendingMessage) {
+		var nextStatusMessage =
+			typeof statusMessage === "string" && statusMessage ? statusMessage : "";
+		if (nextStatusMessage) {
+			pendingMessage.classList.remove("hidden");
+			pendingMessage.innerHTML =
+				'<div class="session-started-notice">' +
+				'<span class="codicon codicon-check"></span> ' +
+				nextStatusMessage +
+				"</div>";
+		} else {
+			pendingMessage.classList.add("hidden");
+			pendingMessage.innerHTML = "";
+		}
+	}
+	if (typeof updateWelcomeSectionVisibility === "function")
+		updateWelcomeSectionVisibility();
 }
 
 // ——— Server state application (SSOT) ———

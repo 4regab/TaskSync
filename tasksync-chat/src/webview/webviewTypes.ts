@@ -127,7 +127,7 @@ export type ToWebviewMessage =
 			type: "contextReferenceAdded";
 			reference: { id: string; type: string; label: string; content: string };
 	  }
-	| { type: "clear" }
+	| { type: "clear"; statusMessage?: string }
 	| {
 			type: "updateSessionTimer";
 			startTime: number | null;
@@ -135,7 +135,8 @@ export type ToWebviewMessage =
 	  }
 	| { type: "triggerSendFromShortcut" }
 	| { type: "openHistoryModal" }
-	| { type: "openNewSessionModal" };
+	| { type: "openNewSessionModal" }
+	| { type: "openResetSessionModal" };
 
 // Message types sent from webview to extension
 export type FromWebviewMessage =
@@ -157,6 +158,7 @@ export type FromWebviewMessage =
 	| { type: "clearPersistedHistory" }
 	| { type: "openHistoryModal" }
 	| { type: "newSession" }
+	| { type: "resetSession" }
 	| { type: "searchFiles"; query: string }
 	| { type: "saveImage"; data: string; mimeType: string }
 	| { type: "addFileReference"; file: FileSearchResult }

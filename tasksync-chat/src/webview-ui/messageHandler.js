@@ -45,6 +45,9 @@ function handleExtensionMessage(event) {
 		case "openNewSessionModal":
 			openNewSessionModal();
 			break;
+		case "openResetSessionModal":
+			openResetSessionModal();
+			break;
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
@@ -128,19 +131,26 @@ function handleExtensionMessage(event) {
 			}
 			break;
 		case "clear":
-			promptQueue = [];
 			currentSessionCalls = [];
 			pendingToolCall = null;
 			lastPendingContentHtml = "";
 			isProcessingResponse = false;
-			renderQueue();
 			renderCurrentSession();
 			if (pendingMessage) {
-				pendingMessage.classList.remove("hidden");
-				pendingMessage.innerHTML =
-					'<div class="session-started-notice">' +
-					'<span class="codicon codicon-check"></span> New session started — waiting for AI' +
-					"</div>";
+				if (
+					typeof message.statusMessage === "string" &&
+					message.statusMessage
+				) {
+					pendingMessage.classList.remove("hidden");
+					pendingMessage.innerHTML =
+						'<div class="session-started-notice">' +
+						'<span class="codicon codicon-check"></span> ' +
+						message.statusMessage +
+						"</div>";
+				} else {
+					pendingMessage.classList.add("hidden");
+					pendingMessage.innerHTML = "";
+				}
 			}
 			updateWelcomeSectionVisibility();
 			break;

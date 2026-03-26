@@ -281,7 +281,9 @@ describe("verifyHttpAuth", () => {
 	it("accepts code via query string", () => {
 		const svc = createService();
 		const req = createMockReq();
-		const url = new URL(`http://localhost/api/test?pin=${svc.getOrCreatePin()}`);
+		const url = new URL(
+			`http://localhost/api/test?pin=${svc.getOrCreatePin()}`,
+		);
 
 		const result = svc.verifyHttpAuth(req, url);
 		expect(result.allowed).toBe(true);

@@ -62,7 +62,7 @@ export class RemoteHtmlService {
 	constructor(
 		private webDir: string,
 		private mediaDir: string,
-	) { }
+	) {}
 
 	/**
 	 * Preload HTML templates asynchronously during server startup.

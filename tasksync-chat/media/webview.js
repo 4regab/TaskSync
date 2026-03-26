@@ -388,7 +388,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-				(msg.reason || "The remote server has been stopped."),
+					(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -399,9 +399,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-					msg.protocolVersion +
-					" client=" +
-					TASKSYNC_PROTOCOL_VERSION,
+						msg.protocolVersion +
+						" client=" +
+						TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",
@@ -3196,10 +3196,10 @@ function renderQueue() {
 			let attachmentBadge =
 				item.attachments && item.attachments.length > 0
 					? '<span class="queue-item-attachment-badge" title="' +
-					item.attachments.length +
-					' attachment(s)" aria-label="' +
-					item.attachments.length +
-					' attachments"><span class="codicon codicon-file-media" aria-hidden="true"></span></span>'
+						item.attachments.length +
+						' attachment(s)" aria-label="' +
+						item.attachments.length +
+						' attachments"><span class="codicon codicon-file-media" aria-hidden="true"></span></span>'
 					: "";
 			return (
 				'<div class="queue-item" data-id="' +

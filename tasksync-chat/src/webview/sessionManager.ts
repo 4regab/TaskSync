@@ -130,14 +130,19 @@ export function playSystemSound(): void {
 
 	try {
 		if (platform === "win32") {
-			const child = spawn("powershell.exe", [
-				"-Command",
-				"[System.Media.SystemSounds]::Exclamation.Play()",
-			], { stdio: "ignore", windowsHide: true });
+			const child = spawn(
+				"powershell.exe",
+				["-Command", "[System.Media.SystemSounds]::Exclamation.Play()"],
+				{ stdio: "ignore", windowsHide: true },
+			);
 			child.on("error", onErr);
 			child.unref();
 		} else if (platform === "darwin") {
-			const child = execFile("afplay", ["/System/Library/Sounds/Tink.aiff"], onErr);
+			const child = execFile(
+				"afplay",
+				["/System/Library/Sounds/Tink.aiff"],
+				onErr,
+			);
 			child.unref();
 		} else {
 			const child = execFile(

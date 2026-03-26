@@ -1,9 +1,7 @@
 import * as crypto from "crypto";
 import * as vscode from "vscode";
 import type { WebSocket } from "ws";
-import {
-	WS_PROTOCOL_VERSION,
-} from "../constants/remoteConstants";
+import { WS_PROTOCOL_VERSION } from "../constants/remoteConstants";
 import { getSafeErrorMessage, sendWsError } from "./serverUtils";
 
 /**
@@ -72,7 +70,7 @@ export class RemoteAuthService {
 		return attempt;
 	}
 
-	constructor(_context: vscode.ExtensionContext) { }
+	constructor(_context: vscode.ExtensionContext) {}
 
 	/**
 	 * Handle PIN/session-token authentication for a WebSocket client.

@@ -1,10 +1,12 @@
-import * as vscode from "vscode";
 import { afterEach, describe, expect, it } from "vitest";
+import * as vscode from "vscode";
 import { isValidFilePath } from "../server/gitService";
 
 describe("isValidFilePath", () => {
 	afterEach(() => {
-		(vscode.workspace as unknown as { workspaceFolders: unknown[] }).workspaceFolders = [];
+		(
+			vscode.workspace as unknown as { workspaceFolders: unknown[] }
+		).workspaceFolders = [];
 	});
 
 	describe("valid paths", () => {
@@ -24,8 +26,11 @@ describe("isValidFilePath", () => {
 		});
 
 		it("accepts absolute paths under any workspace folder", () => {
-			(vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> })
-				.workspaceFolders = [
+			(
+				vscode.workspace as unknown as {
+					workspaceFolders: Array<{ uri: { fsPath: string } }>;
+				}
+			).workspaceFolders = [
 				{ uri: { fsPath: "/workspace/root-a" } },
 				{ uri: { fsPath: "/workspace/root-b" } },
 			];

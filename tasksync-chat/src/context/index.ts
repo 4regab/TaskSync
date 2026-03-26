@@ -9,7 +9,7 @@
 export {
 	ProblemInfo,
 	ProblemsContextProvider,
-	ProblemsSummary
+	ProblemsSummary,
 } from "./problemsContext";
 export { TerminalCommand, TerminalContextProvider } from "./terminalContext";
 

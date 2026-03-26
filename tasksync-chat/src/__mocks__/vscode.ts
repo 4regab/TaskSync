@@ -16,7 +16,9 @@ export const workspace = {
 	}),
 	workspaceFolders: [],
 	getWorkspaceFolder: (uri: { fsPath: string }) => {
-		const folders = workspace.workspaceFolders as Array<{ uri: { fsPath: string } }>;
+		const folders = workspace.workspaceFolders as Array<{
+			uri: { fsPath: string };
+		}>;
 		const match = folders.find((folder) => {
 			const root = folder.uri.fsPath;
 			return uri.fsPath === root || uri.fsPath.startsWith(`${root}/`);

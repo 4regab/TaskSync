@@ -421,7 +421,7 @@ export class RemoteServer {
 	private async handleMessage(
 		ws: WebSocket,
 		clientIp: string,
-		msg: { type: string;[key: string]: unknown },
+		msg: { type: string; [key: string]: unknown },
 	): Promise<void> {
 		if (!msg || typeof msg.type !== "string") {
 			sendWsError(ws, "Invalid message format");

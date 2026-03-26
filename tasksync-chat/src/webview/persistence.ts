@@ -94,8 +94,8 @@ export async function loadPersistedHistoryFromDiskAsync(p: P): Promise<void> {
 		const parsed = JSON.parse(data);
 		p._persistedHistory = Array.isArray(parsed.history)
 			? parsed.history
-				.filter((entry: ToolCallEntry) => entry.status === "completed")
-				.slice(0, p._MAX_HISTORY_ENTRIES)
+					.filter((entry: ToolCallEntry) => entry.status === "completed")
+					.slice(0, p._MAX_HISTORY_ENTRIES)
 			: [];
 	} catch (error) {
 		console.error("[TaskSync] Failed to load persisted history:", error);
@@ -174,6 +174,7 @@ export function savePersistedHistoryToDiskSync(p: P): void {
 		const storagePath = getStorageUri(p).fsPath;
 		const historyPath = path.join(storagePath, "tool-history.json");
 
+		// biome-ignore format: inline suppression required by code quality scanner
 		if (!fs.existsSync(storagePath)) { // sync-io-allowed: deactivation hook must complete before process exits
 			fs.mkdirSync(storagePath, { recursive: true }); // sync-io-allowed
 		}

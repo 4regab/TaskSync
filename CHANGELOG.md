@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v3.0.1 (03-26-26)
+- TaskSync 3.0.0: Remote Access, Read-Only Code Review, Security Hardening, and Webview Refactor
+- Summary
+- This PR delivers TaskSync 3.0.0 with a full remote-access stack, security hardening, major webview architecture refactor, and expanded automated testing. It introduces LAN remote workflows, read-only remote code review, stronger auth/session handling, and cleaner internal module boundaries for long-term maintainability.
+- What Changed
+- 1. Remote Access and Remote UI
+- Added LAN remote server support with HTTP + WebSocket communication.
+- Added remote web client assets including login page, manifest, offline page, and service worker.
+- Added remote control commands and flows for start, stop, and quick access from VS Code.
+- Added configurable remote settings including port, PIN enablement, TLS toggle, and max connected devices.
+- 2. Authentication and Security
+- Reworked remote auth from rotating OTP behavior to a stable per-session PIN model.
+- Added session-token auth flow with token rotation and IP-aware validation.
+- Added failed-auth tracking and lockout behavior.
+- Added/strengthened security headers and origin/host validation.
+- Hardened input and path handling for remote git/file operations.
+- Kept remote code review safe by explicitly disabling write operations in remote mode.
+- 3. Remote Code Review (Read-Only)
+- Added remote API support for change listing and diff retrieval.
+- Exposed review UI actions for browsing changes remotely.
+- Enforced read-only behavior for remote git operations to reduce risk.
+- 4. ask_user Tool and Session Behavior
+- Added Consistent mode via askUserVerbosePayload to improve reliable ask_user loop behavior.
+- Standardized compact ask_user output shape with conditional metadata fields.
+- Improved session lifecycle handling and termination signaling.
+- Updated response-timeout related formatting/alignment and message consistency.
+- 5. Webview and Extension Architecture Refactor
+- Split monolithic webview/provider logic into focused handler modules.
+- Added shared webview types and utility layers to improve SSOT/DRY consistency.
+- Modularized webview frontend scripts (state, rendering, events, input, queue, settings, etc.).
+- Removed deprecated/legacy pieces and cleaned up extension orchestration.
+- 6. Testing, Tooling, and CI
+- Added substantial new unit/comprehensive tests across server, webview, constants, and utilities.
+- Added remote auth end-to-end test coverage with Playwright.
+- Added CI workflow and git hooks for quality gates.
+- Added code-quality scanner script and formatting/lint consistency updates.
+- 7. Documentation and Release Hygiene
+- Updated AGENTS/instruction docs and README coverage for new remote behavior.
+- Updated changelog and release metadata for the 3.0.0 transition.
+- Removed obsolete tracked artifacts and deprecated module paths.
+- Breaking / Behavioral Changes
+- MCP server module was removed from this code path.
+- Remote authentication behavior changed to stable session PIN semantics.
+- Remote max devices default now favors stricter limits (default 1).
+- Remote git actions are intentionally read-only for Code Review workflows.
+
+
 ## TaskSync v2.0.26 (06-25-25)
 - refactor: replace rotating OTP with static PIN for remote access authentication
 - PIN is generated once per server start (no longer rotates every 30s)

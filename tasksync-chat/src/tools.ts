@@ -206,9 +206,9 @@ export function registerTools(
 					"autoAppendEnabled",
 					config.get<boolean>("askUserVerbosePayload", false),
 				);
-				// Use AUTO_APPEND_DEFAULT_TEXT if autoAppendText is empty or not set
-				const configAutoAppendText = config.get<string>("autoAppendText", "");
-				const autoAppendText = configAutoAppendText || AUTO_APPEND_DEFAULT_TEXT;
+				// Auto Append Rules: user-defined text (empty = append nothing)
+				const autoAppendText = config.get<string>("autoAppendText", "");
+				// Auto Reminder: predefined askUser instruction (separate toggle)
 				const alwaysAppendReminder = config.get<boolean>(
 					"alwaysAppendAskUserReminder",
 					false,
@@ -222,9 +222,11 @@ export function registerTools(
 
 				// Build response with auto-append logic
 				let finalResponse = result.response;
+				// Auto Append Rules: only if enabled AND user provided custom text
 				if (autoAppendEnabled && autoAppendText) {
 					finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
 				}
+				// Auto Reminder: always appends predefined instruction when enabled
 				if (alwaysAppendReminder) {
 					finalResponse = appendAutoAppendText(
 						finalResponse,

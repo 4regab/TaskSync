@@ -40,6 +40,7 @@ function generateSharedConstants() {
     const v = {
         protocolVersion: extractNum("WS_PROTOCOL_VERSION"),
         timeoutDefault: extractNum("RESPONSE_TIMEOUT_DEFAULT_MINUTES"),
+        timeoutRiskThreshold: extractNum("RESPONSE_TIMEOUT_RISK_THRESHOLD"),
         sessionWarningDefault: extractNum("DEFAULT_SESSION_WARNING_HOURS"),
         sessionWarningMax: extractNum("SESSION_WARNING_HOURS_MAX"),
         maxAutoDefault: extractNum("DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES"),
@@ -84,6 +85,7 @@ var TASKSYNC_PROTOCOL_VERSION = ${v.protocolVersion};
 // Response timeout settings (from RESPONSE_TIMEOUT_ALLOWED_VALUES, RESPONSE_TIMEOUT_DEFAULT_MINUTES)
 var TASKSYNC_RESPONSE_TIMEOUT_ALLOWED = [${timeoutValues}];
 var TASKSYNC_RESPONSE_TIMEOUT_DEFAULT = ${v.timeoutDefault};
+var TASKSYNC_RESPONSE_TIMEOUT_RISK_THRESHOLD = ${v.timeoutRiskThreshold};
 
 // Settings defaults & validation ranges (from remoteConstants.ts)
 var TASKSYNC_DEFAULT_SESSION_WARNING_HOURS = ${v.sessionWarningDefault};

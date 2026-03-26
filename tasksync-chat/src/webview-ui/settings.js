@@ -127,10 +127,16 @@ function updateAutopilotToggleUI() {
 function handleResponseTimeoutChange() {
 	if (!responseTimeoutSelect) return;
 	let value = parseInt(responseTimeoutSelect.value, 10);
-	if (!isNaN(value)) {
-		responseTimeout = value;
-		vscode.postMessage({ type: "updateResponseTimeout", value: value });
+	if (isNaN(value)) return;
+
+	// Show warning modal for risky values: disabled (0) or extended (>4 hours)
+	if (value === 0 || value > RESPONSE_TIMEOUT_RISK_THRESHOLD) {
+		showTimeoutWarning(value);
+		return;
 	}
+
+	responseTimeout = value;
+	vscode.postMessage({ type: "updateResponseTimeout", value: value });
 }
 
 function updateResponseTimeoutUI() {

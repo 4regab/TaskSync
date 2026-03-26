@@ -6,6 +6,7 @@ function init() {
 		createApprovalModal();
 		createSettingsModal();
 		createNewSessionModal();
+		createTimeoutWarningModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
 
@@ -681,4 +682,146 @@ function openNewSessionModal() {
 function closeNewSessionModal() {
 	if (!newSessionModalOverlay) return;
 	newSessionModalOverlay.classList.add("hidden");
+}
+
+// ==================== Timeout Warning Modal ====================
+
+/**
+ * Create the timeout warning modal for risky timeout settings.
+ * Shows different warnings for disabled (0) vs extended (>4 hours) timeouts.
+ */
+function createTimeoutWarningModal() {
+	timeoutWarningModalOverlay = document.createElement("div");
+	timeoutWarningModalOverlay.className = "settings-modal-overlay hidden";
+	timeoutWarningModalOverlay.id = "timeout-warning-modal-overlay";
+
+	var modal = document.createElement("div");
+	modal.className = "settings-modal timeout-warning-modal";
+	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-labelledby", "timeout-warning-modal-title");
+	modal.setAttribute("aria-describedby", "timeout-warning-modal-desc");
+
+	// Header with warning icon
+	var header = document.createElement("div");
+	header.className = "settings-modal-header timeout-warning-header";
+	var title = document.createElement("span");
+	title.className = "settings-modal-title timeout-warning-title";
+	title.id = "timeout-warning-modal-title";
+	// Title will be updated dynamically in showTimeoutWarning
+	title.innerHTML =
+		'<span class="codicon codicon-warning"></span> <span id="timeout-warning-title-text">Warning</span>';
+	header.appendChild(title);
+
+	// Content
+	var content = document.createElement("div");
+	content.className = "settings-modal-content timeout-warning-content";
+	content.id = "timeout-warning-modal-desc";
+
+	var warningText = document.createElement("p");
+	warningText.className = "timeout-warning-text";
+	warningText.id = "timeout-warning-text";
+	// Text will be updated dynamically in showTimeoutWarning
+	content.appendChild(warningText);
+
+	var riskList = document.createElement("ul");
+	riskList.className = "timeout-warning-list";
+	riskList.id = "timeout-warning-list";
+	// List will be updated dynamically in showTimeoutWarning
+	content.appendChild(riskList);
+
+	var disclaimer = document.createElement("p");
+	disclaimer.className = "timeout-warning-disclaimer";
+	disclaimer.innerHTML =
+		"<strong>You assume full responsibility for any consequences.</strong>";
+	content.appendChild(disclaimer);
+
+	// Button row
+	var btnRow = document.createElement("div");
+	btnRow.className = "new-session-btn-row";
+
+	var cancelBtn = document.createElement("button");
+	cancelBtn.className = "form-btn form-btn-cancel";
+	cancelBtn.textContent = "Cancel";
+	cancelBtn.addEventListener("click", cancelTimeoutWarning);
+	btnRow.appendChild(cancelBtn);
+
+	var confirmBtn = document.createElement("button");
+	confirmBtn.className = "form-btn form-btn-danger";
+	confirmBtn.textContent = "I Understand, Proceed";
+	confirmBtn.addEventListener("click", confirmTimeoutWarning);
+	btnRow.appendChild(confirmBtn);
+
+	content.appendChild(btnRow);
+	modal.appendChild(header);
+	modal.appendChild(content);
+	timeoutWarningModalOverlay.appendChild(modal);
+	document.body.appendChild(timeoutWarningModalOverlay);
+
+	// Close on overlay click (treat as cancel)
+	timeoutWarningModalOverlay.addEventListener("click", function (e) {
+		if (e.target === timeoutWarningModalOverlay) cancelTimeoutWarning();
+	});
+}
+
+function showTimeoutWarning(value) {
+	pendingTimeoutValue = value;
+	if (!timeoutWarningModalOverlay) {
+		return;
+	}
+
+	// Update modal content based on warning type
+	var titleText = document.getElementById("timeout-warning-title-text");
+	var warningText = document.getElementById("timeout-warning-text");
+	var riskList = document.getElementById("timeout-warning-list");
+
+	if (value === 0) {
+		// Disabled - infinite wait warning
+		if (titleText) titleText.textContent = "Disabled Timeout Warning";
+		if (warningText)
+			warningText.textContent =
+				"Disabling the response timeout means the agent will wait indefinitely for your response. This may result in:";
+		if (riskList)
+			riskList.innerHTML =
+				"<li>Agent stalling forever if you forget to respond</li>" +
+				"<li>Session resources held indefinitely</li>" +
+				"<li>Unexpected behavior if connection is lost</li>";
+	} else {
+		// Extended timeout (>4 hours) warning
+		if (titleText) titleText.textContent = "Extended Timeout Risk";
+		if (warningText)
+			warningText.textContent =
+				"Setting a response timeout longer than 4 hours may result in:";
+		if (riskList)
+			riskList.innerHTML =
+				"<li>Account rate limiting or temporary bans</li>" +
+				"<li>Excessive API usage charges</li>" +
+				"<li>Runaway autonomous operations</li>";
+	}
+
+	timeoutWarningModalOverlay.classList.remove("hidden");
+}
+
+function cancelTimeoutWarning() {
+	pendingTimeoutValue = null;
+	if (timeoutWarningModalOverlay) {
+		timeoutWarningModalOverlay.classList.add("hidden");
+	}
+	// Revert dropdown to current value
+	if (responseTimeoutSelect) {
+		responseTimeoutSelect.value = String(responseTimeout);
+	}
+}
+
+function confirmTimeoutWarning() {
+	if (pendingTimeoutValue !== null) {
+		responseTimeout = pendingTimeoutValue;
+		vscode.postMessage({
+			type: "updateResponseTimeout",
+			value: pendingTimeoutValue,
+		});
+	}
+	pendingTimeoutValue = null;
+	if (timeoutWarningModalOverlay) {
+		timeoutWarningModalOverlay.classList.add("hidden");
+	}
 }

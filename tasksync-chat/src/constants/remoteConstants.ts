@@ -83,8 +83,11 @@ export const DEFAULT_REMOTE_CHAT_COMMAND = "workbench.action.chat.openagent";
 // Response timeout configuration (minutes)
 export const RESPONSE_TIMEOUT_ALLOWED_VALUES = new Set<number>([
 	0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210, 240,
+	300, 360, 420, 480,
 ]);
 export const RESPONSE_TIMEOUT_DEFAULT_MINUTES = 60;
+// Threshold above which users see a risk warning (minutes)
+export const RESPONSE_TIMEOUT_RISK_THRESHOLD = 240;
 
 // Queue ID validation
 export const VALID_QUEUE_ID_PATTERN = /^q_\d+_[a-z0-9]+$/;

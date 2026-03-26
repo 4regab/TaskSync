@@ -3209,6 +3209,63 @@ button#send-btn:disabled {
     background-color: var(--vscode-button-hoverBackground);
 }
 
+.form-btn-danger {
+    background-color: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+    border: 1px solid var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.form-btn-danger:hover {
+    background-color: var(--vscode-inputValidation-errorBorder, #be1100);
+    color: #fff;
+}
+
+/* Timeout Warning Modal */
+.timeout-warning-modal {
+    max-width: 380px;
+}
+
+.timeout-warning-header {
+    border-bottom: 1px solid var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.timeout-warning-title {
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.timeout-warning-title .codicon {
+    font-size: 16px;
+}
+
+.timeout-warning-content {
+    padding: 16px;
+}
+
+.timeout-warning-text {
+    font-size: 12px;
+    color: var(--vscode-foreground);
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.timeout-warning-list {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 12px 0;
+    padding-left: 20px;
+    line-height: 1.6;
+}
+
+.timeout-warning-disclaimer {
+    font-size: 11px;
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+    margin: 0 0 16px 0;
+    line-height: 1.4;
+}
+
 /* Add Prompt Button - inline (next to title) */
 .add-prompt-btn-inline {
     display: flex;

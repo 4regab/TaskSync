@@ -32,6 +32,7 @@ import {
 	MAX_SEARCH_QUERY_LENGTH,
 	RESPONSE_TIMEOUT_ALLOWED_VALUES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
+	RESPONSE_TIMEOUT_RISK_THRESHOLD,
 	SESSION_WARNING_HOURS_MAX,
 	SESSION_WARNING_HOURS_MIN,
 	truncateDiff,
@@ -139,6 +140,17 @@ describe("remoteConstants", () => {
 
 		it("0 (disabled) is an allowed value", () => {
 			expect(RESPONSE_TIMEOUT_ALLOWED_VALUES.has(0)).toBe(true);
+		});
+
+		it("risk threshold is in allowed values", () => {
+			expect(
+				RESPONSE_TIMEOUT_ALLOWED_VALUES.has(RESPONSE_TIMEOUT_RISK_THRESHOLD),
+			).toBe(true);
+		});
+
+		it("risk threshold is less than max allowed value", () => {
+			const maxAllowed = Math.max(...RESPONSE_TIMEOUT_ALLOWED_VALUES);
+			expect(RESPONSE_TIMEOUT_RISK_THRESHOLD).toBeLessThan(maxAllowed);
 		});
 	});
 

@@ -1689,8 +1689,10 @@ function createTimeoutWarningModal() {
 	var modal = document.createElement("div");
 	modal.className = "settings-modal timeout-warning-modal";
 	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-modal", "true");
 	modal.setAttribute("aria-labelledby", "timeout-warning-modal-title");
 	modal.setAttribute("aria-describedby", "timeout-warning-modal-desc");
+	modal.id = "timeout-warning-modal";
 
 	// Header with warning icon
 	var header = document.createElement("div");
@@ -1722,8 +1724,10 @@ function createTimeoutWarningModal() {
 
 	var disclaimer = document.createElement("p");
 	disclaimer.className = "timeout-warning-disclaimer";
-	disclaimer.innerHTML =
-		"<strong>You assume full responsibility for any consequences.</strong>";
+	var disclaimerStrong = document.createElement("strong");
+	disclaimerStrong.textContent =
+		"You assume full responsibility for any consequences.";
+	disclaimer.appendChild(disclaimerStrong);
 	content.appendChild(disclaimer);
 
 	// Button row
@@ -1732,12 +1736,14 @@ function createTimeoutWarningModal() {
 
 	var cancelBtn = document.createElement("button");
 	cancelBtn.className = "form-btn form-btn-cancel";
+	cancelBtn.id = "timeout-warning-cancel-btn";
 	cancelBtn.textContent = "Cancel";
 	cancelBtn.addEventListener("click", cancelTimeoutWarning);
 	btnRow.appendChild(cancelBtn);
 
 	var confirmBtn = document.createElement("button");
 	confirmBtn.className = "form-btn form-btn-danger";
+	confirmBtn.id = "timeout-warning-confirm-btn";
 	confirmBtn.textContent = "I Understand, Proceed";
 	confirmBtn.addEventListener("click", confirmTimeoutWarning);
 	btnRow.appendChild(confirmBtn);
@@ -1752,13 +1758,36 @@ function createTimeoutWarningModal() {
 	timeoutWarningModalOverlay.addEventListener("click", function (e) {
 		if (e.target === timeoutWarningModalOverlay) cancelTimeoutWarning();
 	});
+
+	// Keyboard handling: Escape to cancel
+	timeoutWarningModalOverlay.addEventListener("keydown", function (e) {
+		if (e.key === "Escape") {
+			cancelTimeoutWarning();
+		}
+	});
+}
+
+/**
+ * Helper to populate risk list items using DOM methods (no innerHTML)
+ */
+function populateRiskList(listElement, items) {
+	listElement.innerHTML = "";
+	for (var i = 0; i < items.length; i++) {
+		var li = document.createElement("li");
+		li.textContent = items[i];
+		listElement.appendChild(li);
+	}
 }
 
 function showTimeoutWarning(value) {
-	pendingTimeoutValue = value;
 	if (!timeoutWarningModalOverlay) {
+		// Modal failed to create - apply value immediately and revert dropdown
+		if (responseTimeoutSelect) {
+			responseTimeoutSelect.value = String(responseTimeout);
+		}
 		return;
 	}
+	pendingTimeoutValue = value;
 
 	// Update modal content based on warning type
 	var titleText = document.getElementById("timeout-warning-title-text");
@@ -1772,24 +1801,33 @@ function showTimeoutWarning(value) {
 			warningText.textContent =
 				"Disabling the response timeout means the agent will wait indefinitely for your response. This may result in:";
 		if (riskList)
-			riskList.innerHTML =
-				"<li>Agent stalling forever if you forget to respond</li>" +
-				"<li>Session resources held indefinitely</li>" +
-				"<li>Unexpected behavior if connection is lost</li>";
+			populateRiskList(riskList, [
+				"Agent stalling forever if you forget to respond",
+				"Session resources held indefinitely",
+				"Unexpected behavior if connection is lost",
+			]);
 	} else {
-		// Extended timeout (>4 hours) warning
+		// Extended timeout warning - derive threshold from constant
+		var thresholdHours = RESPONSE_TIMEOUT_RISK_THRESHOLD / 60;
 		if (titleText) titleText.textContent = "Extended Timeout Risk";
 		if (warningText)
 			warningText.textContent =
-				"Setting a response timeout longer than 4 hours may result in:";
+				"Setting a response timeout longer than " +
+				thresholdHours +
+				" hours may result in:";
 		if (riskList)
-			riskList.innerHTML =
-				"<li>Account rate limiting or temporary bans</li>" +
-				"<li>Excessive API usage charges</li>" +
-				"<li>Runaway autonomous operations</li>";
+			populateRiskList(riskList, [
+				"Account rate limiting or temporary bans",
+				"Excessive API usage charges",
+				"Runaway autonomous operations",
+			]);
 	}
 
 	timeoutWarningModalOverlay.classList.remove("hidden");
+
+	// Focus the cancel button for accessibility
+	var cancelBtn = document.getElementById("timeout-warning-cancel-btn");
+	if (cancelBtn) cancelBtn.focus();
 }
 
 function cancelTimeoutWarning() {
@@ -1797,9 +1835,10 @@ function cancelTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
-	// Revert dropdown to current value
+	// Revert dropdown to current value and restore focus
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.value = String(responseTimeout);
+		responseTimeoutSelect.focus();
 	}
 }
 
@@ -1814,6 +1853,10 @@ function confirmTimeoutWarning() {
 	pendingTimeoutValue = null;
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
+	}
+	// Restore focus to dropdown
+	if (responseTimeoutSelect) {
+		responseTimeoutSelect.focus();
 	}
 }
 // ==================== Event Listeners ====================

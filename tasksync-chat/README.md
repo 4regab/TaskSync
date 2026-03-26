@@ -70,10 +70,19 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - Remove individual entries or clear all history
 
 ### Auto Append
-Automatically append instruction text to every `ask_user` response. Helps ensure AI agents continue calling `ask_user`:
-- **Enabled by default** with the askUser reminder instruction
-- Configurable text in Settings (gear icon) → Auto Append Text
-- **Always Append Reminder** toggle (OFF by default): Forces the askUser reminder instruction even when custom text is set — recommended for GPT 5.4 users
+Two features for appending text to every `ask_user` response:
+
+**1. Auto Append Rules** (Settings → Auto Append)
+- Toggle ON by default, but empty by default (appends nothing)
+- Set custom rules in the text field (e.g., "follow SOLID principles")
+- Only appends when text is provided
+
+**2. Auto Reminder** (Settings → Always Append askUser Reminder)
+- Toggle OFF by default
+- When enabled, appends the predefined askUser instruction to ensure the agent continues calling `ask_user`
+- Recommended for GPT 5.4 users who experience the agent exiting without calling `ask_user`
+
+Both can be enabled together — custom text appends first, then the askUser instruction.
 
 ## Installation
 

@@ -109,7 +109,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 				let message = `Remote Access: ${result.localUrl}`;
 				if (result.pin) {
-					message += ` (OTP: ${result.pin}, rotates every 30s)`;
+					message += ` (PIN: ${result.pin})`;
 				}
 
 				const action = await vscode.window.showInformationMessage(
@@ -155,7 +155,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			// If server is running, show current status
 			if (remoteServer?.isRunning()) {
 				const info = remoteServer.getConnectionInfo();
-				const directUrl = info.pin ? `${info.url}/${info.pin}` : info.url;
+				const directUrl = info.pin ? `${info.url}#pin=${info.pin}` : info.url;
 
 				const items: vscode.QuickPickItem[] = [
 					{
@@ -170,8 +170,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 				if (info.pin) {
 					items.unshift({
-						label: `$(key) OTP: ${info.pin}`,
-						description: "Tap to copy (rotates every 30s)",
+						label: `$(key) PIN: ${info.pin}`,
+						description: "Tap to copy",
 					});
 				}
 
@@ -183,9 +183,9 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (pick?.label.includes("Copy URL")) {
 					await vscode.env.clipboard.writeText(directUrl);
 					vscode.window.showInformationMessage("URL copied to clipboard");
-				} else if (pick?.label.includes("OTP:")) {
+				} else if (pick?.label.includes("PIN:")) {
 					await vscode.env.clipboard.writeText(info.pin || "");
-					vscode.window.showInformationMessage("OTP copied to clipboard");
+					vscode.window.showInformationMessage("PIN copied to clipboard");
 				} else if (pick?.label.includes("Stop")) {
 					remoteServer.stop();
 					vscode.window.showInformationMessage("Remote server stopped");
@@ -198,7 +198,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				[
 					{
 						label: "$(broadcast) Start Remote Access",
-						description: "LAN mode, OTP required",
+						description: "LAN mode, PIN required",
 						detail:
 							"Connect from any device on your local network. Use Tailscale for internet access.",
 					},
@@ -218,7 +218,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				const result = await remoteServer!.start(port);
 
 				const directUrl = result.pin
-					? `${result.localUrl}/${result.pin}`
+					? `${result.localUrl}#pin=${result.pin}`
 					: result.localUrl;
 
 				// Show connection info in a QuickPick for easy copying
@@ -226,15 +226,15 @@ export function activate(context: vscode.ExtensionContext): void {
 					{
 						label: `$(link) ${directUrl}`,
 						description: result.pin
-							? "Tap to copy (includes OTP)"
+							? "Tap to copy (includes PIN)"
 							: "Tap to copy",
 					},
 				];
 
 				if (result.pin) {
 					infoItems.push({
-						label: `$(key) OTP: ${result.pin}`,
-						description: "Tap to copy OTP (rotates every 30s)",
+						label: `$(key) PIN: ${result.pin}`,
+						description: "Tap to copy PIN",
 					});
 				}
 
@@ -257,9 +257,9 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (infoPick?.label.includes(directUrl)) {
 					await vscode.env.clipboard.writeText(directUrl);
 					vscode.window.showInformationMessage("URL copied!");
-				} else if (infoPick?.label.includes("OTP:")) {
+				} else if (infoPick?.label.includes("PIN:")) {
 					await vscode.env.clipboard.writeText(result.pin || "");
-					vscode.window.showInformationMessage("OTP copied!");
+					vscode.window.showInformationMessage("PIN copied!");
 				} else if (infoPick?.label.includes("Tailscale")) {
 					vscode.env.openExternal(
 						vscode.Uri.parse("https://tailscale.com/download"),

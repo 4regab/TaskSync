@@ -92,7 +92,7 @@
         "tasksync.remotePinEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Require rotating OTP authentication for remote access. Recommended for LAN access."
+          "description": "Require PIN authentication for remote access. Recommended for LAN access."
         },
         "tasksync.remoteTlsEnabled": {
           "type": "boolean",
@@ -112,7 +112,7 @@
         "tasksync.remotePin": {
           "type": "string",
           "default": "",
-          "description": "Deprecated. Static custom PINs are no longer used because remote auth now uses rotating OTP."
+          "description": "Deprecated. Static custom PINs are no longer used — remote auth now generates a random PIN on each server start."
         },
         "tasksync.autopilot": {
           "type": "boolean",

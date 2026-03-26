@@ -222,13 +222,14 @@ function attemptConnect() {
     };
 }
 
-// Check for OTP in the URL path (/XXXX).
-// Clear OTP from URL immediately after reading to minimize exposure.
-const pathOtp = window.location.pathname.split("/").filter(Boolean).pop();
-const urlPin = pathOtp && /^\d{4,6}$/.test(pathOtp) ? pathOtp : "";
+// Check for PIN in the URL fragment (#pin=XXXX).
+// Fragments are never sent to the server, reducing exposure.
+// Clear fragment from URL immediately after reading.
+const hashParams = new URLSearchParams(window.location.hash.slice(1));
+const urlPin = hashParams.get("pin") || "";
 if (urlPin && urlPin.length >= 4) {
-    // Clear OTP from URL
-    window.history.replaceState({}, "", "/");
+    // Clear PIN from URL fragment
+    window.history.replaceState({}, "", window.location.pathname);
     // Fill PIN inputs with URL PIN
     const pinDigits = urlPin.slice(0, 6).split("");
     pinDigits.forEach((char, i) => {

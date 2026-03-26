@@ -187,15 +187,6 @@ export class RemoteHtmlService {
 			return;
 		}
 
-		// Route: /123456 - clean one-click OTP login link.
-		if (/^\/\d{4,6}\/?$/.test(url.pathname)) {
-			const requestHost = req.headers.host || "";
-			const cspHeader = this.buildLoginCsp(requestHost);
-			const loginPath = path.join(this.webDir, "index.html");
-			void this.serveFile(loginPath, res, undefined, cspHeader);
-			return;
-		}
-
 		// Default: serve from web folder (login page, etc)
 		let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 

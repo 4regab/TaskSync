@@ -15,64 +15,19 @@ export class RemoteAuthService {
 	pinEnabled: boolean = true;
 	pin: string = "";
 	readonly authenticatedClients: Set<WebSocket> = new Set();
-	private otpSecret: Buffer | null = null;
 
-	private readonly OTP_DIGITS = 6;
-	private readonly OTP_STEP_MS = 30 * 1000; // 30 seconds
-	private readonly OTP_WINDOW_TOLERANCE = 1; // +/- one step for clock drift
-
-	/** Create or return the in-memory secret used for rotating OTP generation. */
-	private getOtpSecret(): Buffer {
-		if (!this.otpSecret) {
-			this.otpSecret = crypto.randomBytes(32);
-		}
-		return this.otpSecret;
-	}
-
-	/** Generate a 6-digit OTP for a given time step using RFC4226 dynamic truncation. */
-	private generateOtpForStep(step: number): string {
-		const counter = Buffer.alloc(8);
-		counter.writeBigUInt64BE(BigInt(step));
-		const hmac = crypto
-			.createHmac("sha1", this.getOtpSecret())
-			.update(counter)
-			.digest();
-		const offset = hmac[hmac.length - 1] & 0x0f;
-		const binaryCode =
-			((hmac[offset] & 0x7f) << 24) |
-			((hmac[offset + 1] & 0xff) << 16) |
-			((hmac[offset + 2] & 0xff) << 8) |
-			(hmac[offset + 3] & 0xff);
-		const mod = 10 ** this.OTP_DIGITS;
-		return (binaryCode % mod).toString().padStart(this.OTP_DIGITS, "0");
-	}
-
-	private getCurrentOtpStep(nowMs: number = Date.now()): number {
-		return Math.floor(nowMs / this.OTP_STEP_MS);
-	}
-
-	private digestCode(code: string): Buffer {
-		return crypto.createHash("sha256").update(code, "utf8").digest();
-	}
-
-	/** Timing-safe OTP comparison against current and adjacent time windows. */
+	/** Timing-safe PIN comparison using SHA-256 digests (constant-time). */
 	private comparePinTimingSafe(input: string): boolean {
-		const inputDigest = this.digestCode(input);
-		const currentStep = this.getCurrentOtpStep();
-
-		for (
-			let delta = -this.OTP_WINDOW_TOLERANCE;
-			delta <= this.OTP_WINDOW_TOLERANCE;
-			delta++
-		) {
-			const expected = this.generateOtpForStep(currentStep + delta);
-			const expectedDigest = this.digestCode(expected);
-			if (crypto.timingSafeEqual(expectedDigest, inputDigest)) {
-				return true;
-			}
-		}
-
-		return false;
+		if (!this.pin) return false;
+		const inputDigest = crypto
+			.createHash("sha256")
+			.update(input, "utf8")
+			.digest();
+		const expectedDigest = crypto
+			.createHash("sha256")
+			.update(this.pin, "utf8")
+			.digest();
+		return crypto.timingSafeEqual(expectedDigest, inputDigest);
 	}
 	private failedAttempts: Map<
 		string,
@@ -313,12 +268,14 @@ export class RemoteAuthService {
 	}
 
 	/**
-	 * Get the current 6-digit OTP for display in VS Code UI.
+	 * Generate a new 6-digit PIN. Called once per server start.
+	 * Not persisted — a fresh PIN is created each time the server starts.
 	 */
-	getCurrentOtp(): string {
-		const otp = this.generateOtpForStep(this.getCurrentOtpStep());
-		this.pin = otp;
-		return otp;
+	getOrCreatePin(): string {
+		if (!this.pin) {
+			this.pin = crypto.randomInt(100000, 1000000).toString();
+		}
+		return this.pin;
 	}
 
 	/**

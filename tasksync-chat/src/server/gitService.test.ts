@@ -4,7 +4,7 @@ import { isValidFilePath } from "../server/gitService";
 
 describe("isValidFilePath", () => {
 	afterEach(() => {
-		(vscode.workspace as { workspaceFolders: unknown[] }).workspaceFolders = [];
+		(vscode.workspace as unknown as { workspaceFolders: unknown[] }).workspaceFolders = [];
 	});
 
 	describe("valid paths", () => {
@@ -24,7 +24,7 @@ describe("isValidFilePath", () => {
 		});
 
 		it("accepts absolute paths under any workspace folder", () => {
-			(vscode.workspace as { workspaceFolders: Array<{ uri: { fsPath: string } }> })
+			(vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> })
 				.workspaceFolders = [
 				{ uri: { fsPath: "/workspace/root-a" } },
 				{ uri: { fsPath: "/workspace/root-b" } },

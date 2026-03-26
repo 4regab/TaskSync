@@ -95,8 +95,8 @@ export class RemoteServer {
 		this.authService.onAuthFailure = (ip, count, lockedOut) => {
 			if (!lockedOut && count < 3) return;
 			const msg = lockedOut
-				? `Client ${ip} locked out after ${count} failed OTP attempts.`
-				: `${count} failed OTP attempts from ${ip}.`;
+				? `Client ${ip} locked out after ${count} failed PIN attempts.`
+				: `${count} failed PIN attempts from ${ip}.`;
 			vscode.window.showWarningMessage(`[TaskSync Remote] ${msg}`);
 		};
 		this.htmlService = new RemoteHtmlService(webDir, mediaDir);
@@ -124,14 +124,14 @@ export class RemoteServer {
 		return {
 			url,
 			pin: this.authService.pinEnabled
-				? this.authService.getCurrentOtp()
+				? this.authService.getOrCreatePin()
 				: undefined,
 		};
 	}
 
 	async start(port: number = DEFAULT_REMOTE_PORT): Promise<RemoteServerUrls> {
 		const pin = this.authService.pinEnabled
-			? this.authService.getCurrentOtp()
+			? this.authService.getOrCreatePin()
 			: undefined;
 		if (this.running) {
 			return {
@@ -149,7 +149,7 @@ export class RemoteServer {
 		this.htmlService.tlsEnabled = !!this.tlsCert;
 
 		if (this.authService.pinEnabled) {
-			this.authService.pin = this.authService.getCurrentOtp();
+			this.authService.getOrCreatePin();
 		}
 		this.configChangeDisposable?.dispose();
 		this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
@@ -162,9 +162,10 @@ export class RemoteServer {
 					true,
 				);
 				if (this.authService.pinEnabled) {
-					const newPin = this.authService.getCurrentOtp();
-					if (newPin !== this.authService.pin || !wasPinEnabled) {
-						this.authService.pin = newPin;
+					if (!wasPinEnabled) {
+						// PIN was just re-enabled — generate fresh PIN and clear all sessions
+						this.authService.pin = "";
+						this.authService.getOrCreatePin();
 						this.authService.authenticatedClients.clear();
 						this.authService.clearSessionTokens();
 					}
@@ -190,7 +191,7 @@ export class RemoteServer {
 				resolve({
 					localUrl: `${this.protocol}://${getLocalIp()}:${this.port}`,
 					pin: this.authService.pinEnabled
-						? this.authService.getCurrentOtp()
+						? this.authService.getOrCreatePin()
 						: undefined,
 				});
 			});
@@ -224,6 +225,7 @@ export class RemoteServer {
 			this.ipRateLimitCleanupTimer = null;
 		}
 		this.authService.cleanup();
+		this.authService.pin = ""; // Fresh PIN will be generated on next start
 		this.configChangeDisposable?.dispose();
 		this.configChangeDisposable = null;
 		this.running = false;

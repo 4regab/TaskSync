@@ -39,6 +39,7 @@ function createProvider(overrides: Partial<any> = {}) {
 
 describe("cancelPendingToolCall", () => {
 	beforeEach(() => {
+		vi.restoreAllMocks();
 		vi.clearAllMocks();
 	});
 

@@ -75,17 +75,17 @@ export interface ReusablePrompt {
 export type ToWebviewMessage =
 	| { type: "updateQueue"; queue: QueuedPrompt[]; enabled: boolean }
 	| {
-		type: "toolCallPending";
-		id: string;
-		prompt: string;
-		isApproval: boolean;
-		choices?: ParsedChoice[];
-	}
+			type: "toolCallPending";
+			id: string;
+			prompt: string;
+			isApproval: boolean;
+			choices?: ParsedChoice[];
+	  }
 	| {
-		type: "toolCallCompleted";
-		entry: ToolCallEntry;
-		sessionTerminated?: boolean;
-	}
+			type: "toolCallCompleted";
+			entry: ToolCallEntry;
+			sessionTerminated?: boolean;
+	  }
 	| { type: "updateCurrentSession"; history: ToolCallEntry[] }
 	| { type: "updatePersistedHistory"; history: ToolCallEntry[] }
 	| { type: "fileSearchResults"; files: FileSearchResult[] }
@@ -93,45 +93,45 @@ export type ToWebviewMessage =
 	| { type: "imageSaved"; attachment: AttachmentInfo }
 	| { type: "openSettingsModal" }
 	| {
-		type: "updateSettings";
-		soundEnabled: boolean;
-		interactiveApprovalEnabled: boolean;
-		askUserVerbosePayloadEnabled: boolean;
-		autopilotEnabled: boolean;
-		autopilotText: string;
-		autopilotPrompts: string[];
-		reusablePrompts: ReusablePrompt[];
-		responseTimeout: number;
-		sessionWarningHours: number;
-		maxConsecutiveAutoResponses: number;
-		remoteMaxDevices: number;
-		humanLikeDelayEnabled: boolean;
-		humanLikeDelayMin: number;
-		humanLikeDelayMax: number;
-		sendWithCtrlEnter: boolean;
-		queueEnabled: boolean;
-	}
+			type: "updateSettings";
+			soundEnabled: boolean;
+			interactiveApprovalEnabled: boolean;
+			askUserVerbosePayloadEnabled: boolean;
+			autopilotEnabled: boolean;
+			autopilotText: string;
+			autopilotPrompts: string[];
+			reusablePrompts: ReusablePrompt[];
+			responseTimeout: number;
+			sessionWarningHours: number;
+			maxConsecutiveAutoResponses: number;
+			remoteMaxDevices: number;
+			humanLikeDelayEnabled: boolean;
+			humanLikeDelayMin: number;
+			humanLikeDelayMax: number;
+			sendWithCtrlEnter: boolean;
+			queueEnabled: boolean;
+	  }
 	| { type: "slashCommandResults"; prompts: ReusablePrompt[] }
 	| { type: "playNotificationSound" }
 	| {
-		type: "contextSearchResults";
-		suggestions: Array<{
-			type: string;
-			label: string;
-			description: string;
-			detail: string;
-		}>;
-	}
+			type: "contextSearchResults";
+			suggestions: Array<{
+				type: string;
+				label: string;
+				description: string;
+				detail: string;
+			}>;
+	  }
 	| {
-		type: "contextReferenceAdded";
-		reference: { id: string; type: string; label: string; content: string };
-	}
+			type: "contextReferenceAdded";
+			reference: { id: string; type: string; label: string; content: string };
+	  }
 	| { type: "clear" }
 	| {
-		type: "updateSessionTimer";
-		startTime: number | null;
-		frozenElapsed: number | null;
-	}
+			type: "updateSessionTimer";
+			startTime: number | null;
+			frozenElapsed: number | null;
+	  }
 	| { type: "triggerSendFromShortcut" }
 	| { type: "openHistoryModal" }
 	| { type: "openNewSessionModal" };
@@ -140,11 +140,11 @@ export type ToWebviewMessage =
 export type FromWebviewMessage =
 	| { type: "submit"; value: string; attachments: AttachmentInfo[] }
 	| {
-		type: "addQueuePrompt";
-		prompt: string;
-		id: string;
-		attachments?: AttachmentInfo[];
-	}
+			type: "addQueuePrompt";
+			prompt: string;
+			id: string;
+			attachments?: AttachmentInfo[];
+	  }
 	| { type: "removeQueuePrompt"; promptId: string }
 	| { type: "editQueuePrompt"; promptId: string; newPrompt: string }
 	| { type: "reorderQueue"; fromIndex: number; toIndex: number }
@@ -186,8 +186,8 @@ export type FromWebviewMessage =
 	| { type: "updateSendWithCtrlEnterSetting"; enabled: boolean }
 	| { type: "searchContext"; query: string }
 	| {
-		type: "selectContextReference";
-		contextType: string;
-		options?: Record<string, unknown>;
-	}
+			type: "selectContextReference";
+			contextType: string;
+			options?: Record<string, unknown>;
+	  }
 	| { type: "copyToClipboard"; text: string };

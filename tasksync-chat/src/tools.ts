@@ -22,12 +22,14 @@ export function buildFinalResponse(
 	let finalResponse = response;
 	if (autoAppendEnabled) {
 		finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
-	}
-	if (alwaysAppendReminder) {
-		finalResponse = appendAutoAppendText(
-			finalResponse,
-			AUTO_APPEND_DEFAULT_TEXT,
-		);
+		// alwaysAppendReminder only applies when autoAppendEnabled is true
+		// (UI hides this toggle when autoAppendEnabled is off)
+		if (alwaysAppendReminder) {
+			finalResponse = appendAutoAppendText(
+				finalResponse,
+				AUTO_APPEND_DEFAULT_TEXT,
+			);
+		}
 	}
 	return finalResponse;
 }

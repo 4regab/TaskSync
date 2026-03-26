@@ -79,14 +79,14 @@ describe("buildFinalResponse", () => {
 
 	// ── Case 5: alwaysAppendReminder ON but autoAppend OFF ───────
 	describe("Case 5: alwaysAppendReminder ON, autoAppend OFF", () => {
-		it("appends only REQUIRED text (reminder is independent of autoAppend)", () => {
+		it("returns response unchanged (reminder only applies when autoAppend is ON)", () => {
 			const result = buildFinalResponse(userResponse, false, customText, true);
-			expect(result).toBe(`${userResponse}\n\n${AUTO_APPEND_DEFAULT_TEXT}`);
+			expect(result).toBe(userResponse);
 		});
 
-		it("returns just REQUIRED text when response is empty", () => {
+		it("returns empty when response is empty", () => {
 			const result = buildFinalResponse("", false, customText, true);
-			expect(result).toBe(AUTO_APPEND_DEFAULT_TEXT);
+			expect(result).toBe("");
 		});
 	});
 
@@ -173,10 +173,11 @@ describe("buildFinalResponse", () => {
 			expect(result).toBe(`${emojiResponse}\n\n${emojiAppend}`);
 		});
 
-		it("handles unicode with alwaysAppendReminder", () => {
+		it("handles unicode with alwaysAppendReminder (no effect when autoAppend OFF)", () => {
 			const emojiResponse = "Réponse complète ✅";
 			const result = buildFinalResponse(emojiResponse, false, "", true);
-			expect(result).toBe(`${emojiResponse}\n\n${AUTO_APPEND_DEFAULT_TEXT}`);
+			// alwaysAppendReminder has no effect when autoAppend is OFF
+			expect(result).toBe(emojiResponse);
 		});
 
 		it("handles response that already contains append text (no dedup)", () => {

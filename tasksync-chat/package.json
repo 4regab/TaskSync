@@ -244,7 +244,13 @@
           "type": "string",
           "default": "",
           "scope": "window",
-          "description": "Optional custom text appended before the mandatory instruction when Auto Append is enabled."
+          "description": "Custom text appended to every ask_user response when Auto Append is enabled. Defaults to the askUser reminder instruction."
+        },
+        "tasksync.alwaysAppendAskUserReminder": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Always append the askUser reminder instruction, even when custom autoAppendText is set. Recommended for GPT 5.4 users."
         },
         "tasksync.askUserVerbosePayload": {
           "type": "boolean",

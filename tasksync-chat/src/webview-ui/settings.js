@@ -87,6 +87,24 @@ function updateAutoAppendTextUI() {
 	autoAppendTextInput.value = autoAppendText;
 }
 
+function toggleAlwaysAppendReminderSetting() {
+	alwaysAppendReminder = !alwaysAppendReminder;
+	updateAlwaysAppendReminderToggleUI();
+	vscode.postMessage({
+		type: "updateAlwaysAppendReminderSetting",
+		enabled: alwaysAppendReminder,
+	});
+}
+
+function updateAlwaysAppendReminderToggleUI() {
+	if (!alwaysAppendReminderToggle) return;
+	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
+	alwaysAppendReminderToggle.setAttribute(
+		"aria-checked",
+		alwaysAppendReminder ? "true" : "false",
+	);
+}
+
 function toggleSendWithCtrlEnterSetting() {
 	sendWithCtrlEnter = !sendWithCtrlEnter;
 	updateSendWithCtrlEnterToggleUI();

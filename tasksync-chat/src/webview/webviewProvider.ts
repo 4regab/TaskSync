@@ -121,6 +121,8 @@ export class TaskSyncWebviewProvider
 	// Auto Append setting controls whether shared guidance is appended to ask_user responses.
 	_autoAppendEnabled: boolean = false;
 	_autoAppendText: string = "";
+	// Force askUser reminder even with custom autoAppendText (for GPT 5.4)
+	_alwaysAppendReminder: boolean = false;
 
 	readonly _AUTOPILOT_DEFAULT_TEXT =
 		"You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.";

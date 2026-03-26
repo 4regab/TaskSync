@@ -166,6 +166,7 @@ export type FromWebviewMessage =
 	| { type: "updateInteractiveApprovalSetting"; enabled: boolean }
 	| { type: "updateAutoAppendSetting"; enabled: boolean }
 	| { type: "updateAutoAppendText"; text: string }
+	| { type: "updateAlwaysAppendReminderSetting"; enabled: boolean }
 	| { type: "updateAutopilotSetting"; enabled: boolean }
 	| { type: "updateAutopilotText"; text: string }
 	| { type: "addAutopilotPrompt"; prompt: string }

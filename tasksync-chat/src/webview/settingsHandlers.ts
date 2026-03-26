@@ -156,6 +156,10 @@ export function loadSettings(p: P): void {
 		AUTO_APPEND_DEFAULT_TEXT,
 	);
 	p._autoAppendText = normalizeAutoAppendText(configuredAutoAppendText);
+	p._alwaysAppendReminder = config.get<boolean>(
+		"alwaysAppendAskUserReminder",
+		false,
+	);
 	p._autopilotEnabled = config.get<boolean>("autopilot", false);
 
 	const defaultAutopilotText = getAutopilotDefaultText(p, config);
@@ -240,6 +244,7 @@ export function buildSettingsPayload(p: P): {
 	interactiveApprovalEnabled: boolean;
 	autoAppendEnabled: boolean;
 	autoAppendText: string;
+	alwaysAppendReminder: boolean;
 	sendWithCtrlEnter: boolean;
 	autopilotEnabled: boolean;
 	autopilotText: string;
@@ -260,6 +265,7 @@ export function buildSettingsPayload(p: P): {
 		interactiveApprovalEnabled: p._interactiveApprovalEnabled,
 		autoAppendEnabled: p._autoAppendEnabled,
 		autoAppendText: p._autoAppendText,
+		alwaysAppendReminder: p._alwaysAppendReminder,
 		sendWithCtrlEnter: p._sendWithCtrlEnter,
 		autopilotEnabled: p._autopilotEnabled,
 		autopilotText: p._autopilotText,
@@ -362,6 +368,21 @@ export async function handleUpdateAutoAppendText(
 		await config.update(
 			"autoAppendText",
 			normalizedText,
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+}
+
+export async function handleUpdateAlwaysAppendReminderSetting(
+	p: P,
+	enabled: boolean,
+): Promise<void> {
+	p._alwaysAppendReminder = enabled;
+	await withConfigGuard(p, async () => {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		await config.update(
+			"alwaysAppendAskUserReminder",
+			enabled,
 			vscode.ConfigurationTarget.Workspace,
 		);
 	});

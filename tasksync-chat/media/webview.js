@@ -36,6 +36,12 @@ const getWsProtocol =
 				return location.protocol === "https:" ? "wss:" : "ws:";
 			};
 
+// Auto Append instruction text (SSOT from remoteConstants.ts)
+const AUTO_APPEND_DEFAULT_TEXT =
+	typeof TASKSYNC_AUTO_APPEND_DEFAULT_TEXT !== "undefined"
+		? TASKSYNC_AUTO_APPEND_DEFAULT_TEXT
+		: "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
+
 const PROCESSING_POLL_INTERVAL_MS = 5000; // Delay before polling server for state after tool call
 // ==================== Communication Adapter ====================
 // Provides unified API for VS Code postMessage or WebSocket communication
@@ -638,6 +644,9 @@ function applySettingsData(s) {
 	if (typeof s.autoAppendText === "string") {
 		autoAppendText = s.autoAppendText;
 	}
+	if (s.alwaysAppendReminder !== undefined) {
+		alwaysAppendReminder = s.alwaysAppendReminder;
+	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
 	if (s.interactiveApprovalEnabled !== undefined)
@@ -881,7 +890,8 @@ let lastPendingContentHtml = "";
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
 let autoAppendEnabled = true;
-let autoAppendText = ""; // User's optional custom text (instruction is always appended separately)
+let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
+let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -1366,8 +1376,15 @@ function createSettingsModal() {
 		"</div>" +
 		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
 		"</div>" +
-		'<div class="form-row hidden" id="auto-append-text-row"><label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
-		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea></div>';
+		'<div class="form-row hidden" id="auto-append-text-row">' +
+		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
+		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
+		'<div class="auto-append-reminder-row">' +
+		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder</label>' +
+		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
+		"</div>" +
+		'<p class="auto-append-note">When enabled, the askUser reminder instruction is always appended (recommended for GPT 5.4).</p>' +
+		"</div>";
 	modalContent.appendChild(autoAppendSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
@@ -1560,6 +1577,9 @@ function createSettingsModal() {
 	autoAppendToggle = document.getElementById("auto-append-toggle");
 	autoAppendTextRow = document.getElementById("auto-append-text-row");
 	autoAppendTextInput = document.getElementById("auto-append-text-input");
+	alwaysAppendReminderToggle = document.getElementById(
+		"always-append-reminder-toggle",
+	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
 	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
 	autopilotAddBtn = document.getElementById("autopilot-add-btn");
@@ -1994,6 +2014,18 @@ function bindEventListeners() {
 	if (autoAppendTextInput) {
 		autoAppendTextInput.addEventListener("change", handleAutoAppendTextChange);
 		autoAppendTextInput.addEventListener("blur", handleAutoAppendTextChange);
+	}
+	if (alwaysAppendReminderToggle) {
+		alwaysAppendReminderToggle.addEventListener(
+			"click",
+			toggleAlwaysAppendReminderSetting,
+		);
+		alwaysAppendReminderToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAlwaysAppendReminderSetting();
+			}
+		});
 	}
 	if (sendShortcutToggle) {
 		sendShortcutToggle.addEventListener(
@@ -2645,6 +2677,7 @@ function handleExtensionMessage(event) {
 				typeof message.autoAppendText === "string"
 					? message.autoAppendText
 					: DEFAULT_AUTO_APPEND_TEXT;
+			alwaysAppendReminder = message.alwaysAppendReminder === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -2683,6 +2716,7 @@ function handleExtensionMessage(event) {
 			updateInteractiveApprovalToggleUI();
 			updateAutoAppendToggleUI();
 			updateAutoAppendTextUI();
+			updateAlwaysAppendReminderToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();
@@ -4148,6 +4182,24 @@ function handleAutoAppendTextChange() {
 function updateAutoAppendTextUI() {
 	if (!autoAppendTextInput) return;
 	autoAppendTextInput.value = autoAppendText;
+}
+
+function toggleAlwaysAppendReminderSetting() {
+	alwaysAppendReminder = !alwaysAppendReminder;
+	updateAlwaysAppendReminderToggleUI();
+	vscode.postMessage({
+		type: "updateAlwaysAppendReminderSetting",
+		enabled: alwaysAppendReminder,
+	});
+}
+
+function updateAlwaysAppendReminderToggleUI() {
+	if (!alwaysAppendReminderToggle) return;
+	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
+	alwaysAppendReminderToggle.setAttribute(
+		"aria-checked",
+		alwaysAppendReminder ? "true" : "false",
+	);
 }
 
 function toggleSendWithCtrlEnterSetting() {

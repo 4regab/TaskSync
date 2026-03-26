@@ -43,3 +43,6 @@ var TASKSYNC_HUMAN_DELAY_MIN_LOWER = 1;
 var TASKSYNC_HUMAN_DELAY_MIN_UPPER = 30;
 var TASKSYNC_HUMAN_DELAY_MAX_LOWER = 2;
 var TASKSYNC_HUMAN_DELAY_MAX_UPPER = 60;
+
+// Auto Append instruction text (from AUTO_APPEND_DEFAULT_TEXT)
+var TASKSYNC_AUTO_APPEND_DEFAULT_TEXT = "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";

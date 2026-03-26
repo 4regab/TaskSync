@@ -69,6 +69,12 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - Access full history via the history button in the title bar
 - Remove individual entries or clear all history
 
+### Auto Append
+Automatically append instruction text to every `ask_user` response. Helps ensure AI agents continue calling `ask_user`:
+- **Enabled by default** with the askUser reminder instruction
+- Configurable text in Settings (gear icon) → Auto Append Text
+- **Always Append Reminder** toggle (OFF by default): Forces the askUser reminder instruction even when custom text is set — recommended for GPT 5.4 users
+
 ## Installation
 
 1. Install from VS Code Marketplace

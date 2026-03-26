@@ -206,9 +206,12 @@ export function registerTools(
 					"autoAppendEnabled",
 					config.get<boolean>("askUserVerbosePayload", false),
 				);
-				const autoAppendText = config.get<string>(
-					"autoAppendText",
-					AUTO_APPEND_DEFAULT_TEXT,
+				// Use AUTO_APPEND_DEFAULT_TEXT if autoAppendText is empty or not set
+				const configAutoAppendText = config.get<string>("autoAppendText", "");
+				const autoAppendText = configAutoAppendText || AUTO_APPEND_DEFAULT_TEXT;
+				const alwaysAppendReminder = config.get<boolean>(
+					"alwaysAppendAskUserReminder",
+					false,
 				);
 
 				const result = await askUser(
@@ -217,17 +220,24 @@ export function registerTools(
 					token,
 				);
 
+				// Build response with auto-append logic
+				let finalResponse = result.response;
+				if (autoAppendEnabled && autoAppendText) {
+					finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
+				}
+				if (alwaysAppendReminder) {
+					finalResponse = appendAutoAppendText(
+						finalResponse,
+						AUTO_APPEND_DEFAULT_TEXT,
+					);
+				}
+
 				const resultPayload: {
 					response: string;
 					queued?: boolean;
 					attachmentCount?: number;
 				} = {
-					response: autoAppendEnabled
-						? appendAutoAppendText(
-								appendAutoAppendText(result.response, autoAppendText),
-								AUTO_APPEND_DEFAULT_TEXT,
-							)
-						: result.response,
+					response: finalResponse,
 				};
 
 				if (result.queue) {

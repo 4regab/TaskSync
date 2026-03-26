@@ -37,6 +37,15 @@ function generateSharedConstants() {
         .filter(Boolean)
         .join(", ");
 
+    // Extract string constants: export const NAME = "value";
+    function extractString(name) {
+        // Match double-quoted strings (handles escaped quotes inside)
+        const m = source.match(new RegExp(`export const ${name}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)";`));
+        if (!m)
+            throw new Error(`Failed to extract ${name} from remoteConstants.ts`);
+        return m[1];
+    }
+
     const v = {
         protocolVersion: extractNum("WS_PROTOCOL_VERSION"),
         timeoutDefault: extractNum("RESPONSE_TIMEOUT_DEFAULT_MINUTES"),
@@ -51,6 +60,7 @@ function generateSharedConstants() {
         delayMinUpper: extractNum("HUMAN_DELAY_MIN_UPPER"),
         delayMaxLower: extractNum("HUMAN_DELAY_MAX_LOWER"),
         delayMaxUpper: extractNum("HUMAN_DELAY_MAX_UPPER"),
+        autoAppendDefaultText: extractString("AUTO_APPEND_DEFAULT_TEXT"),
     };
 
     const output = `/**
@@ -98,6 +108,9 @@ var TASKSYNC_HUMAN_DELAY_MIN_LOWER = ${v.delayMinLower};
 var TASKSYNC_HUMAN_DELAY_MIN_UPPER = ${v.delayMinUpper};
 var TASKSYNC_HUMAN_DELAY_MAX_LOWER = ${v.delayMaxLower};
 var TASKSYNC_HUMAN_DELAY_MAX_UPPER = ${v.delayMaxUpper};
+
+// Auto Append instruction text (from AUTO_APPEND_DEFAULT_TEXT)
+var TASKSYNC_AUTO_APPEND_DEFAULT_TEXT = "${v.autoAppendDefaultText}";
 `;
 
     fs.writeFileSync(path.join(__dirname, "web", "shared-constants.js"), output);

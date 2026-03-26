@@ -3100,6 +3100,79 @@ button#send-btn:disabled {
     margin-top: 4px;
 }
 
+.form-label-inline {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Auto Append reminder toggle row */
+.auto-append-reminder-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: var(--vscode-textBlockQuote-background);
+    border-radius: 4px;
+}
+
+/* Smaller toggle switch for inline use */
+.toggle-switch-small {
+    width: 32px;
+    height: 16px;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, var(--vscode-input-background));
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.toggle-switch-small::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    background-color: var(--vscode-descriptionForeground);
+    border-radius: 50%;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.toggle-switch-small.active {
+    background-color: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+}
+
+.toggle-switch-small.active::after {
+    transform: translateX(16px);
+    background-color: var(--vscode-button-foreground, #fff);
+}
+
+/* Auto Append instruction display */
+.auto-append-note {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 8px 0 6px 0;
+    line-height: 1.4;
+}
+
+.auto-append-instruction {
+    background: var(--vscode-textBlockQuote-background);
+    border-left: 3px solid var(--vscode-textLink-foreground);
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vscode-editor-foreground);
+    margin-bottom: 12px;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .form-help-text {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);

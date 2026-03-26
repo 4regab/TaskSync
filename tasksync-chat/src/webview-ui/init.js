@@ -375,8 +375,15 @@ function createSettingsModal() {
 		"</div>" +
 		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
 		"</div>" +
-		'<div class="form-row hidden" id="auto-append-text-row"><label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
-		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea></div>';
+		'<div class="form-row hidden" id="auto-append-text-row">' +
+		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
+		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
+		'<div class="auto-append-reminder-row">' +
+		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder</label>' +
+		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
+		"</div>" +
+		'<p class="auto-append-note">When enabled, the askUser reminder instruction is always appended (recommended for GPT 5.4).</p>' +
+		"</div>";
 	modalContent.appendChild(autoAppendSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
@@ -569,6 +576,9 @@ function createSettingsModal() {
 	autoAppendToggle = document.getElementById("auto-append-toggle");
 	autoAppendTextRow = document.getElementById("auto-append-text-row");
 	autoAppendTextInput = document.getElementById("auto-append-text-input");
+	alwaysAppendReminderToggle = document.getElementById(
+		"always-append-reminder-toggle",
+	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
 	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
 	autopilotAddBtn = document.getElementById("autopilot-add-btn");

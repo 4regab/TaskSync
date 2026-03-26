@@ -1,3 +1,4 @@
+import * as path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
 import { GitService, isValidFilePath } from "../server/gitService";
@@ -162,17 +163,18 @@ describe("GitService.getChanges", () => {
 describe("GitService.getDiff", () => {
 	let service: GitService;
 	let repo: any;
+	const workspaceRoot = path.resolve(process.cwd(), "workspace");
 
 	beforeEach(async () => {
 		service = new GitService();
 		vi.restoreAllMocks();
 
-		repo = createMockRepo();
+		repo = createMockRepo({ rootUri: { fsPath: workspaceRoot } });
 		const api = createMockGitAPI([repo]);
 		setupGitExtension(api);
 
 		(vscode.workspace as any).workspaceFolders = [
-			{ uri: { fsPath: "/workspace" } },
+			{ uri: { fsPath: workspaceRoot } },
 		];
 
 		await service.initialize();
@@ -185,7 +187,7 @@ describe("GitService.getDiff", () => {
 	});
 
 	it("converts absolute path to relative", async () => {
-		await service.getDiff("/workspace/src/file.ts");
+		await service.getDiff(path.resolve(workspaceRoot, "src/file.ts"));
 		expect(repo.diffWithHEAD).toHaveBeenCalled();
 	});
 
@@ -221,17 +223,49 @@ describe("GitService getRepo multi-root", () => {
 		const repo1 = createMockRepo();
 		const repo2 = createMockRepo();
 		const api = createMockGitAPI([repo1, repo2]);
+		const projectRoot = path.resolve(process.cwd(), "project-a");
+		const targetPath = path.resolve(projectRoot, "sub", "file.ts");
 		api.getRepository.mockImplementation((uri: any) =>
-			uri?.fsPath === "/project-a/sub/file.ts" ? repo2 : null,
+			uri?.fsPath === targetPath ? repo2 : null,
 		);
 		setupGitExtension(api);
 		await service.initialize();
 
 		(vscode.workspace as any).workspaceFolders = [
-			{ uri: { fsPath: "/project-a" } },
+			{ uri: { fsPath: projectRoot } },
 		];
-		await service.getDiff("/project-a/sub/file.ts");
+		await service.getDiff(targetPath);
 		expect(repo2.diffWithHEAD).toHaveBeenCalled();
+	});
+
+	it("resolves relative diff path to repo derived from requested path", async () => {
+		const rootA = path.resolve(process.cwd(), "workspace", "root-a");
+		const rootB = path.resolve(process.cwd(), "workspace", "root-b");
+		const repo1 = createMockRepo({ rootUri: { fsPath: rootA } });
+		const repo2 = createMockRepo({ rootUri: { fsPath: rootB } });
+		const api = createMockGitAPI([repo1, repo2]);
+		api.getRepository.mockImplementation((uri: any) => {
+			const normalized = String(uri?.fsPath || "").replace(/\\/g, "/");
+			const normalizedRootB = rootB.replace(/\\/g, "/") + "/";
+			const normalizedRootA = rootA.replace(/\\/g, "/") + "/";
+			if (normalized.startsWith(normalizedRootB)) return repo2;
+			if (normalized.startsWith(normalizedRootA)) return repo1;
+			return null;
+		});
+		setupGitExtension(api);
+		await service.initialize();
+
+		(vscode.workspace as any).workspaceFolders = [
+			{ uri: { fsPath: rootA } },
+			{ uri: { fsPath: rootB } },
+		];
+		(vscode.window as any).activeTextEditor = {
+			document: { uri: { fsPath: path.resolve(rootA, "active.ts") } },
+		};
+
+		await service.getDiff("root-b/src/file.ts");
+		expect(repo2.diffWithHEAD).toHaveBeenCalledWith("src/file.ts");
+		expect(repo1.diffWithHEAD).not.toHaveBeenCalled();
 	});
 
 	it("falls back to active editor repo", async () => {

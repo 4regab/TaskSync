@@ -2,7 +2,10 @@ import * as crypto from "crypto";
 import * as http from "http";
 import * as https from "https";
 import * as os from "os";
+import * as path from "path";
 import selfsigned from "selfsigned";
+import { fileURLToPath } from "url";
+import * as vscode from "vscode";
 import type { WebSocket } from "ws";
 import {
 	MAX_ATTACHMENT_NAME_LENGTH,
@@ -10,6 +13,38 @@ import {
 	MAX_ATTACHMENTS,
 } from "../constants/remoteConstants";
 import type { AttachmentInfo } from "../webview/webviewTypes";
+
+function isAttachmentUriAllowed(uri: string): boolean {
+	if (!uri.trim()) return false;
+
+	// Context references are resolved by extension handlers, not filesystem reads.
+	if (uri.startsWith("context://")) return true;
+
+	let parsed: URL;
+	try {
+		parsed = new URL(uri);
+	} catch {
+		return false;
+	}
+
+	if (parsed.protocol !== "file:") return false;
+
+	let filePath: string;
+	try {
+		filePath = path.resolve(fileURLToPath(parsed));
+	} catch {
+		return false;
+	}
+
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders || workspaceFolders.length === 0) return false;
+
+	return workspaceFolders.some((folder) => {
+		const root = path.resolve(folder.uri.fsPath);
+		const rel = path.relative(root, filePath);
+		return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+	});
+}
 
 /**
  * Send a typed error response over a WebSocket connection.
@@ -104,6 +139,7 @@ export function normalizeAttachments(raw: unknown): AttachmentInfo[] {
 		if (!a || typeof a !== "object") continue;
 		if (typeof a.uri !== "string" || a.uri.length > MAX_ATTACHMENT_URI_LENGTH)
 			continue;
+		if (!isAttachmentUriAllowed(a.uri)) continue;
 		if (
 			typeof a.name !== "string" ||
 			a.name.length > MAX_ATTACHMENT_NAME_LENGTH

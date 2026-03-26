@@ -76,7 +76,11 @@ describe("isValidFilePath", () => {
 			expect(isValidFilePath("file>output")).toBe(false);
 			expect(isValidFilePath("file(paren")).toBe(false);
 			expect(isValidFilePath("file{brace")).toBe(false);
-			expect(isValidFilePath("file[bracket")).toBe(false);
+		});
+
+		it("allows bracket characters used in route filenames", () => {
+			expect(isValidFilePath("src/app/[id].tsx")).toBe(true);
+			expect(isValidFilePath("src/pages/[...slug].ts")).toBe(true);
 		});
 
 		it("rejects paths with quotes", () => {

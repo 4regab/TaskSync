@@ -1,6 +1,9 @@
 import * as http from "http";
 import * as https from "https";
-import { describe, expect, it, vi } from "vitest";
+import * as path from "path";
+import { pathToFileURL } from "url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as vscode from "vscode";
 import {
 	createServer,
 	findAvailablePort,
@@ -138,6 +141,31 @@ describe("isOriginAllowed", () => {
 // ─── normalizeAttachments ────────────────────────────────────
 
 describe("normalizeAttachments", () => {
+	const workspaceRoot = path.resolve(process.cwd(), "workspace-root");
+	const toWorkspaceFileUri = (fileName: string): string =>
+		pathToFileURL(path.resolve(workspaceRoot, fileName)).toString();
+	const toOutsideFileUri = (fileName: string): string =>
+		pathToFileURL(
+			path.resolve(process.cwd(), "outside-workspace-root", fileName),
+		).toString();
+
+	beforeEach(() => {
+		vi.restoreAllMocks();
+		(
+			vscode.workspace as unknown as {
+				workspaceFolders: Array<{ uri: { fsPath: string } }>;
+			}
+		).workspaceFolders = [{ uri: { fsPath: workspaceRoot } }];
+	});
+
+	afterEach(() => {
+		(
+			vscode.workspace as unknown as {
+				workspaceFolders: Array<{ uri: { fsPath: string } }>;
+			}
+		).workspaceFolders = [];
+	});
+
 	it("returns empty array for non-array input", () => {
 		expect(normalizeAttachments(null)).toEqual([]);
 		expect(normalizeAttachments(undefined)).toEqual([]);
@@ -152,19 +180,19 @@ describe("normalizeAttachments", () => {
 
 	it("normalizes valid attachments", () => {
 		const input = [
-			{ id: "att1", name: "file.png", uri: "file:///path/to/file.png" },
+			{ id: "att1", name: "file.png", uri: toWorkspaceFileUri("file.png") },
 		];
 		const result = normalizeAttachments(input);
 		expect(result).toHaveLength(1);
 		expect(result[0]).toMatchObject({
 			id: "att1",
 			name: "file.png",
-			uri: "file:///path/to/file.png",
+			uri: toWorkspaceFileUri("file.png"),
 		});
 	});
 
 	it("generates UUID for missing/invalid IDs", () => {
-		const input = [{ name: "file.png", uri: "file:///path" }];
+		const input = [{ name: "file.png", uri: toWorkspaceFileUri("file.png") }];
 		const result = normalizeAttachments(input);
 		expect(result).toHaveLength(1);
 		expect(result[0].id).toBeTruthy();
@@ -172,7 +200,7 @@ describe("normalizeAttachments", () => {
 	});
 
 	it("generates UUID for empty string ID", () => {
-		const input = [{ id: "", name: "file.png", uri: "file:///path" }];
+		const input = [{ id: "", name: "file.png", uri: toWorkspaceFileUri("f") }];
 		const result = normalizeAttachments(input);
 		expect(result[0].id).not.toBe("");
 	});
@@ -186,12 +214,16 @@ describe("normalizeAttachments", () => {
 	});
 
 	it("skips items without string name", () => {
-		const input = [{ id: "a", name: 123, uri: "file:///path" }];
+		const input = [{ id: "a", name: 123, uri: toWorkspaceFileUri("f") }];
 		expect(normalizeAttachments(input)).toEqual([]);
 	});
 
 	it("skips null/undefined items", () => {
-		const input = [null, undefined, { id: "a", name: "f", uri: "u" }];
+		const input = [
+			null,
+			undefined,
+			{ id: "a", name: "f", uri: toWorkspaceFileUri("f") },
+		];
 		const result = normalizeAttachments(input);
 		expect(result).toHaveLength(1);
 	});
@@ -200,7 +232,7 @@ describe("normalizeAttachments", () => {
 		const input = Array.from({ length: 30 }, (_, i) => ({
 			id: `att_${i}`,
 			name: `file${i}.txt`,
-			uri: `file:///path/${i}`,
+			uri: toWorkspaceFileUri(String(i)),
 		}));
 		const result = normalizeAttachments(input);
 		expect(result.length).toBeLessThanOrEqual(20); // MAX_ATTACHMENTS = 20
@@ -222,7 +254,7 @@ describe("normalizeAttachments", () => {
 			{
 				id: "a",
 				name: "x".repeat(256), // MAX_ATTACHMENT_NAME_LENGTH = 255
-				uri: "file:///path",
+				uri: toWorkspaceFileUri("f"),
 			},
 		];
 		expect(normalizeAttachments(input)).toEqual([]);
@@ -233,7 +265,7 @@ describe("normalizeAttachments", () => {
 			{
 				id: "x".repeat(128),
 				name: "f.txt",
-				uri: "file:///p",
+				uri: toWorkspaceFileUri("p"),
 			},
 		];
 		const result = normalizeAttachments(input);
@@ -245,11 +277,33 @@ describe("normalizeAttachments", () => {
 			{
 				id: "x".repeat(129),
 				name: "f.txt",
-				uri: "file:///p",
+				uri: toWorkspaceFileUri("p"),
 			},
 		];
 		const result = normalizeAttachments(input);
 		expect(result[0].id).not.toBe("x".repeat(129));
+	});
+
+	it("rejects non-file and non-context URIs", () => {
+		const input = [
+			{ id: "a", name: "f.txt", uri: "https://example.com/file.png" },
+			{ id: "b", name: "f.txt", uri: "data:image/png;base64,AAAA" },
+		];
+		expect(normalizeAttachments(input)).toEqual([]);
+	});
+
+	it("rejects file URIs outside workspace root", () => {
+		const input = [
+			{ id: "a", name: "f.txt", uri: toOutsideFileUri("file.png") },
+		];
+		expect(normalizeAttachments(input)).toEqual([]);
+	});
+
+	it("allows context URIs", () => {
+		const input = [{ id: "a", name: "terminal", uri: "context://terminal" }];
+		const result = normalizeAttachments(input);
+		expect(result).toHaveLength(1);
+		expect(result[0].uri).toBe("context://terminal");
 	});
 });
 

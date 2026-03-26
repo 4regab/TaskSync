@@ -51,7 +51,7 @@ export function isValidFilePath(filePath: string): boolean {
 	// Normalize separators so Windows-style paths are handled consistently
 	const normalizedPath = filePath.replace(/\\/g, "/");
 	// Reject paths with shell metacharacters (allow path separators)
-	const dangerousChars = /[`$|;&<>(){}[\]!*?'"\n\r\x00]/;
+	const dangerousChars = /[`$|;&<>(){}!*?'"\n\r\x00]/;
 	if (dangerousChars.test(normalizedPath)) return false;
 
 	// Absolute paths must resolve under the workspace root
@@ -149,16 +149,84 @@ export class GitService {
 		repoRoot: string;
 		relativePath: string;
 	} {
-		const fileUri = path.isAbsolute(filePath)
-			? vscode.Uri.file(filePath)
-			: undefined;
-		const repo = this.getRepo(fileUri);
-		const workspaceRoot = fileUri
-			? vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath
-			: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		if (!this.api) throw new Error("Git service not initialized");
+
+		let repo: Repository;
+		let workspaceRoot: string | undefined;
+		let resolvedFilePath: string;
+
+		if (path.isAbsolute(filePath)) {
+			resolvedFilePath = path.resolve(filePath);
+			const fileUri = vscode.Uri.file(resolvedFilePath);
+			repo = this.getRepo(fileUri);
+			workspaceRoot =
+				vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath ||
+				repo.rootUri?.fsPath ||
+				vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		} else {
+			const normalizedRelativePath = filePath.replace(/\\/g, "/");
+			const workspaceFolders = vscode.workspace.workspaceFolders || [];
+			const firstSegment = normalizedRelativePath.split("/")[0] || "";
+			const hasWorkspacePrefix = workspaceFolders.some(
+				(folder) =>
+					path.basename(path.resolve(folder.uri.fsPath)).replace(/\\/g, "/") ===
+					firstSegment,
+			);
+			let matchedRepo: Repository | undefined;
+			let matchedWorkspaceRoot: string | undefined;
+			let matchedAbsolutePath: string | undefined;
+
+			for (const folder of workspaceFolders) {
+				const folderRoot = path.resolve(folder.uri.fsPath);
+				const folderName = path.basename(folderRoot).replace(/\\/g, "/");
+				if (hasWorkspacePrefix && folderName !== firstSegment) {
+					continue;
+				}
+				const relativeToFolder = hasWorkspacePrefix
+					? normalizedRelativePath === folderName
+						? ""
+						: normalizedRelativePath.startsWith(`${folderName}/`)
+							? normalizedRelativePath.slice(folderName.length + 1)
+							: ""
+					: normalizedRelativePath;
+				if (!relativeToFolder) continue;
+
+				const candidateAbsolutePath = path.resolve(
+					folderRoot,
+					relativeToFolder,
+				);
+				const candidateRepo = this.api.getRepository(
+					vscode.Uri.file(candidateAbsolutePath),
+				);
+				if (candidateRepo) {
+					matchedRepo = candidateRepo;
+					matchedWorkspaceRoot = folderRoot;
+					matchedAbsolutePath = candidateAbsolutePath;
+					break;
+				}
+			}
+
+			if (matchedRepo && matchedWorkspaceRoot && matchedAbsolutePath) {
+				repo = matchedRepo;
+				workspaceRoot = matchedWorkspaceRoot;
+				resolvedFilePath = matchedAbsolutePath;
+			} else {
+				workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+				if (!workspaceRoot) throw new Error("No workspace folder");
+				workspaceRoot = path.resolve(workspaceRoot);
+				resolvedFilePath = path.resolve(workspaceRoot, normalizedRelativePath);
+				repo = this.getRepo(vscode.Uri.file(resolvedFilePath));
+			}
+		}
+
 		if (!workspaceRoot) throw new Error("No workspace folder");
-		const repoRoot = repo.rootUri?.fsPath || workspaceRoot;
-		const relativePath = this.toRepoRelativePath(repo, filePath, workspaceRoot);
+		const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+		const repoRoot = repo.rootUri?.fsPath || normalizedWorkspaceRoot;
+		const relativePath = this.toRepoRelativePath(
+			repo,
+			resolvedFilePath,
+			normalizedWorkspaceRoot,
+		);
 		if (!isValidFilePath(relativePath)) throw new Error("Invalid file path");
 		return { repo, repoRoot, relativePath };
 	}

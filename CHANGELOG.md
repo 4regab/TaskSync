@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v3.0.3 (03-26-26)
+- chore: update package version to 3.0.2 and bump picomatch to 4.0.4
+
+
 ## TaskSync v3.0.1 (03-26-26)
 - feat: extend response timeout to 8 hours and add auto append feature
 

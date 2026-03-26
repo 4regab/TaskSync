@@ -599,6 +599,9 @@ function applySettingsData(s) {
 	if (typeof s.autoAppendText === "string") {
 		autoAppendText = s.autoAppendText;
 	}
+	if (s.alwaysAppendReminder !== undefined) {
+		alwaysAppendReminder = s.alwaysAppendReminder;
+	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
 	if (s.interactiveApprovalEnabled !== undefined)

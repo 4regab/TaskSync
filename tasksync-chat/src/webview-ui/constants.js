@@ -27,4 +27,10 @@ const getWsProtocol =
 				return location.protocol === "https:" ? "wss:" : "ws:";
 			};
 
+// Auto Append instruction text (SSOT from remoteConstants.ts)
+const AUTO_APPEND_DEFAULT_TEXT =
+	typeof TASKSYNC_AUTO_APPEND_DEFAULT_TEXT !== "undefined"
+		? TASKSYNC_AUTO_APPEND_DEFAULT_TEXT
+		: "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
+
 const PROCESSING_POLL_INTERVAL_MS = 5000; // Delay before polling server for state after tool call

@@ -36,6 +36,12 @@ const getWsProtocol =
 				return location.protocol === "https:" ? "wss:" : "ws:";
 			};
 
+// Auto Append instruction text (SSOT from remoteConstants.ts)
+const AUTO_APPEND_DEFAULT_TEXT =
+	typeof TASKSYNC_AUTO_APPEND_DEFAULT_TEXT !== "undefined"
+		? TASKSYNC_AUTO_APPEND_DEFAULT_TEXT
+		: "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
+
 const PROCESSING_POLL_INTERVAL_MS = 5000; // Delay before polling server for state after tool call
 // ==================== Communication Adapter ====================
 // Provides unified API for VS Code postMessage or WebSocket communication
@@ -638,6 +644,9 @@ function applySettingsData(s) {
 	if (typeof s.autoAppendText === "string") {
 		autoAppendText = s.autoAppendText;
 	}
+	if (s.alwaysAppendReminder !== undefined) {
+		alwaysAppendReminder = s.alwaysAppendReminder;
+	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
 	if (s.interactiveApprovalEnabled !== undefined)
@@ -786,12 +795,17 @@ const RESPONSE_TIMEOUT_ALLOWED_VALUES =
 		? new Set(TASKSYNC_RESPONSE_TIMEOUT_ALLOWED)
 		: new Set([
 				0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
-				240,
+				240, 300, 360, 420, 480,
 			]);
 const RESPONSE_TIMEOUT_DEFAULT =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_DEFAULT !== "undefined"
 		? TASKSYNC_RESPONSE_TIMEOUT_DEFAULT
 		: 60;
+// Threshold above which users see a risk warning (minutes)
+const RESPONSE_TIMEOUT_RISK_THRESHOLD =
+	typeof TASKSYNC_RESPONSE_TIMEOUT_RISK_THRESHOLD !== "undefined"
+		? TASKSYNC_RESPONSE_TIMEOUT_RISK_THRESHOLD
+		: 240;
 const MAX_DISPLAY_HISTORY = 20; // Client-side display limit (matches MAX_REMOTE_HISTORY_ITEMS)
 
 const DEFAULT_SESSION_WARNING_HOURS =
@@ -842,7 +856,6 @@ const HUMAN_DELAY_MAX_UPPER =
 	typeof TASKSYNC_HUMAN_DELAY_MAX_UPPER !== "undefined"
 		? TASKSYNC_HUMAN_DELAY_MAX_UPPER
 		: 60;
-const DEFAULT_AUTO_APPEND_TEXT = "";
 
 // State
 let promptQueue = [];
@@ -876,8 +889,9 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let autoAppendEnabled = false;
-let autoAppendText = DEFAULT_AUTO_APPEND_TEXT;
+let autoAppendEnabled = true;
+let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
+let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -958,6 +972,9 @@ let actionsLeft,
 let approvalModal, approvalContinueBtn, approvalNoBtn;
 // Slash command elements
 let slashDropdown, slashList, slashEmpty;
+// Timeout warning modal for extended timeouts (>4h)
+let timeoutWarningModalOverlay = null;
+let pendingTimeoutValue = null;
 // Settings modal elements
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
@@ -990,6 +1007,7 @@ function init() {
 		createApprovalModal();
 		createSettingsModal();
 		createNewSessionModal();
+		createTimeoutWarningModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
 
@@ -1358,8 +1376,16 @@ function createSettingsModal() {
 		"</div>" +
 		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
 		"</div>" +
-		'<div class="form-row hidden" id="auto-append-text-row"><label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
-		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea></div>';
+		'<div class="form-row hidden" id="auto-append-text-row">' +
+		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
+		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
+		'<div class="auto-append-reminder-row">' +
+		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder' +
+		'<span class="settings-info-icon-inline" title="Auto Append = YOUR custom rules (e.g. &quot;follow SOLID principles&quot;). If empty, nothing is appended.\n\nAuto Reminder = predefined instruction that tells the AI to call askUser. Enable this if your AI keeps ending without asking for feedback (common with GPT 5.4).\n\nBoth can be ON together.">' +
+		'<span class="codicon codicon-question"></span></span></label>' +
+		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
+		"</div>" +
+		"</div>";
 	modalContent.appendChild(autoAppendSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
@@ -1552,6 +1578,9 @@ function createSettingsModal() {
 	autoAppendToggle = document.getElementById("auto-append-toggle");
 	autoAppendTextRow = document.getElementById("auto-append-text-row");
 	autoAppendTextInput = document.getElementById("auto-append-text-input");
+	alwaysAppendReminderToggle = document.getElementById(
+		"always-append-reminder-toggle",
+	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
 	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
 	autopilotAddBtn = document.getElementById("autopilot-add-btn");
@@ -1665,6 +1694,191 @@ function openNewSessionModal() {
 function closeNewSessionModal() {
 	if (!newSessionModalOverlay) return;
 	newSessionModalOverlay.classList.add("hidden");
+}
+
+// ==================== Timeout Warning Modal ====================
+
+/**
+ * Create the timeout warning modal for risky timeout settings.
+ * Shows different warnings for disabled (0) vs extended (>4 hours) timeouts.
+ */
+function createTimeoutWarningModal() {
+	timeoutWarningModalOverlay = document.createElement("div");
+	timeoutWarningModalOverlay.className = "settings-modal-overlay hidden";
+	timeoutWarningModalOverlay.id = "timeout-warning-modal-overlay";
+
+	var modal = document.createElement("div");
+	modal.className = "settings-modal timeout-warning-modal";
+	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-modal", "true");
+	modal.setAttribute("aria-labelledby", "timeout-warning-modal-title");
+	modal.setAttribute("aria-describedby", "timeout-warning-modal-desc");
+	modal.id = "timeout-warning-modal";
+
+	// Header with warning icon
+	var header = document.createElement("div");
+	header.className = "settings-modal-header timeout-warning-header";
+	var title = document.createElement("span");
+	title.className = "settings-modal-title timeout-warning-title";
+	title.id = "timeout-warning-modal-title";
+	// Title will be updated dynamically in showTimeoutWarning
+	title.innerHTML =
+		'<span class="codicon codicon-warning"></span> <span id="timeout-warning-title-text">Warning</span>';
+	header.appendChild(title);
+
+	// Content
+	var content = document.createElement("div");
+	content.className = "settings-modal-content timeout-warning-content";
+	content.id = "timeout-warning-modal-desc";
+
+	var warningText = document.createElement("p");
+	warningText.className = "timeout-warning-text";
+	warningText.id = "timeout-warning-text";
+	// Text will be updated dynamically in showTimeoutWarning
+	content.appendChild(warningText);
+
+	var riskList = document.createElement("ul");
+	riskList.className = "timeout-warning-list";
+	riskList.id = "timeout-warning-list";
+	// List will be updated dynamically in showTimeoutWarning
+	content.appendChild(riskList);
+
+	var disclaimer = document.createElement("p");
+	disclaimer.className = "timeout-warning-disclaimer";
+	var disclaimerStrong = document.createElement("strong");
+	disclaimerStrong.textContent =
+		"You assume full responsibility for any consequences.";
+	disclaimer.appendChild(disclaimerStrong);
+	content.appendChild(disclaimer);
+
+	// Button row
+	var btnRow = document.createElement("div");
+	btnRow.className = "new-session-btn-row";
+
+	var cancelBtn = document.createElement("button");
+	cancelBtn.className = "form-btn form-btn-cancel";
+	cancelBtn.id = "timeout-warning-cancel-btn";
+	cancelBtn.textContent = "Cancel";
+	cancelBtn.addEventListener("click", cancelTimeoutWarning);
+	btnRow.appendChild(cancelBtn);
+
+	var confirmBtn = document.createElement("button");
+	confirmBtn.className = "form-btn form-btn-danger";
+	confirmBtn.id = "timeout-warning-confirm-btn";
+	confirmBtn.textContent = "I Understand, Proceed";
+	confirmBtn.addEventListener("click", confirmTimeoutWarning);
+	btnRow.appendChild(confirmBtn);
+
+	content.appendChild(btnRow);
+	modal.appendChild(header);
+	modal.appendChild(content);
+	timeoutWarningModalOverlay.appendChild(modal);
+	document.body.appendChild(timeoutWarningModalOverlay);
+
+	// Close on overlay click (treat as cancel)
+	timeoutWarningModalOverlay.addEventListener("click", function (e) {
+		if (e.target === timeoutWarningModalOverlay) cancelTimeoutWarning();
+	});
+
+	// Keyboard handling: Escape to cancel
+	timeoutWarningModalOverlay.addEventListener("keydown", function (e) {
+		if (e.key === "Escape") {
+			cancelTimeoutWarning();
+		}
+	});
+}
+
+/**
+ * Helper to populate risk list items using DOM methods (no innerHTML)
+ */
+function populateRiskList(listElement, items) {
+	listElement.innerHTML = "";
+	for (var i = 0; i < items.length; i++) {
+		var li = document.createElement("li");
+		li.textContent = items[i];
+		listElement.appendChild(li);
+	}
+}
+
+function showTimeoutWarning(value) {
+	if (!timeoutWarningModalOverlay) {
+		// Modal failed to create - apply value immediately and revert dropdown
+		if (responseTimeoutSelect) {
+			responseTimeoutSelect.value = String(responseTimeout);
+		}
+		return;
+	}
+	pendingTimeoutValue = value;
+
+	// Update modal content based on warning type
+	var titleText = document.getElementById("timeout-warning-title-text");
+	var warningText = document.getElementById("timeout-warning-text");
+	var riskList = document.getElementById("timeout-warning-list");
+
+	if (value === 0) {
+		// Disabled - infinite wait warning
+		if (titleText) titleText.textContent = "Disabled Timeout Warning";
+		if (warningText)
+			warningText.textContent =
+				"Disabling the response timeout means the agent will wait indefinitely for your response. This may result in:";
+		if (riskList)
+			populateRiskList(riskList, [
+				"Agent stalling forever if you forget to respond",
+				"Session resources held indefinitely",
+				"Unexpected behavior if connection is lost",
+			]);
+	} else {
+		// Extended timeout warning - derive threshold from constant
+		var thresholdHours = RESPONSE_TIMEOUT_RISK_THRESHOLD / 60;
+		if (titleText) titleText.textContent = "Extended Timeout Risk";
+		if (warningText)
+			warningText.textContent =
+				"Setting a response timeout longer than " +
+				thresholdHours +
+				" hours may result in:";
+		if (riskList)
+			populateRiskList(riskList, [
+				"Account rate limiting or temporary bans",
+				"Excessive API usage charges",
+				"Runaway autonomous operations",
+			]);
+	}
+
+	timeoutWarningModalOverlay.classList.remove("hidden");
+
+	// Focus the cancel button for accessibility
+	var cancelBtn = document.getElementById("timeout-warning-cancel-btn");
+	if (cancelBtn) cancelBtn.focus();
+}
+
+function cancelTimeoutWarning() {
+	pendingTimeoutValue = null;
+	if (timeoutWarningModalOverlay) {
+		timeoutWarningModalOverlay.classList.add("hidden");
+	}
+	// Revert dropdown to current value and restore focus
+	if (responseTimeoutSelect) {
+		responseTimeoutSelect.value = String(responseTimeout);
+		responseTimeoutSelect.focus();
+	}
+}
+
+function confirmTimeoutWarning() {
+	if (pendingTimeoutValue !== null) {
+		responseTimeout = pendingTimeoutValue;
+		vscode.postMessage({
+			type: "updateResponseTimeout",
+			value: pendingTimeoutValue,
+		});
+	}
+	pendingTimeoutValue = null;
+	if (timeoutWarningModalOverlay) {
+		timeoutWarningModalOverlay.classList.add("hidden");
+	}
+	// Restore focus to dropdown
+	if (responseTimeoutSelect) {
+		responseTimeoutSelect.focus();
+	}
 }
 // ==================== Event Listeners ====================
 
@@ -1801,6 +2015,18 @@ function bindEventListeners() {
 	if (autoAppendTextInput) {
 		autoAppendTextInput.addEventListener("change", handleAutoAppendTextChange);
 		autoAppendTextInput.addEventListener("blur", handleAutoAppendTextChange);
+	}
+	if (alwaysAppendReminderToggle) {
+		alwaysAppendReminderToggle.addEventListener(
+			"click",
+			toggleAlwaysAppendReminderSetting,
+		);
+		alwaysAppendReminderToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAlwaysAppendReminderSetting();
+			}
+		});
 	}
 	if (sendShortcutToggle) {
 		sendShortcutToggle.addEventListener(
@@ -2452,6 +2678,7 @@ function handleExtensionMessage(event) {
 				typeof message.autoAppendText === "string"
 					? message.autoAppendText
 					: DEFAULT_AUTO_APPEND_TEXT;
+			alwaysAppendReminder = message.alwaysAppendReminder === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -2490,6 +2717,7 @@ function handleExtensionMessage(event) {
 			updateInteractiveApprovalToggleUI();
 			updateAutoAppendToggleUI();
 			updateAutoAppendTextUI();
+			updateAlwaysAppendReminderToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();
@@ -3957,6 +4185,24 @@ function updateAutoAppendTextUI() {
 	autoAppendTextInput.value = autoAppendText;
 }
 
+function toggleAlwaysAppendReminderSetting() {
+	alwaysAppendReminder = !alwaysAppendReminder;
+	updateAlwaysAppendReminderToggleUI();
+	vscode.postMessage({
+		type: "updateAlwaysAppendReminderSetting",
+		enabled: alwaysAppendReminder,
+	});
+}
+
+function updateAlwaysAppendReminderToggleUI() {
+	if (!alwaysAppendReminderToggle) return;
+	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
+	alwaysAppendReminderToggle.setAttribute(
+		"aria-checked",
+		alwaysAppendReminder ? "true" : "false",
+	);
+}
+
 function toggleSendWithCtrlEnterSetting() {
 	sendWithCtrlEnter = !sendWithCtrlEnter;
 	updateSendWithCtrlEnterToggleUI();
@@ -3997,10 +4243,16 @@ function updateAutopilotToggleUI() {
 function handleResponseTimeoutChange() {
 	if (!responseTimeoutSelect) return;
 	let value = parseInt(responseTimeoutSelect.value, 10);
-	if (!isNaN(value)) {
-		responseTimeout = value;
-		vscode.postMessage({ type: "updateResponseTimeout", value: value });
+	if (isNaN(value)) return;
+
+	// Show warning modal for risky values: disabled (0) or extended (>4 hours)
+	if (value === 0 || value > RESPONSE_TIMEOUT_RISK_THRESHOLD) {
+		showTimeoutWarning(value);
+		return;
 	}
+
+	responseTimeout = value;
+	vscode.postMessage({ type: "updateResponseTimeout", value: value });
 }
 
 function updateResponseTimeoutUI() {

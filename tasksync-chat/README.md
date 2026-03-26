@@ -69,6 +69,21 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - Access full history via the history button in the title bar
 - Remove individual entries or clear all history
 
+### Auto Append
+Two features for appending text to every `ask_user` response:
+
+**1. Auto Append Rules** (Settings → Auto Append)
+- Toggle ON by default, but empty by default (appends nothing)
+- Set custom rules in the text field (e.g., "follow SOLID principles")
+- Only appends when text is provided
+
+**2. Auto Reminder** (Settings → Always Append askUser Reminder)
+- Toggle OFF by default
+- When enabled, appends the predefined askUser instruction to ensure the agent continues calling `ask_user`
+- Recommended for GPT 5.4 users who experience the agent exiting without calling `ask_user`
+
+Both can be enabled together — custom text appends first, then the askUser instruction.
+
 ## Installation
 
 1. Install from VS Code Marketplace

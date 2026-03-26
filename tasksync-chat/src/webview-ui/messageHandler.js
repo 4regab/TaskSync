@@ -53,6 +53,7 @@ function handleExtensionMessage(event) {
 				typeof message.autoAppendText === "string"
 					? message.autoAppendText
 					: DEFAULT_AUTO_APPEND_TEXT;
+			alwaysAppendReminder = message.alwaysAppendReminder === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -91,6 +92,7 @@ function handleExtensionMessage(event) {
 			updateInteractiveApprovalToggleUI();
 			updateAutoAppendToggleUI();
 			updateAutoAppendTextUI();
+			updateAlwaysAppendReminderToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();

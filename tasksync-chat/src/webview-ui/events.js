@@ -134,6 +134,18 @@ function bindEventListeners() {
 		autoAppendTextInput.addEventListener("change", handleAutoAppendTextChange);
 		autoAppendTextInput.addEventListener("blur", handleAutoAppendTextChange);
 	}
+	if (alwaysAppendReminderToggle) {
+		alwaysAppendReminderToggle.addEventListener(
+			"click",
+			toggleAlwaysAppendReminderSetting,
+		);
+		alwaysAppendReminderToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAlwaysAppendReminderSetting();
+			}
+		});
+	}
 	if (sendShortcutToggle) {
 		sendShortcutToggle.addEventListener(
 			"click",

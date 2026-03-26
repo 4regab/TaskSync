@@ -2812,6 +2812,25 @@ button#send-btn:disabled {
     opacity: 1;
 }
 
+/* Inline info icon (for use within labels) */
+.settings-info-icon-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.settings-info-icon-inline .codicon {
+    font-size: 11px;
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.settings-info-icon-inline:hover .codicon {
+    opacity: 1;
+}
+
 /* Section header with toggle inline */
 .settings-section-header {
     display: flex;
@@ -3100,6 +3119,79 @@ button#send-btn:disabled {
     margin-top: 4px;
 }
 
+.form-label-inline {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Auto Append reminder toggle row */
+.auto-append-reminder-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: var(--vscode-textBlockQuote-background);
+    border-radius: 4px;
+}
+
+/* Smaller toggle switch for inline use */
+.toggle-switch-small {
+    width: 32px;
+    height: 16px;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, var(--vscode-input-background));
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.toggle-switch-small::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    background-color: var(--vscode-descriptionForeground);
+    border-radius: 50%;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.toggle-switch-small.active {
+    background-color: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+}
+
+.toggle-switch-small.active::after {
+    transform: translateX(16px);
+    background-color: var(--vscode-button-foreground, #fff);
+}
+
+/* Auto Append instruction display */
+.auto-append-note {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 8px 0 6px 0;
+    line-height: 1.4;
+}
+
+.auto-append-instruction {
+    background: var(--vscode-textBlockQuote-background);
+    border-left: 3px solid var(--vscode-textLink-foreground);
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vscode-editor-foreground);
+    margin-bottom: 12px;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .form-help-text {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
@@ -3207,6 +3299,63 @@ button#send-btn:disabled {
 
 .form-btn-save:hover {
     background-color: var(--vscode-button-hoverBackground);
+}
+
+.form-btn-danger {
+    background-color: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+    border: 1px solid var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.form-btn-danger:hover {
+    background-color: var(--vscode-inputValidation-errorBorder, #be1100);
+    color: #fff;
+}
+
+/* Timeout Warning Modal */
+.timeout-warning-modal {
+    max-width: 380px;
+}
+
+.timeout-warning-header {
+    border-bottom: 1px solid var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.timeout-warning-title {
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.timeout-warning-title .codicon {
+    font-size: 16px;
+}
+
+.timeout-warning-content {
+    padding: 16px;
+}
+
+.timeout-warning-text {
+    font-size: 12px;
+    color: var(--vscode-foreground);
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.timeout-warning-list {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 12px 0;
+    padding-left: 20px;
+    line-height: 1.6;
+}
+
+.timeout-warning-disclaimer {
+    font-size: 11px;
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+    margin: 0 0 16px 0;
+    line-height: 1.4;
 }
 
 /* Add Prompt Button - inline (next to title) */

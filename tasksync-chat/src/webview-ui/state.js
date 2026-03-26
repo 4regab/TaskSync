@@ -8,12 +8,17 @@ const RESPONSE_TIMEOUT_ALLOWED_VALUES =
 		? new Set(TASKSYNC_RESPONSE_TIMEOUT_ALLOWED)
 		: new Set([
 				0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
-				240,
+				240, 300, 360, 420, 480,
 			]);
 const RESPONSE_TIMEOUT_DEFAULT =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_DEFAULT !== "undefined"
 		? TASKSYNC_RESPONSE_TIMEOUT_DEFAULT
 		: 60;
+// Threshold above which users see a risk warning (minutes)
+const RESPONSE_TIMEOUT_RISK_THRESHOLD =
+	typeof TASKSYNC_RESPONSE_TIMEOUT_RISK_THRESHOLD !== "undefined"
+		? TASKSYNC_RESPONSE_TIMEOUT_RISK_THRESHOLD
+		: 240;
 const MAX_DISPLAY_HISTORY = 20; // Client-side display limit (matches MAX_REMOTE_HISTORY_ITEMS)
 
 const DEFAULT_SESSION_WARNING_HOURS =
@@ -64,7 +69,6 @@ const HUMAN_DELAY_MAX_UPPER =
 	typeof TASKSYNC_HUMAN_DELAY_MAX_UPPER !== "undefined"
 		? TASKSYNC_HUMAN_DELAY_MAX_UPPER
 		: 60;
-const DEFAULT_AUTO_APPEND_TEXT = "";
 
 // State
 let promptQueue = [];
@@ -98,8 +102,9 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let autoAppendEnabled = false;
-let autoAppendText = DEFAULT_AUTO_APPEND_TEXT;
+let autoAppendEnabled = true;
+let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
+let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -180,6 +185,9 @@ let actionsLeft,
 let approvalModal, approvalContinueBtn, approvalNoBtn;
 // Slash command elements
 let slashDropdown, slashList, slashEmpty;
+// Timeout warning modal for extended timeouts (>4h)
+let timeoutWarningModalOverlay = null;
+let pendingTimeoutValue = null;
 // Settings modal elements
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,

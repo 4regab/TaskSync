@@ -37,9 +37,19 @@ function generateSharedConstants() {
         .filter(Boolean)
         .join(", ");
 
+    // Extract string constants: export const NAME = "value";
+    function extractString(name) {
+        // Match double-quoted strings (handles escaped quotes inside)
+        const m = source.match(new RegExp(`export const ${name}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)";`));
+        if (!m)
+            throw new Error(`Failed to extract ${name} from remoteConstants.ts`);
+        return m[1];
+    }
+
     const v = {
         protocolVersion: extractNum("WS_PROTOCOL_VERSION"),
         timeoutDefault: extractNum("RESPONSE_TIMEOUT_DEFAULT_MINUTES"),
+        timeoutRiskThreshold: extractNum("RESPONSE_TIMEOUT_RISK_THRESHOLD"),
         sessionWarningDefault: extractNum("DEFAULT_SESSION_WARNING_HOURS"),
         sessionWarningMax: extractNum("SESSION_WARNING_HOURS_MAX"),
         maxAutoDefault: extractNum("DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES"),
@@ -50,6 +60,7 @@ function generateSharedConstants() {
         delayMinUpper: extractNum("HUMAN_DELAY_MIN_UPPER"),
         delayMaxLower: extractNum("HUMAN_DELAY_MAX_LOWER"),
         delayMaxUpper: extractNum("HUMAN_DELAY_MAX_UPPER"),
+        autoAppendDefaultText: extractString("AUTO_APPEND_DEFAULT_TEXT"),
     };
 
     const output = `/**
@@ -84,6 +95,7 @@ var TASKSYNC_PROTOCOL_VERSION = ${v.protocolVersion};
 // Response timeout settings (from RESPONSE_TIMEOUT_ALLOWED_VALUES, RESPONSE_TIMEOUT_DEFAULT_MINUTES)
 var TASKSYNC_RESPONSE_TIMEOUT_ALLOWED = [${timeoutValues}];
 var TASKSYNC_RESPONSE_TIMEOUT_DEFAULT = ${v.timeoutDefault};
+var TASKSYNC_RESPONSE_TIMEOUT_RISK_THRESHOLD = ${v.timeoutRiskThreshold};
 
 // Settings defaults & validation ranges (from remoteConstants.ts)
 var TASKSYNC_DEFAULT_SESSION_WARNING_HOURS = ${v.sessionWarningDefault};
@@ -96,6 +108,9 @@ var TASKSYNC_HUMAN_DELAY_MIN_LOWER = ${v.delayMinLower};
 var TASKSYNC_HUMAN_DELAY_MIN_UPPER = ${v.delayMinUpper};
 var TASKSYNC_HUMAN_DELAY_MAX_LOWER = ${v.delayMaxLower};
 var TASKSYNC_HUMAN_DELAY_MAX_UPPER = ${v.delayMaxUpper};
+
+// Auto Append instruction text (from AUTO_APPEND_DEFAULT_TEXT)
+var TASKSYNC_AUTO_APPEND_DEFAULT_TEXT = "${v.autoAppendDefaultText}";
 `;
 
     fs.writeFileSync(path.join(__dirname, "web", "shared-constants.js"), output);

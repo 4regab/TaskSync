@@ -62,7 +62,8 @@ export const ASKUSER_VISIBILITY_TEXT =
 	"The user can ONLY see messages you send via the #askUser tool — your normal chat responses are invisible to them.";
 export const ASKUSER_LOOP_TEXT =
 	"Do the work, then call #askUser to report results. NEVER end your turn without calling #askUser.";
-export const AUTO_APPEND_DEFAULT_TEXT = "";
+export const AUTO_APPEND_DEFAULT_TEXT =
+	"REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
 
 // Default query when a remote session starts without an explicit prompt
 export const DEFAULT_REMOTE_SESSION_QUERY = `${ASKUSER_VISIBILITY_TEXT} Start by calling #askUser to greet the user and ask what they need. After receiving their response, do the work, then call #askUser again with results. Continue this loop indefinitely — NEVER end your turn without calling #askUser.`;
@@ -83,8 +84,11 @@ export const DEFAULT_REMOTE_CHAT_COMMAND = "workbench.action.chat.openagent";
 // Response timeout configuration (minutes)
 export const RESPONSE_TIMEOUT_ALLOWED_VALUES = new Set<number>([
 	0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210, 240,
+	300, 360, 420, 480,
 ]);
 export const RESPONSE_TIMEOUT_DEFAULT_MINUTES = 60;
+// Threshold above which users see a risk warning (minutes)
+export const RESPONSE_TIMEOUT_RISK_THRESHOLD = 240;
 
 // Queue ID validation
 export const VALID_QUEUE_ID_PATTERN = /^q_\d+_[a-z0-9]+$/;

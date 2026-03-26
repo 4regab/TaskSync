@@ -11,7 +11,7 @@ export const Uri = {
 export const workspace = {
 	getConfiguration: () => ({
 		get: () => undefined,
-		update: async () => { },
+		update: async () => {},
 		inspect: () => undefined,
 	}),
 	workspaceFolders: [],

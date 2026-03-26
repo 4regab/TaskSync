@@ -103,6 +103,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 		case "updateAutoAppendText":
 			settingsH.handleUpdateAutoAppendText(p, message.text);
 			break;
+		case "updateAlwaysAppendReminderSetting":
+			settingsH.handleUpdateAlwaysAppendReminderSetting(p, message.enabled);
+			break;
 		case "updateAutopilotSetting":
 			settingsH.handleUpdateAutopilotSetting(p, message.enabled);
 			break;

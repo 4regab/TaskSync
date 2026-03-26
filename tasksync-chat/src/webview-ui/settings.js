@@ -87,6 +87,24 @@ function updateAutoAppendTextUI() {
 	autoAppendTextInput.value = autoAppendText;
 }
 
+function toggleAlwaysAppendReminderSetting() {
+	alwaysAppendReminder = !alwaysAppendReminder;
+	updateAlwaysAppendReminderToggleUI();
+	vscode.postMessage({
+		type: "updateAlwaysAppendReminderSetting",
+		enabled: alwaysAppendReminder,
+	});
+}
+
+function updateAlwaysAppendReminderToggleUI() {
+	if (!alwaysAppendReminderToggle) return;
+	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
+	alwaysAppendReminderToggle.setAttribute(
+		"aria-checked",
+		alwaysAppendReminder ? "true" : "false",
+	);
+}
+
 function toggleSendWithCtrlEnterSetting() {
 	sendWithCtrlEnter = !sendWithCtrlEnter;
 	updateSendWithCtrlEnterToggleUI();
@@ -127,10 +145,16 @@ function updateAutopilotToggleUI() {
 function handleResponseTimeoutChange() {
 	if (!responseTimeoutSelect) return;
 	let value = parseInt(responseTimeoutSelect.value, 10);
-	if (!isNaN(value)) {
-		responseTimeout = value;
-		vscode.postMessage({ type: "updateResponseTimeout", value: value });
+	if (isNaN(value)) return;
+
+	// Show warning modal for risky values: disabled (0) or extended (>4 hours)
+	if (value === 0 || value > RESPONSE_TIMEOUT_RISK_THRESHOLD) {
+		showTimeoutWarning(value);
+		return;
 	}
+
+	responseTimeout = value;
+	vscode.postMessage({ type: "updateResponseTimeout", value: value });
 }
 
 function updateResponseTimeoutUI() {

@@ -94,6 +94,12 @@
           "default": true,
           "description": "Require PIN authentication for remote access. Recommended for LAN access."
         },
+        "tasksync.remoteMaxDevices": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "description": "Maximum number of devices that can be connected to the remote server simultaneously."
+        },
         "tasksync.remoteTlsEnabled": {
           "type": "boolean",
           "default": false,

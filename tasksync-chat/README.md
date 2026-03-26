@@ -196,6 +196,7 @@ In VS Code Settings (search "tasksync"):
 **Remote Access:**
 - `tasksync.remotePort`: Server port (default: 3580)
 - `tasksync.remotePinEnabled`: Require PIN authentication for LAN mode (default: true)
+- `tasksync.remoteMaxDevices`: Maximum simultaneous connected devices (default: 2)
 - `tasksync.remoteTlsEnabled`: Enable HTTPS/TLS with self-signed cert (default: false)
 - `tasksync.remotePin`: Deprecated (static custom PIN is no longer used)
 - `tasksync.remoteDebugLogging`: Verbose remote server logging (default: false)

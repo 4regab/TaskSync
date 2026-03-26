@@ -142,6 +142,7 @@ export class RemoteServer {
 
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		this.authService.pinEnabled = config.get<boolean>("remotePinEnabled", true);
+		this.authService.maxDevices = config.get<number>("remoteMaxDevices", 2);
 
 		this.tlsCert = config.get<boolean>("remoteTlsEnabled", false)
 			? await generateSelfSignedCert(getLocalIp())
@@ -161,6 +162,7 @@ export class RemoteServer {
 					"remotePinEnabled",
 					true,
 				);
+				this.authService.maxDevices = cfg.get<number>("remoteMaxDevices", 2);
 				if (this.authService.pinEnabled) {
 					if (!wasPinEnabled) {
 						// PIN was just re-enabled — generate fresh PIN and clear all sessions

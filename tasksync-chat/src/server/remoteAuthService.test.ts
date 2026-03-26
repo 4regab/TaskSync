@@ -377,3 +377,143 @@ describe("lifecycle methods", () => {
 		svc.cleanup();
 	});
 });
+
+describe("max device limit", () => {
+	it("defaults maxDevices to 2", () => {
+		const svc = createService();
+		expect(svc.maxDevices).toBe(2);
+	});
+
+	it("rejects new connection when at max capacity", () => {
+		const svc = createService();
+		svc.maxDevices = 1;
+		const pin = svc.getOrCreatePin();
+
+		// First device connects successfully
+		const ws1 = createMockWs();
+		svc.handleAuth(ws1 as any, "10.0.0.1", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws1 as any)).toBe(true);
+
+		// Second device should be rejected
+		const ws2 = createMockWs();
+		svc.handleAuth(ws2 as any, "10.0.0.2", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws2 as any)).toBe(false);
+		const msgs = ws2._parsed();
+		expect(msgs).toHaveLength(1);
+		expect(msgs[0].type).toBe("authFailed");
+		expect(msgs[0].message).toContain("Maximum");
+	});
+
+	it("allows re-auth of already-authenticated client without counting against limit", () => {
+		const svc = createService();
+		svc.maxDevices = 1;
+		svc.pinEnabled = false;
+		const ws = createMockWs();
+
+		// First auth
+		svc.handleAuth(
+			ws as any,
+			"10.0.0.1",
+			undefined,
+			undefined,
+			GET_STATE,
+			true,
+		);
+		expect(svc.authenticatedClients.has(ws as any)).toBe(true);
+
+		// Re-auth same client should succeed (not counted as new device)
+		svc.handleAuth(
+			ws as any,
+			"10.0.0.1",
+			undefined,
+			undefined,
+			GET_STATE,
+			true,
+		);
+		expect(svc.authenticatedClients.has(ws as any)).toBe(true);
+	});
+
+	it("allows new connection after a device disconnects", () => {
+		const svc = createService();
+		svc.maxDevices = 1;
+		const pin = svc.getOrCreatePin();
+
+		// First device connects
+		const ws1 = createMockWs();
+		svc.handleAuth(ws1 as any, "10.0.0.1", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws1 as any)).toBe(true);
+
+		// First device disconnects
+		svc.removeClient(ws1 as any);
+
+		// Second device can now connect
+		const ws2 = createMockWs();
+		svc.handleAuth(ws2 as any, "10.0.0.2", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws2 as any)).toBe(true);
+	});
+
+	it("allows multiple devices up to maxDevices limit", () => {
+		const svc = createService();
+		svc.maxDevices = 2;
+		const pin = svc.getOrCreatePin();
+
+		const ws1 = createMockWs();
+		svc.handleAuth(ws1 as any, "10.0.0.1", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws1 as any)).toBe(true);
+
+		const ws2 = createMockWs();
+		svc.handleAuth(ws2 as any, "10.0.0.2", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws2 as any)).toBe(true);
+
+		// Third device rejected
+		const ws3 = createMockWs();
+		svc.handleAuth(ws3 as any, "10.0.0.3", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws3 as any)).toBe(false);
+		expect(ws3._parsed()[0].type).toBe("authFailed");
+	});
+
+	it("rejects connection via PIN when at max capacity", () => {
+		const svc = createService();
+		svc.maxDevices = 1;
+		const pin = svc.getOrCreatePin();
+
+		// First device connects
+		const ws1 = createMockWs();
+		svc.handleAuth(ws1 as any, "10.0.0.1", pin, undefined, GET_STATE, true);
+
+		// Second device tries with valid PIN — still rejected
+		const ws2 = createMockWs();
+		svc.handleAuth(ws2 as any, "10.0.0.2", pin, undefined, GET_STATE, true);
+		expect(svc.authenticatedClients.has(ws2 as any)).toBe(false);
+	});
+
+	it("does not enforce limit in no-PIN mode", () => {
+		const svc = createService();
+		svc.maxDevices = 1;
+		svc.pinEnabled = false;
+
+		const ws1 = createMockWs();
+		svc.handleAuth(
+			ws1 as any,
+			"10.0.0.1",
+			undefined,
+			undefined,
+			GET_STATE,
+			true,
+		);
+
+		const ws2 = createMockWs();
+		svc.handleAuth(
+			ws2 as any,
+			"10.0.0.2",
+			undefined,
+			undefined,
+			GET_STATE,
+			true,
+		);
+
+		// Both should be authenticated — no-PIN mode means open access
+		expect(svc.authenticatedClients.has(ws1 as any)).toBe(true);
+		expect(svc.authenticatedClients.has(ws2 as any)).toBe(true);
+	});
+});

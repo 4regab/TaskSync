@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 - PIN is generated once per server start (no longer rotates every 30s)
 - URL scheme changed from path-based (`/123456`) to fragment-based (`#pin=123456`) — fragments are never sent to the server
 - Security: added empty-PIN guard in timing-safe comparison
+- feat: max device limit for remote server (`tasksync.remoteMaxDevices`, default: 2)
+- chore: enforce Biome formatting via `biome check`, add pre-commit hook
 - fix: remote path decoding and workspace-aware git path resolution (4regab)
 
 ## TaskSync v2.0.25 (02-25-26)

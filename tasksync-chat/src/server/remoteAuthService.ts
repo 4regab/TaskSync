@@ -12,6 +12,7 @@ export class RemoteAuthService {
 	// Authentication state
 	pinEnabled: boolean = true;
 	pin: string = "";
+	maxDevices: number = 2;
 	readonly authenticatedClients: Set<WebSocket> = new Set();
 
 	/** Timing-safe PIN comparison using SHA-256 digests (constant-time). */
@@ -109,6 +110,20 @@ export class RemoteAuthService {
 					}),
 				);
 			}
+			return;
+		}
+
+		// Enforce max device limit (skip for already-authenticated clients)
+		if (
+			!this.authenticatedClients.has(ws) &&
+			this.authenticatedClients.size >= this.maxDevices
+		) {
+			ws.send(
+				JSON.stringify({
+					type: "authFailed",
+					message: `Maximum connected devices reached (${this.maxDevices}). Disconnect another device first.`,
+				}),
+			);
 			return;
 		}
 

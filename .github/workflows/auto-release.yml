@@ -115,7 +115,8 @@ jobs:
         run: |
           cd ..
           git add tasksync-chat/package.json CHANGELOG.md
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          # --no-verify skips pre-commit hook (CI already validates; hook regenerates tracked build artifacts causing unstaged changes)
+          git commit --no-verify -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
           # Rebase onto latest main to avoid non-fast-forward push failures when main advances during the run.
           # If rebase conflicts, abort and fail this step explicitly.
           if ! git pull --rebase origin main; then

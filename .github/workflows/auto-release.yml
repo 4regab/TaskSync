@@ -116,7 +116,13 @@ jobs:
           cd ..
           git add tasksync-chat/package.json CHANGELOG.md
           git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
-          git push
+          # Rebase onto latest main to avoid non-fast-forward push failures when main advances during the run.
+          # If rebase conflicts, abort and fail this step explicitly.
+          if ! git pull --rebase origin main; then
+            git rebase --abort || true
+            exit 1
+          fi
+          git push origin HEAD:main
 
       - name: Build extension
         run: npm run build

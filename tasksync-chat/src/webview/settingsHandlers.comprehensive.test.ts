@@ -1430,7 +1430,7 @@ describe("config guard error handling", () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const p = createMockP();
 		await handleUpdateSoundSetting(p, false);

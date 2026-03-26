@@ -69,7 +69,6 @@ const HUMAN_DELAY_MAX_UPPER =
 	typeof TASKSYNC_HUMAN_DELAY_MAX_UPPER !== "undefined"
 		? TASKSYNC_HUMAN_DELAY_MAX_UPPER
 		: 60;
-const DEFAULT_AUTO_APPEND_TEXT = "";
 
 // State
 let promptQueue = [];
@@ -103,8 +102,8 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let autoAppendEnabled = false;
-let autoAppendText = DEFAULT_AUTO_APPEND_TEXT;
+let autoAppendEnabled = true;
+let autoAppendText = ""; // User's optional custom text (instruction is always appended separately)
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";

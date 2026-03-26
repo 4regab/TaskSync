@@ -223,7 +223,10 @@ export function registerTools(
 					attachmentCount?: number;
 				} = {
 					response: autoAppendEnabled
-						? appendAutoAppendText(result.response, autoAppendText)
+						? appendAutoAppendText(
+								appendAutoAppendText(result.response, autoAppendText),
+								AUTO_APPEND_DEFAULT_TEXT,
+							)
 						: result.response,
 				};
 

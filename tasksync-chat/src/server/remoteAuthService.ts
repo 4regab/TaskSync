@@ -1,8 +1,20 @@
 import * as crypto from "crypto";
-import * as vscode from "vscode";
+import type * as vscodeTypes from "vscode";
 import type { WebSocket } from "ws";
 import { WS_PROTOCOL_VERSION } from "../constants/remoteConstants";
 import { getSafeErrorMessage, sendWsError } from "./serverUtils";
+
+let vscode: typeof vscodeTypes;
+try {
+	vscode = require("vscode");
+} catch {
+	const mock = (globalThis as { __TASKSYNC_VSCODE_MOCK__?: typeof vscodeTypes })
+		.__TASKSYNC_VSCODE_MOCK__;
+	if (!mock) {
+		throw new Error("VS Code API is unavailable in this runtime.");
+	}
+	vscode = mock;
+}
 
 /**
  * Handles authentication for the remote server.
@@ -71,7 +83,7 @@ export class RemoteAuthService {
 		return attempt;
 	}
 
-	constructor(_context: vscode.ExtensionContext) {}
+	constructor(_context: vscodeTypes.ExtensionContext) { }
 
 	/**
 	 * Handle PIN/session-token authentication for a WebSocket client.

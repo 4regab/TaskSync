@@ -121,17 +121,18 @@ function bindEventListeners() {
 			}
 		});
 	}
-	if (askUserVerbosePayloadToggle) {
-		askUserVerbosePayloadToggle.addEventListener(
-			"click",
-			toggleAskUserVerbosePayloadSetting,
-		);
-		askUserVerbosePayloadToggle.addEventListener("keydown", function (e) {
+	if (autoAppendToggle) {
+		autoAppendToggle.addEventListener("click", toggleAutoAppendSetting);
+		autoAppendToggle.addEventListener("keydown", function (e) {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
-				toggleAskUserVerbosePayloadSetting();
+				toggleAutoAppendSetting();
 			}
 		});
+	}
+	if (autoAppendTextInput) {
+		autoAppendTextInput.addEventListener("change", handleAutoAppendTextChange);
+		autoAppendTextInput.addEventListener("blur", handleAutoAppendTextChange);
 	}
 	if (sendShortcutToggle) {
 		sendShortcutToggle.addEventListener(

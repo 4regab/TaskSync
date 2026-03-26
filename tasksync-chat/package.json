@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "3.0.1",
+  "version": "3.0.0",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -226,11 +226,24 @@
           "default": true,
           "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
         },
+        "tasksync.autoAppendEnabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Auto Append: append configured text directly to every ask_user response. Increases context usage."
+        },
+        "tasksync.autoAppendText": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Text appended when Auto Append is enabled. Keep this short to reduce token usage."
+        },
         "tasksync.askUserVerbosePayload": {
           "type": "boolean",
           "default": false,
           "scope": "window",
-          "description": "Consistent mode: add an extra instruction prompt in ask_user tool output so Copilot consistently calls #askUser. Off by default for cleaner tool call Input/Output blocks."
+          "description": "Deprecated legacy setting. Use tasksync.autoAppendEnabled instead.",
+          "deprecationMessage": "Deprecated: use TaskSync Auto Append settings (tasksync.autoAppendEnabled and tasksync.autoAppendText)."
         },
         "tasksync.sendWithCtrlEnter": {
           "type": "boolean",

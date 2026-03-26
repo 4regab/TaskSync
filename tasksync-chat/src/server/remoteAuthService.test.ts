@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import "../__mocks__/vscode";
 import { RemoteAuthService } from "./remoteAuthService";
 
 function createMockContext() {

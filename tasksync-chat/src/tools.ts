@@ -1,9 +1,12 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { CONFIG_SECTION } from "./constants/remoteConstants";
+import {
+	AUTO_APPEND_DEFAULT_TEXT,
+	CONFIG_SECTION,
+} from "./constants/remoteConstants";
 import { getImageMimeType } from "./utils/imageUtils";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
-import { debugLog } from "./webview/webviewUtils";
+import { appendAutoAppendText, debugLog } from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
@@ -199,9 +202,13 @@ export function registerTools(
 			);
 			try {
 				const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-				const includeVerbosePayload = config.get<boolean>(
-					"askUserVerbosePayload",
-					false,
+				const autoAppendEnabled = config.get<boolean>(
+					"autoAppendEnabled",
+					config.get<boolean>("askUserVerbosePayload", false),
+				);
+				const autoAppendText = config.get<string>(
+					"autoAppendText",
+					AUTO_APPEND_DEFAULT_TEXT,
 				);
 
 				const result = await askUser(
@@ -214,9 +221,10 @@ export function registerTools(
 					response: string;
 					queued?: boolean;
 					attachmentCount?: number;
-					instruction?: string;
 				} = {
-					response: result.response,
+					response: autoAppendEnabled
+						? appendAutoAppendText(result.response, autoAppendText)
+						: result.response,
 				};
 
 				if (result.queue) {
@@ -225,11 +233,6 @@ export function registerTools(
 
 				if (result.attachments.length > 0) {
 					resultPayload.attachmentCount = result.attachments.length;
-				}
-
-				if (includeVerbosePayload) {
-					resultPayload.instruction =
-						"Do the task, then call the askUser tool; keep this workflow.";
 				}
 
 				// Build result parts - text first, then images

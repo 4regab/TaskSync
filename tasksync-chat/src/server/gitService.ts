@@ -1,10 +1,22 @@
 import * as path from "path";
-import * as vscode from "vscode";
+import type * as vscodeTypes from "vscode";
+
+let vscode: typeof vscodeTypes;
+try {
+	vscode = require("vscode");
+} catch {
+	const mock = (globalThis as { __TASKSYNC_VSCODE_MOCK__?: typeof vscodeTypes })
+		.__TASKSYNC_VSCODE_MOCK__;
+	if (!mock) {
+		throw new Error("VS Code API is unavailable in this runtime.");
+	}
+	vscode = mock;
+}
 
 // Git extension types
 interface Repository {
 	state: RepositoryState;
-	rootUri?: vscode.Uri;
+	rootUri?: vscodeTypes.Uri;
 	diffWithHEAD(path: string): Promise<string>;
 }
 
@@ -14,13 +26,13 @@ interface RepositoryState {
 }
 
 interface Change {
-	uri: vscode.Uri;
+	uri: vscodeTypes.Uri;
 	status: number;
 }
 
 interface GitAPI {
 	repositories: Repository[];
-	getRepository(uri: vscode.Uri): Repository | null;
+	getRepository(uri: vscodeTypes.Uri): Repository | null;
 }
 
 interface GitExtension {
@@ -94,7 +106,7 @@ export class GitService {
 		this.initialized = true;
 	}
 
-	private getRepo(fileUri?: vscode.Uri): Repository {
+	private getRepo(fileUri?: vscodeTypes.Uri): Repository {
 		if (!this.api) {
 			throw new Error("Git service not initialized");
 		}

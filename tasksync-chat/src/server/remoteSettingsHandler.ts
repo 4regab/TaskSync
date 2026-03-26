@@ -32,13 +32,20 @@ export async function dispatchSettingsMessage(
 			broadcastSettingsChanged(provider, broadcastFn);
 			return true;
 
-		case "updateAskUserVerbosePayloadSetting":
-			await settingsH.handleUpdateAskUserVerbosePayloadSetting(
+		case "updateAutoAppendSetting":
+			await settingsH.handleUpdateAutoAppendSetting(
 				provider,
 				msg.enabled === true,
 			);
 			broadcastSettingsChanged(provider, broadcastFn);
 			return true;
+
+		case "updateAutoAppendText": {
+			const text = typeof msg.text === "string" ? msg.text : "";
+			await settingsH.handleUpdateAutoAppendText(provider, text);
+			broadcastSettingsChanged(provider, broadcastFn);
+			return true;
+		}
 
 		case "updateSendWithCtrlEnterSetting":
 			await settingsH.handleUpdateSendWithCtrlEnterSetting(

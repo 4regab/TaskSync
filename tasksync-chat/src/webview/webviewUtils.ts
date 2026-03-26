@@ -1,10 +1,22 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import * as vscode from "vscode";
+import type * as vscodeTypes from "vscode";
 import { CONFIG_SECTION } from "../constants/remoteConstants";
 import { generateId } from "../utils/generateId";
 import type { P, ToolCallEntry } from "./webviewTypes";
+
+let vscode: typeof vscodeTypes;
+try {
+	vscode = require("vscode");
+} catch {
+	const mock = (globalThis as { __TASKSYNC_VSCODE_MOCK__?: typeof vscodeTypes })
+		.__TASKSYNC_VSCODE_MOCK__;
+	if (!mock) {
+		throw new Error("VS Code API is unavailable in this runtime.");
+	}
+	vscode = mock;
+}
 
 export { generateId };
 
@@ -25,6 +37,37 @@ export function debugLog(...args: unknown[]): void {
 /** Returns true when the queue is enabled and has pending items. */
 export function hasQueuedItems(p: P): boolean {
 	return p._queueEnabled && p._promptQueue.length > 0;
+}
+
+/**
+ * Append configured follow-up text to a response when both are non-empty.
+ */
+export function appendAutoAppendText(
+	response: string,
+	appendText: string,
+): string {
+	const trimmedAppend = appendText.trim();
+	if (trimmedAppend.length === 0) {
+		return response;
+	}
+
+	const trimmedResponse = response.trimEnd();
+	if (trimmedResponse.length === 0) {
+		return trimmedAppend;
+	}
+
+	return `${trimmedResponse}\n\n${trimmedAppend}`;
+}
+
+/**
+ * Apply auto-append behavior based on a feature flag.
+ */
+export function applyAutoAppendText(
+	enabled: boolean,
+	response: string,
+	appendText: string,
+): string {
+	return enabled ? appendAutoAppendText(response, appendText) : response;
 }
 
 /**
@@ -230,7 +273,7 @@ async function isFile(filePath: string): Promise<boolean> {
  */
 export async function resolveFileLinkUri(
 	rawPath: string,
-): Promise<vscode.Uri | null> {
+): Promise<vscodeTypes.Uri | null> {
 	const normalizedPath = rawPath.trim().replace(/^\.\//, "").trim();
 	if (!normalizedPath) {
 		return null;

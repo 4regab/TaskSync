@@ -3,7 +3,7 @@ import {
 	MAX_QUEUE_PROMPT_LENGTH,
 	MAX_QUEUE_SIZE,
 } from "../constants/remoteConstants";
-import { buildSettingsPayload } from "./settingsHandlers";
+import * as settingsH from "./settingsHandlers";
 import type {
 	AttachmentInfo,
 	P,
@@ -68,11 +68,15 @@ export function handleAddQueuePrompt(
 			p._pendingRequests.delete(currentCallId);
 			p._currentToolCallId = null;
 		} else {
+			const effectiveResponse = settingsH.applyAutoAppendToResponse(
+				p,
+				queuedPrompt.prompt,
+			);
 			const pendingEntry = p._currentSessionCallsMap.get(currentCallId);
 
 			let completedEntry: ToolCallEntry;
 			if (pendingEntry && pendingEntry.status === "pending") {
-				pendingEntry.response = queuedPrompt.prompt;
+				pendingEntry.response = effectiveResponse;
 				pendingEntry.attachments = queuedPrompt.attachments || [];
 				pendingEntry.status = "completed";
 				pendingEntry.isFromQueue = true;
@@ -82,7 +86,7 @@ export function handleAddQueuePrompt(
 				completedEntry = {
 					id: currentCallId,
 					prompt: "Tool call",
-					response: queuedPrompt.prompt,
+					response: effectiveResponse,
 					attachments: queuedPrompt.attachments || [],
 					timestamp: Date.now(),
 					isFromQueue: true,
@@ -208,7 +212,10 @@ export function handleToggleQueue(p: P, enabled: boolean): void {
 	p._queueEnabled = enabled;
 	p._saveQueueToDisk();
 	p._updateQueueUI();
-	p._remoteServer?.broadcast("settingsChanged", buildSettingsPayload(p));
+	p._remoteServer?.broadcast(
+		"settingsChanged",
+		settingsH.buildSettingsPayload(p),
+	);
 }
 
 /**

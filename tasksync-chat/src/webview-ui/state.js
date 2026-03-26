@@ -64,6 +64,7 @@ const HUMAN_DELAY_MAX_UPPER =
 	typeof TASKSYNC_HUMAN_DELAY_MAX_UPPER !== "undefined"
 		? TASKSYNC_HUMAN_DELAY_MAX_UPPER
 		: 60;
+const DEFAULT_AUTO_APPEND_TEXT = "";
 
 // State
 let promptQueue = [];
@@ -97,7 +98,8 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let askUserVerbosePayloadEnabled = false;
+let autoAppendEnabled = false;
+let autoAppendText = DEFAULT_AUTO_APPEND_TEXT;
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -182,7 +184,9 @@ let slashDropdown, slashList, slashEmpty;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
-	askUserVerbosePayloadToggle,
+	autoAppendToggle,
+	autoAppendTextRow,
+	autoAppendTextInput,
 	sendShortcutToggle,
 	autopilotToggle,
 	promptsList,

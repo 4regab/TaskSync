@@ -3,7 +3,7 @@ import * as https from "https";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as vscode from "vscode";
+import * as vscode from "../__mocks__/vscode";
 import {
 	createServer,
 	findAvailablePort,

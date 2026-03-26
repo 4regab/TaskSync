@@ -1,5 +1,6 @@
 import * as http from "http";
 import { describe, expect, it, vi } from "vitest";
+import "../__mocks__/vscode";
 import { RemoteHtmlService } from "./remoteHtmlService";
 
 function createResponse() {

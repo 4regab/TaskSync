@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import "../__mocks__/vscode";
 import { MAX_QUEUE_PROMPT_LENGTH } from "../constants/remoteConstants";
 import {
 	handleClearQueue,

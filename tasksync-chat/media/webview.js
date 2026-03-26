@@ -233,7 +233,8 @@ function mapToRemoteMessage(msg) {
 		// VS Code-only settings/UI messages — not applicable to remote
 		case "updateSoundSetting":
 		case "updateInteractiveApprovalSetting":
-		case "updateAskUserVerbosePayloadSetting":
+		case "updateAutoAppendSetting":
+		case "updateAutoAppendText":
 		case "updateSendWithCtrlEnterSetting":
 		case "updateHumanDelaySetting":
 		case "updateHumanDelayMin":
@@ -631,8 +632,11 @@ function applySettingsData(s) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
 	}
-	if (s.askUserVerbosePayloadEnabled !== undefined) {
-		askUserVerbosePayloadEnabled = s.askUserVerbosePayloadEnabled;
+	if (s.autoAppendEnabled !== undefined) {
+		autoAppendEnabled = s.autoAppendEnabled;
+	}
+	if (typeof s.autoAppendText === "string") {
+		autoAppendText = s.autoAppendText;
 	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
@@ -757,7 +761,8 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
-	updateAskUserVerbosePayloadToggleUI();
+	updateAutoAppendToggleUI();
+	updateAutoAppendTextUI();
 	updateSendWithCtrlEnterToggleUI();
 	updateAutopilotToggleUI();
 	updateResponseTimeoutUI();
@@ -837,6 +842,7 @@ const HUMAN_DELAY_MAX_UPPER =
 	typeof TASKSYNC_HUMAN_DELAY_MAX_UPPER !== "undefined"
 		? TASKSYNC_HUMAN_DELAY_MAX_UPPER
 		: 60;
+const DEFAULT_AUTO_APPEND_TEXT = "";
 
 // State
 let promptQueue = [];
@@ -870,7 +876,8 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let askUserVerbosePayloadEnabled = false;
+let autoAppendEnabled = false;
+let autoAppendText = DEFAULT_AUTO_APPEND_TEXT;
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -955,7 +962,9 @@ let slashDropdown, slashList, slashEmpty;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
-	askUserVerbosePayloadToggle,
+	autoAppendToggle,
+	autoAppendTextRow,
+	autoAppendTextInput,
 	sendShortcutToggle,
 	autopilotToggle,
 	promptsList,
@@ -1337,19 +1346,21 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(sendShortcutSection);
 
-	// Consistent mode section - adds a reminder instruction for consistent #askUser usage
-	let askUserVerbosePayloadSection = document.createElement("div");
-	askUserVerbosePayloadSection.className = "settings-section";
-	askUserVerbosePayloadSection.innerHTML =
+	// Auto Append section - appends configured guidance to every ask_user response.
+	let autoAppendSection = document.createElement("div");
+	autoAppendSection.className = "settings-section";
+	autoAppendSection.innerHTML =
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-symbol-structure"></span> Consistent mode' +
-		'<span class="settings-info-icon" title="When enabled, TaskSync adds an extra instruction prompt in ask_user output so Copilot consistently calls #askUser.\n\nDisabled by default for cleaner Input/Output blocks.">' +
+		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync appends this text directly to every ask_user response (manual, queue, autopilot, timeout).\n\nThis increases context usage, so keep it concise.">' +
 		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
-		'<div class="toggle-switch" id="askuser-verbose-payload-toggle" role="switch" aria-checked="false" aria-label="Enable Consistent mode prompt" tabindex="0"></div>' +
-		"</div>";
-	modalContent.appendChild(askUserVerbosePayloadSection);
+		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row hidden" id="auto-append-text-row"><label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
+		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea></div>';
+	modalContent.appendChild(autoAppendSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
 	let humanDelaySection = document.createElement("div");
@@ -1538,9 +1549,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
-	askUserVerbosePayloadToggle = document.getElementById(
-		"askuser-verbose-payload-toggle",
-	);
+	autoAppendToggle = document.getElementById("auto-append-toggle");
+	autoAppendTextRow = document.getElementById("auto-append-text-row");
+	autoAppendTextInput = document.getElementById("auto-append-text-input");
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
 	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
 	autopilotAddBtn = document.getElementById("autopilot-add-btn");
@@ -1778,17 +1789,18 @@ function bindEventListeners() {
 			}
 		});
 	}
-	if (askUserVerbosePayloadToggle) {
-		askUserVerbosePayloadToggle.addEventListener(
-			"click",
-			toggleAskUserVerbosePayloadSetting,
-		);
-		askUserVerbosePayloadToggle.addEventListener("keydown", function (e) {
+	if (autoAppendToggle) {
+		autoAppendToggle.addEventListener("click", toggleAutoAppendSetting);
+		autoAppendToggle.addEventListener("keydown", function (e) {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
-				toggleAskUserVerbosePayloadSetting();
+				toggleAutoAppendSetting();
 			}
 		});
+	}
+	if (autoAppendTextInput) {
+		autoAppendTextInput.addEventListener("change", handleAutoAppendTextChange);
+		autoAppendTextInput.addEventListener("blur", handleAutoAppendTextChange);
 	}
 	if (sendShortcutToggle) {
 		sendShortcutToggle.addEventListener(
@@ -2435,8 +2447,11 @@ function handleExtensionMessage(event) {
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
-			askUserVerbosePayloadEnabled =
-				message.askUserVerbosePayloadEnabled === true;
+			autoAppendEnabled = message.autoAppendEnabled === true;
+			autoAppendText =
+				typeof message.autoAppendText === "string"
+					? message.autoAppendText
+					: DEFAULT_AUTO_APPEND_TEXT;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -2473,7 +2488,8 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
-			updateAskUserVerbosePayloadToggleUI();
+			updateAutoAppendToggleUI();
+			updateAutoAppendTextUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();
@@ -3899,25 +3915,46 @@ function updateInteractiveApprovalToggleUI() {
 	);
 }
 
-function toggleAskUserVerbosePayloadSetting() {
-	askUserVerbosePayloadEnabled = !askUserVerbosePayloadEnabled;
-	updateAskUserVerbosePayloadToggleUI();
+function toggleAutoAppendSetting() {
+	autoAppendEnabled = !autoAppendEnabled;
+	updateAutoAppendToggleUI();
 	vscode.postMessage({
-		type: "updateAskUserVerbosePayloadSetting",
-		enabled: askUserVerbosePayloadEnabled,
+		type: "updateAutoAppendSetting",
+		enabled: autoAppendEnabled,
 	});
 }
 
-function updateAskUserVerbosePayloadToggleUI() {
-	if (!askUserVerbosePayloadToggle) return;
-	askUserVerbosePayloadToggle.classList.toggle(
-		"active",
-		askUserVerbosePayloadEnabled,
-	);
-	askUserVerbosePayloadToggle.setAttribute(
+function updateAutoAppendToggleUI() {
+	if (!autoAppendToggle) return;
+	autoAppendToggle.classList.toggle("active", autoAppendEnabled);
+	autoAppendToggle.setAttribute(
 		"aria-checked",
-		askUserVerbosePayloadEnabled ? "true" : "false",
+		autoAppendEnabled ? "true" : "false",
 	);
+	updateAutoAppendTextVisibility();
+}
+
+function updateAutoAppendTextVisibility() {
+	if (!autoAppendTextRow) return;
+	autoAppendTextRow.classList.toggle("hidden", !autoAppendEnabled);
+	autoAppendTextRow.setAttribute(
+		"aria-hidden",
+		autoAppendEnabled ? "false" : "true",
+	);
+}
+
+function handleAutoAppendTextChange() {
+	if (!autoAppendTextInput) return;
+	autoAppendText = autoAppendTextInput.value;
+	vscode.postMessage({
+		type: "updateAutoAppendText",
+		text: autoAppendText,
+	});
+}
+
+function updateAutoAppendTextUI() {
+	if (!autoAppendTextInput) return;
+	autoAppendTextInput.value = autoAppendText;
 }
 
 function toggleSendWithCtrlEnterSetting() {

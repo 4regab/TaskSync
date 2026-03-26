@@ -45,25 +45,46 @@ function updateInteractiveApprovalToggleUI() {
 	);
 }
 
-function toggleAskUserVerbosePayloadSetting() {
-	askUserVerbosePayloadEnabled = !askUserVerbosePayloadEnabled;
-	updateAskUserVerbosePayloadToggleUI();
+function toggleAutoAppendSetting() {
+	autoAppendEnabled = !autoAppendEnabled;
+	updateAutoAppendToggleUI();
 	vscode.postMessage({
-		type: "updateAskUserVerbosePayloadSetting",
-		enabled: askUserVerbosePayloadEnabled,
+		type: "updateAutoAppendSetting",
+		enabled: autoAppendEnabled,
 	});
 }
 
-function updateAskUserVerbosePayloadToggleUI() {
-	if (!askUserVerbosePayloadToggle) return;
-	askUserVerbosePayloadToggle.classList.toggle(
-		"active",
-		askUserVerbosePayloadEnabled,
-	);
-	askUserVerbosePayloadToggle.setAttribute(
+function updateAutoAppendToggleUI() {
+	if (!autoAppendToggle) return;
+	autoAppendToggle.classList.toggle("active", autoAppendEnabled);
+	autoAppendToggle.setAttribute(
 		"aria-checked",
-		askUserVerbosePayloadEnabled ? "true" : "false",
+		autoAppendEnabled ? "true" : "false",
 	);
+	updateAutoAppendTextVisibility();
+}
+
+function updateAutoAppendTextVisibility() {
+	if (!autoAppendTextRow) return;
+	autoAppendTextRow.classList.toggle("hidden", !autoAppendEnabled);
+	autoAppendTextRow.setAttribute(
+		"aria-hidden",
+		autoAppendEnabled ? "false" : "true",
+	);
+}
+
+function handleAutoAppendTextChange() {
+	if (!autoAppendTextInput) return;
+	autoAppendText = autoAppendTextInput.value;
+	vscode.postMessage({
+		type: "updateAutoAppendText",
+		text: autoAppendText,
+	});
+}
+
+function updateAutoAppendTextUI() {
+	if (!autoAppendTextInput) return;
+	autoAppendTextInput.value = autoAppendText;
 }
 
 function toggleSendWithCtrlEnterSetting() {

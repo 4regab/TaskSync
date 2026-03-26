@@ -165,9 +165,38 @@ function buildWebview() {
     fs.writeFileSync(WEBVIEW_OUTPUT, header + "\n" + body + footer);
 }
 
+function removeDistTestArtifacts() {
+    const distDir = path.join(__dirname, "dist");
+    if (!fs.existsSync(distDir)) {
+        return;
+    }
+
+    const queue = [distDir];
+    while (queue.length > 0) {
+        const current = queue.pop();
+        if (!current) continue;
+
+        const entries = fs.readdirSync(current, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(current, entry.name);
+            if (entry.isDirectory()) {
+                queue.push(fullPath);
+                continue;
+            }
+
+            if (/\.test\.js(\.map)?$/.test(entry.name)) {
+                fs.unlinkSync(fullPath);
+            }
+        }
+    }
+}
+
 // ==================== Main Build ====================
 
 async function main() {
+    // Prevent stale compiled test files from being discovered by non-Vitest runners.
+    removeDistTestArtifacts();
+
     // Generate shared constants from SSOT (remoteConstants.ts → web/shared-constants.js)
     generateSharedConstants();
     console.log("Shared constants generated");

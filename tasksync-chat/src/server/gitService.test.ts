@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import * as vscode from "vscode";
+import * as vscode from "../__mocks__/vscode";
 import { isValidFilePath } from "../server/gitService";
 
 describe("isValidFilePath", () => {

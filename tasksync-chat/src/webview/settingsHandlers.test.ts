@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import "../__mocks__/vscode";
 import {
 	RESPONSE_TIMEOUT_ALLOWED_VALUES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,

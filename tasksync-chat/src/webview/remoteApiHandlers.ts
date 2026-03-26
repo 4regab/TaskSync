@@ -190,7 +190,7 @@ export function resolveRemoteResponse(
 
 	const entry = p._currentSessionCallsMap.get(toolCallId);
 	if (entry) {
-		entry.response = value;
+		entry.response = settingsH.applyAutoAppendToResponse(p, value);
 		entry.status = "completed";
 		entry.attachments = attachments;
 		entry.timestamp = Date.now();

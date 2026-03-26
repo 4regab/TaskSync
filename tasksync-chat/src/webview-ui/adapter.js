@@ -194,7 +194,8 @@ function mapToRemoteMessage(msg) {
 		// VS Code-only settings/UI messages — not applicable to remote
 		case "updateSoundSetting":
 		case "updateInteractiveApprovalSetting":
-		case "updateAskUserVerbosePayloadSetting":
+		case "updateAutoAppendSetting":
+		case "updateAutoAppendText":
 		case "updateSendWithCtrlEnterSetting":
 		case "updateHumanDelaySetting":
 		case "updateHumanDelayMin":
@@ -592,8 +593,11 @@ function applySettingsData(s) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
 	}
-	if (s.askUserVerbosePayloadEnabled !== undefined) {
-		askUserVerbosePayloadEnabled = s.askUserVerbosePayloadEnabled;
+	if (s.autoAppendEnabled !== undefined) {
+		autoAppendEnabled = s.autoAppendEnabled;
+	}
+	if (typeof s.autoAppendText === "string") {
+		autoAppendText = s.autoAppendText;
 	}
 	if (s.responseTimeout !== undefined) responseTimeout = s.responseTimeout;
 	if (s.soundEnabled !== undefined) soundEnabled = s.soundEnabled;
@@ -718,7 +722,8 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
-	updateAskUserVerbosePayloadToggleUI();
+	updateAutoAppendToggleUI();
+	updateAutoAppendTextUI();
 	updateSendWithCtrlEnterToggleUI();
 	updateAutopilotToggleUI();
 	updateResponseTimeoutUI();

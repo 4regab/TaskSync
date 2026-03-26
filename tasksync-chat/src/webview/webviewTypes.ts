@@ -96,7 +96,8 @@ export type ToWebviewMessage =
 			type: "updateSettings";
 			soundEnabled: boolean;
 			interactiveApprovalEnabled: boolean;
-			askUserVerbosePayloadEnabled: boolean;
+			autoAppendEnabled: boolean;
+			autoAppendText: string;
 			autopilotEnabled: boolean;
 			autopilotText: string;
 			autopilotPrompts: string[];
@@ -163,7 +164,8 @@ export type FromWebviewMessage =
 	| { type: "openSettingsModal" }
 	| { type: "updateSoundSetting"; enabled: boolean }
 	| { type: "updateInteractiveApprovalSetting"; enabled: boolean }
-	| { type: "updateAskUserVerbosePayloadSetting"; enabled: boolean }
+	| { type: "updateAutoAppendSetting"; enabled: boolean }
+	| { type: "updateAutoAppendText"; text: string }
 	| { type: "updateAutopilotSetting"; enabled: boolean }
 	| { type: "updateAutopilotText"; text: string }
 	| { type: "addAutopilotPrompt"; prompt: string }

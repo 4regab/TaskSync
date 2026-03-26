@@ -62,6 +62,7 @@ export const ASKUSER_VISIBILITY_TEXT =
 	"The user can ONLY see messages you send via the #askUser tool — your normal chat responses are invisible to them.";
 export const ASKUSER_LOOP_TEXT =
 	"Do the work, then call #askUser to report results. NEVER end your turn without calling #askUser.";
+export const AUTO_APPEND_DEFAULT_TEXT = "";
 
 // Default query when a remote session starts without an explicit prompt
 export const DEFAULT_REMOTE_SESSION_QUERY = `${ASKUSER_VISIBILITY_TEXT} Start by calling #askUser to greet the user and ask what they need. After receiving their response, do the work, then call #askUser again with results. Continue this loop indefinitely — NEVER end your turn without calling #askUser.`;

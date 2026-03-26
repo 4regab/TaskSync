@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import selfsigned from "selfsigned";
 import { fileURLToPath } from "url";
-import * as vscode from "vscode";
+import type * as vscodeTypes from "vscode";
 import type { WebSocket } from "ws";
 import {
 	MAX_ATTACHMENT_NAME_LENGTH,
@@ -13,6 +13,18 @@ import {
 	MAX_ATTACHMENTS,
 } from "../constants/remoteConstants";
 import type { AttachmentInfo } from "../webview/webviewTypes";
+
+let vscode: typeof vscodeTypes;
+try {
+	vscode = require("vscode");
+} catch {
+	const mock = (globalThis as { __TASKSYNC_VSCODE_MOCK__?: typeof vscodeTypes })
+		.__TASKSYNC_VSCODE_MOCK__;
+	if (!mock) {
+		throw new Error("VS Code API is unavailable in this runtime.");
+	}
+	vscode = mock;
+}
 
 function isAttachmentUriAllowed(uri: string): boolean {
 	if (!uri.trim()) return false;

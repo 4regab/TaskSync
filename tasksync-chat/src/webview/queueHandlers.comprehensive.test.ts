@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as vscode from "vscode";
+import * as vscode from "../__mocks__/vscode";
 import {
 	MAX_QUEUE_PROMPT_LENGTH,
 	MAX_QUEUE_SIZE,
@@ -178,7 +178,7 @@ describe("handleAddQueuePrompt", () => {
 		const resolve = vi.fn();
 		const pendingRequests = new Map<string, any>();
 		pendingRequests.set("tc_1", resolve);
-		const timer = setTimeout(() => {}, 10000);
+		const timer = setTimeout(() => { }, 10000);
 
 		const p = createMockP({
 			_queueEnabled: true,

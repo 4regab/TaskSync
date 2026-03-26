@@ -97,8 +97,11 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 		case "updateInteractiveApprovalSetting":
 			settingsH.handleUpdateInteractiveApprovalSetting(p, message.enabled);
 			break;
-		case "updateAskUserVerbosePayloadSetting":
-			settingsH.handleUpdateAskUserVerbosePayloadSetting(p, message.enabled);
+		case "updateAutoAppendSetting":
+			settingsH.handleUpdateAutoAppendSetting(p, message.enabled);
+			break;
+		case "updateAutoAppendText":
+			settingsH.handleUpdateAutoAppendText(p, message.text);
 			break;
 		case "updateAutopilotSetting":
 			settingsH.handleUpdateAutopilotSetting(p, message.enabled);
@@ -269,6 +272,7 @@ export function handleSubmit(
 	if (p._pendingRequests.size > 0 && p._currentToolCallId) {
 		const resolve = p._pendingRequests.get(p._currentToolCallId);
 		if (resolve) {
+			const effectiveResponse = settingsH.applyAutoAppendToResponse(p, value);
 			debugLog(
 				"[TaskSync] handleSubmit — resolving toolCallId:",
 				p._currentToolCallId,
@@ -281,7 +285,7 @@ export function handleSubmit(
 			let completedEntry: ToolCallEntry;
 			if (pendingEntry && pendingEntry.status === "pending") {
 				// Update existing pending entry
-				pendingEntry.response = value;
+				pendingEntry.response = effectiveResponse;
 				pendingEntry.attachments = attachments;
 				pendingEntry.status = "completed";
 				pendingEntry.timestamp = Date.now();
@@ -291,7 +295,7 @@ export function handleSubmit(
 				completedEntry = {
 					id: p._currentToolCallId,
 					prompt: "Tool call",
-					response: value,
+					response: effectiveResponse,
 					attachments: attachments,
 					timestamp: Date.now(),
 					isFromQueue: false,

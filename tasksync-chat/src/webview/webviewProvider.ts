@@ -118,8 +118,9 @@ export class TaskSyncWebviewProvider
 
 	// Interactive approval buttons enabled (loaded from VS Code settings)
 	_interactiveApprovalEnabled: boolean = true;
-	// When enabled, include ask_user instruction metadata in tool payloads
-	_askUserVerbosePayloadEnabled: boolean = false;
+	// Auto Append setting controls whether shared guidance is appended to ask_user responses.
+	_autoAppendEnabled: boolean = false;
+	_autoAppendText: string = "";
 
 	readonly _AUTOPILOT_DEFAULT_TEXT =
 		"You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.";
@@ -215,6 +216,8 @@ export class TaskSyncWebviewProvider
 				if (
 					e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
+					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendEnabled`) ||
+					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendText`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.askUserVerbosePayload`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilot`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotText`) ||

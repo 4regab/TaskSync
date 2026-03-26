@@ -3100,6 +3100,12 @@ button#send-btn:disabled {
     margin-top: 4px;
 }
 
+.form-help-text {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.35;
+}
+
 .form-input {
     padding: 6px 10px;
     border: 1px solid var(--vscode-panel-border);

@@ -146,6 +146,10 @@ export async function waitForUserResponse(
 				debugLog(
 					`[TaskSync] waitForUserResponse — autopilot auto-responding with: "${effectiveText.slice(0, 60)}" (${p._consecutiveAutoResponses}/${maxConsecutive})`,
 				);
+				const effectiveResponse = settingsH.applyAutoAppendToResponse(
+					p,
+					effectiveText,
+				);
 				vscode.window.showInformationMessage(
 					`TaskSync: Autopilot auto-responded. (${p._consecutiveAutoResponses}/${maxConsecutive})`,
 				);
@@ -153,7 +157,7 @@ export async function waitForUserResponse(
 				const entry: ToolCallEntry = {
 					id: toolCallId,
 					prompt: question,
-					response: effectiveText,
+					response: effectiveResponse,
 					timestamp: Date.now(),
 					isFromQueue: false,
 					status: "completed",
@@ -223,10 +227,14 @@ export async function waitForUserResponse(
 				debugLog(
 					`[TaskSync] waitForUserResponse — queue auto-responding with: "${queuedPrompt.prompt.slice(0, 60)}"`,
 				);
+				const effectiveResponse = settingsH.applyAutoAppendToResponse(
+					p,
+					queuedPrompt.prompt,
+				);
 				const entry: ToolCallEntry = {
 					id: toolCallId,
 					prompt: question,
-					response: queuedPrompt.prompt,
+					response: effectiveResponse,
 					timestamp: Date.now(),
 					isFromQueue: true,
 					status: "completed",
@@ -433,9 +441,13 @@ export async function handleResponseTimeout(
 
 	const resolve = p._pendingRequests.get(toolCallId);
 	if (resolve) {
+		const effectiveResponse = settingsH.applyAutoAppendToResponse(
+			p,
+			responseText,
+		);
 		const pendingEntry = p._currentSessionCallsMap.get(toolCallId);
 		if (pendingEntry && pendingEntry.status === "pending") {
-			pendingEntry.response = responseText;
+			pendingEntry.response = effectiveResponse;
 			pendingEntry.status = "completed";
 			pendingEntry.timestamp = Date.now();
 			pendingEntry.isFromQueue = false;

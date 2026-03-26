@@ -1,5 +1,6 @@
-import * as vscode from "vscode";
+import type * as vscodeTypes from "vscode";
 import {
+	AUTO_APPEND_DEFAULT_TEXT,
 	CONFIG_SECTION,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
@@ -18,7 +19,19 @@ import {
 	SESSION_WARNING_HOURS_MIN,
 } from "../constants/remoteConstants";
 import type { P, ReusablePrompt, ToWebviewMessage } from "./webviewTypes";
-import { generateId } from "./webviewUtils";
+import { applyAutoAppendText, generateId } from "./webviewUtils";
+
+let vscode: typeof vscodeTypes;
+try {
+	vscode = require("vscode");
+} catch {
+	const mock = (globalThis as { __TASKSYNC_VSCODE_MOCK__?: typeof vscodeTypes })
+		.__TASKSYNC_VSCODE_MOCK__;
+	if (!mock) {
+		throw new Error("VS Code API is unavailable in this runtime.");
+	}
+	vscode = mock;
+}
 
 /**
  * Guard config writes with _isUpdatingConfig flag to prevent re-entry.
@@ -38,7 +51,7 @@ async function withConfigGuard(p: P, fn: () => Promise<void>): Promise<void> {
 
 export function getAutopilotDefaultText(
 	p: P,
-	config?: vscode.WorkspaceConfiguration,
+	config?: vscodeTypes.WorkspaceConfiguration,
 ): string {
 	const settings = config ?? vscode.workspace.getConfiguration(CONFIG_SECTION);
 	const inspected = settings.inspect<string>("autopilotText");
@@ -52,10 +65,18 @@ export function getAutopilotDefaultText(
 export function normalizeAutopilotText(
 	p: P,
 	text: string,
-	config?: vscode.WorkspaceConfiguration,
+	config?: vscodeTypes.WorkspaceConfiguration,
 ): string {
 	const defaultAutopilotText = getAutopilotDefaultText(p, config);
 	return text.trim().length > 0 ? text : defaultAutopilotText;
+}
+
+export function normalizeAutoAppendText(text: string): string {
+	return text.trim().length > 0 ? text : AUTO_APPEND_DEFAULT_TEXT;
+}
+
+export function applyAutoAppendToResponse(p: P, response: string): string {
+	return applyAutoAppendText(p._autoAppendEnabled, response, p._autoAppendText);
 }
 
 export function normalizeResponseTimeout(value: unknown): number {
@@ -83,7 +104,7 @@ export function normalizeResponseTimeout(value: unknown): number {
 }
 
 export function readResponseTimeoutMinutes(
-	config?: vscode.WorkspaceConfiguration,
+	config?: vscodeTypes.WorkspaceConfiguration,
 ): number {
 	const settings = config ?? vscode.workspace.getConfiguration(CONFIG_SECTION);
 	const configuredTimeout = settings.get<string>(
@@ -122,10 +143,19 @@ export function loadSettings(p: P): void {
 		"interactiveApproval",
 		true,
 	);
-	p._askUserVerbosePayloadEnabled = config.get<boolean>(
+	const legacyAutoAppendEnabled = config.get<boolean>(
 		"askUserVerbosePayload",
 		false,
 	);
+	p._autoAppendEnabled = config.get<boolean>(
+		"autoAppendEnabled",
+		legacyAutoAppendEnabled,
+	);
+	const configuredAutoAppendText = config.get<string>(
+		"autoAppendText",
+		AUTO_APPEND_DEFAULT_TEXT,
+	);
+	p._autoAppendText = normalizeAutoAppendText(configuredAutoAppendText);
 	p._autopilotEnabled = config.get<boolean>("autopilot", false);
 
 	const defaultAutopilotText = getAutopilotDefaultText(p, config);
@@ -178,9 +208,9 @@ export function loadSettings(p: P): void {
 	);
 	p._sessionWarningHours = Number.isFinite(configuredWarningHours)
 		? Math.min(
-				SESSION_WARNING_HOURS_MAX,
-				Math.max(SESSION_WARNING_HOURS_MIN, Math.floor(configuredWarningHours)),
-			)
+			SESSION_WARNING_HOURS_MAX,
+			Math.max(SESSION_WARNING_HOURS_MIN, Math.floor(configuredWarningHours)),
+		)
 		: DEFAULT_SESSION_WARNING_HOURS;
 	p._sendWithCtrlEnter = config.get<boolean>("sendWithCtrlEnter", false);
 	// Ensure min <= max
@@ -208,7 +238,8 @@ export async function saveReusablePrompts(p: P): Promise<void> {
 export function buildSettingsPayload(p: P): {
 	soundEnabled: boolean;
 	interactiveApprovalEnabled: boolean;
-	askUserVerbosePayloadEnabled: boolean;
+	autoAppendEnabled: boolean;
+	autoAppendText: string;
 	sendWithCtrlEnter: boolean;
 	autopilotEnabled: boolean;
 	autopilotText: string;
@@ -227,7 +258,8 @@ export function buildSettingsPayload(p: P): {
 	return {
 		soundEnabled: p._soundEnabled,
 		interactiveApprovalEnabled: p._interactiveApprovalEnabled,
-		askUserVerbosePayloadEnabled: p._askUserVerbosePayloadEnabled,
+		autoAppendEnabled: p._autoAppendEnabled,
+		autoAppendText: p._autoAppendText,
 		sendWithCtrlEnter: p._sendWithCtrlEnter,
 		autopilotEnabled: p._autopilotEnabled,
 		autopilotText: p._autopilotText,
@@ -304,16 +336,32 @@ export async function handleUpdateInteractiveApprovalSetting(
 	});
 }
 
-export async function handleUpdateAskUserVerbosePayloadSetting(
+export async function handleUpdateAutoAppendSetting(
 	p: P,
 	enabled: boolean,
 ): Promise<void> {
-	p._askUserVerbosePayloadEnabled = enabled;
+	p._autoAppendEnabled = enabled;
 	await withConfigGuard(p, async () => {
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		await config.update(
-			"askUserVerbosePayload",
+			"autoAppendEnabled",
 			enabled,
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+}
+
+export async function handleUpdateAutoAppendText(
+	p: P,
+	text: string,
+): Promise<void> {
+	const normalizedText = normalizeAutoAppendText(text);
+	p._autoAppendText = normalizedText;
+	await withConfigGuard(p, async () => {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		await config.update(
+			"autoAppendText",
+			normalizedText,
 			vscode.ConfigurationTarget.Workspace,
 		);
 	});

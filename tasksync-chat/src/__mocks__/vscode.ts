@@ -11,7 +11,7 @@ export const Uri = {
 export const workspace = {
 	getConfiguration: () => ({
 		get: () => undefined,
-		update: async () => {},
+		update: async () => { },
 		inspect: () => undefined,
 	}),
 	workspaceFolders: [],
@@ -50,7 +50,7 @@ export const ConfigurationTarget = {
 
 export const ExtensionContext = {};
 
-export default {
+const vscodeMock = {
 	Uri,
 	workspace,
 	window,
@@ -58,3 +58,10 @@ export default {
 	ConfigurationTarget,
 	ExtensionContext,
 };
+
+// Allow runtime fallback in non-VS Code test runners (e.g., Bun) without extra config.
+(
+	globalThis as { __TASKSYNC_VSCODE_MOCK__?: typeof vscodeMock }
+).__TASKSYNC_VSCODE_MOCK__ = vscodeMock;
+
+export default vscodeMock;

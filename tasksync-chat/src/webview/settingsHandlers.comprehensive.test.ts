@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as vscode from "vscode";
+import * as vscode from "../__mocks__/vscode";
 import {
+	AUTO_APPEND_DEFAULT_TEXT,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
 	DEFAULT_REMOTE_MAX_DEVICES,
@@ -16,6 +17,7 @@ import {
 	SESSION_WARNING_HOURS_MIN,
 } from "../constants/remoteConstants";
 import {
+	applyAutoAppendToResponse,
 	broadcastAllSettingsToRemote,
 	buildSettingsPayload,
 	getAutopilotDefaultText,
@@ -27,7 +29,8 @@ import {
 	handleRemoveReusablePrompt,
 	handleReorderAutopilotPrompts,
 	handleSearchSlashCommands,
-	handleUpdateAskUserVerbosePayloadSetting,
+	handleUpdateAutoAppendSetting,
+	handleUpdateAutoAppendText,
 	handleUpdateAutopilotSetting,
 	handleUpdateAutopilotText,
 	handleUpdateHumanDelayMax,
@@ -54,7 +57,8 @@ function createMockP(overrides: Partial<any> = {}) {
 	return {
 		_soundEnabled: true,
 		_interactiveApprovalEnabled: true,
-		_askUserVerbosePayloadEnabled: false,
+		_autoAppendEnabled: false,
+		_autoAppendText: AUTO_APPEND_DEFAULT_TEXT,
 		_sendWithCtrlEnter: false,
 		_autopilotEnabled: false,
 		_autopilotText: "Continue",
@@ -157,6 +161,26 @@ describe("normalizeAutopilotText", () => {
 	});
 });
 
+describe("applyAutoAppendToResponse", () => {
+	it("returns original response when auto append is disabled", () => {
+		const p = createMockP({
+			_autoAppendEnabled: false,
+			_autoAppendText: "Always call askUser",
+		});
+		expect(applyAutoAppendToResponse(p, "Answer")).toBe("Answer");
+	});
+
+	it("appends configured text when auto append is enabled", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Always call askUser",
+		});
+		expect(applyAutoAppendToResponse(p, "Answer")).toBe(
+			"Answer\n\nAlways call askUser",
+		);
+	});
+});
+
 // ─── readResponseTimeoutMinutes ─────────────────────────────
 
 describe("readResponseTimeoutMinutes", () => {
@@ -193,7 +217,8 @@ describe("loadSettings", () => {
 		const config = createMockConfig({
 			notificationSound: false,
 			interactiveApproval: false,
-			askUserVerbosePayload: true,
+			autoAppendEnabled: true,
+			autoAppendText: "Use the askUser loop.",
 			sendWithCtrlEnter: true,
 			humanLikeDelay: false,
 			humanLikeDelayMin: 5,
@@ -210,9 +235,24 @@ describe("loadSettings", () => {
 
 		expect(p._soundEnabled).toBe(false);
 		expect(p._interactiveApprovalEnabled).toBe(false);
-		expect(p._askUserVerbosePayloadEnabled).toBe(true);
+		expect(p._autoAppendEnabled).toBe(true);
+		expect(p._autoAppendText).toBe("Use the askUser loop.");
 		expect(p._sendWithCtrlEnter).toBe(true);
 		expect(p._humanLikeDelayEnabled).toBe(false);
+	});
+
+	it("falls back to legacy askUserVerbosePayload when autoAppendEnabled is not set", () => {
+		const config = createMockConfig({
+			askUserVerbosePayload: true,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		loadSettings(p);
+		expect(p._autoAppendEnabled).toBe(true);
 	});
 
 	it("uses new autopilot key when set", () => {
@@ -390,7 +430,8 @@ describe("buildSettingsPayload", () => {
 
 		const payload = buildSettingsPayload(p);
 		expect(payload.soundEnabled).toBe(false);
-		expect(payload.askUserVerbosePayloadEnabled).toBe(false);
+		expect(payload.autoAppendEnabled).toBe(false);
+		expect(payload.autoAppendText).toBe(AUTO_APPEND_DEFAULT_TEXT);
 		expect(payload.autopilotEnabled).toBe(true);
 		expect(payload.autopilotText).toBe("Go ahead");
 		expect(payload.autopilotPrompts).toEqual(["p1"]);
@@ -495,25 +536,58 @@ describe("handleUpdateInteractiveApprovalSetting", () => {
 	});
 });
 
-describe("handleUpdateAskUserVerbosePayloadSetting", () => {
+describe("handleUpdateAutoAppendSetting", () => {
 	beforeEach(() => {
 		vi.restoreAllMocks();
 	});
 
-	it("updates askUserVerbosePayload setting", async () => {
+	it("updates autoAppendEnabled setting", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
 		const p = createMockP();
-		await handleUpdateAskUserVerbosePayloadSetting(p, true);
-		expect(p._askUserVerbosePayloadEnabled).toBe(true);
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(p._autoAppendEnabled).toBe(true);
 		expect(config.update).toHaveBeenCalledWith(
-			"askUserVerbosePayload",
+			"autoAppendEnabled",
 			true,
 			vscode.ConfigurationTarget.Workspace,
 		);
+	});
+});
+
+describe("handleUpdateAutoAppendText", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates autoAppendText setting", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateAutoAppendText(p, "Always call askUser at the end.");
+		expect(p._autoAppendText).toBe("Always call askUser at the end.");
+		expect(config.update).toHaveBeenCalledWith(
+			"autoAppendText",
+			"Always call askUser at the end.",
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+
+	it("normalizes empty text to default", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateAutoAppendText(p, "   ");
+		expect(p._autoAppendText).toBe(AUTO_APPEND_DEFAULT_TEXT);
 	});
 });
 
@@ -1356,7 +1430,7 @@ describe("config guard error handling", () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => { });
 
 		const p = createMockP();
 		await handleUpdateSoundSetting(p, false);

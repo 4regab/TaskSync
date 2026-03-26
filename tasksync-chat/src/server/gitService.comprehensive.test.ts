@@ -1,6 +1,6 @@
 import * as path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as vscode from "vscode";
+import * as vscode from "../__mocks__/vscode";
 import { GitService, isValidFilePath } from "../server/gitService";
 
 function createMockRepo(overrides: Partial<any> = {}) {

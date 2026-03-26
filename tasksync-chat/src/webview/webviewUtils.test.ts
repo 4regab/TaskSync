@@ -1,7 +1,9 @@
 import * as fs from "fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as vscode from "vscode";
+import * as vscode from "../__mocks__/vscode";
 import {
+	appendAutoAppendText,
+	applyAutoAppendText,
 	broadcastToolCallCompleted,
 	formatElapsed,
 	getFileIcon,
@@ -189,6 +191,32 @@ describe("hasQueuedItems", () => {
 	it("returns false when both disabled and empty", () => {
 		const p = { _queueEnabled: false, _promptQueue: [] } as any;
 		expect(hasQueuedItems(p)).toBe(false);
+	});
+});
+
+// ─── auto append helpers ────────────────────────────────────
+
+describe("appendAutoAppendText", () => {
+	it("returns original response when append text is empty", () => {
+		expect(appendAutoAppendText("Answer", "   ")).toBe("Answer");
+	});
+
+	it("returns append text when response is empty", () => {
+		expect(appendAutoAppendText("", "Rule")).toBe("Rule");
+	});
+
+	it("appends with a blank line separator", () => {
+		expect(appendAutoAppendText("Answer", "Rule")).toBe("Answer\n\nRule");
+	});
+});
+
+describe("applyAutoAppendText", () => {
+	it("does not append when disabled", () => {
+		expect(applyAutoAppendText(false, "Answer", "Rule")).toBe("Answer");
+	});
+
+	it("appends when enabled", () => {
+		expect(applyAutoAppendText(true, "Answer", "Rule")).toBe("Answer\n\nRule");
 	});
 });
 
@@ -384,7 +412,7 @@ describe("markSessionTerminated", () => {
 
 describe("resolveFileLinkUri", () => {
 	afterEach(() => {
-		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		(fs.promises.stat as any).mockRejectedValue(new Error("ENOENT"));
 	});
 
 	it("returns null for empty string", async () => {
@@ -396,7 +424,7 @@ describe("resolveFileLinkUri", () => {
 	});
 
 	it("returns null when file does not exist (absolute path)", async () => {
-		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		(fs.promises.stat as any).mockRejectedValue(new Error("ENOENT"));
 		expect(await resolveFileLinkUri("/nonexistent/file.ts")).toBeNull();
 	});
 
@@ -406,7 +434,7 @@ describe("resolveFileLinkUri", () => {
 		(vscode.Uri as any).parse = () => {
 			throw new Error("not a URI");
 		};
-		vi.mocked(fs.promises.stat).mockResolvedValue({
+		(fs.promises.stat as any).mockResolvedValue({
 			isFile: () => true,
 		} as any);
 		const result = await resolveFileLinkUri("/existing/file.ts");
@@ -419,7 +447,7 @@ describe("resolveFileLinkUri", () => {
 		(vscode.Uri as any).parse = () => {
 			throw new Error("not a URI");
 		};
-		vi.mocked(fs.promises.stat).mockResolvedValue({
+		(fs.promises.stat as any).mockResolvedValue({
 			isFile: () => false,
 		} as any);
 		expect(await resolveFileLinkUri("/some/directory")).toBeNull();
@@ -427,13 +455,13 @@ describe("resolveFileLinkUri", () => {
 	});
 
 	it("strips leading ./ from relative paths", async () => {
-		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		(fs.promises.stat as any).mockRejectedValue(new Error("ENOENT"));
 		// Should normalize path and not crash
 		expect(await resolveFileLinkUri("./src/file.ts")).toBeNull();
 	});
 
 	it("returns null for relative path with no workspace folders", async () => {
-		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		(fs.promises.stat as any).mockRejectedValue(new Error("ENOENT"));
 		expect(await resolveFileLinkUri("src/file.ts")).toBeNull();
 	});
 
@@ -446,7 +474,7 @@ describe("resolveFileLinkUri", () => {
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/workspace" } },
 		];
-		vi.mocked(fs.promises.stat).mockResolvedValue({
+		(fs.promises.stat as any).mockResolvedValue({
 			isFile: () => true,
 		} as any);
 
@@ -466,7 +494,7 @@ describe("resolveFileLinkUri", () => {
 		(vscode.workspace as any).workspaceFolders = [
 			{ uri: { fsPath: "/workspace" } },
 		];
-		vi.mocked(fs.promises.stat).mockRejectedValue(new Error("ENOENT"));
+		(fs.promises.stat as any).mockRejectedValue(new Error("ENOENT"));
 
 		expect(await resolveFileLinkUri("nonexistent/file.ts")).toBeNull();
 
@@ -475,7 +503,7 @@ describe("resolveFileLinkUri", () => {
 	});
 
 	it("resolves file:// URI scheme", async () => {
-		vi.mocked(fs.promises.stat).mockResolvedValue({
+		(fs.promises.stat as any).mockResolvedValue({
 			isFile: () => true,
 		} as any);
 

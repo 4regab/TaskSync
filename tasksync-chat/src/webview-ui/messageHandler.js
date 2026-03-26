@@ -48,8 +48,11 @@ function handleExtensionMessage(event) {
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
-			askUserVerbosePayloadEnabled =
-				message.askUserVerbosePayloadEnabled === true;
+			autoAppendEnabled = message.autoAppendEnabled === true;
+			autoAppendText =
+				typeof message.autoAppendText === "string"
+					? message.autoAppendText
+					: DEFAULT_AUTO_APPEND_TEXT;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
 			autopilotText =
@@ -86,7 +89,8 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
-			updateAskUserVerbosePayloadToggleUI();
+			updateAutoAppendToggleUI();
+			updateAutoAppendTextUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
 			renderAutopilotPromptsList();

@@ -43,6 +43,8 @@ export const MAX_IMAGE_PASTE_BYTES = 10 * 1024 * 1024; // 10MB — webview paste
 // Settings defaults
 export const DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES = 5;
 export const MAX_CONSECUTIVE_AUTO_RESPONSES_LIMIT = 100; // upper clamp for user setting
+export const DEFAULT_REMOTE_MAX_DEVICES = 2;
+export const MIN_REMOTE_MAX_DEVICES = 1;
 export const DEFAULT_SESSION_WARNING_HOURS = 2;
 export const SESSION_WARNING_HOURS_MIN = 0;
 export const SESSION_WARNING_HOURS_MAX = 8;

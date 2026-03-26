@@ -18,6 +18,7 @@ const REPLACEABLE_OUTBOUND_TYPES = new Set([
 	"toggleQueue",
 	"toggleAutopilot",
 	"updateResponseTimeout",
+	"updateRemoteMaxDevices",
 	"searchFiles",
 	"getState",
 	"chatCancel",
@@ -199,6 +200,7 @@ function mapToRemoteMessage(msg) {
 		case "updateHumanDelayMax":
 		case "updateSessionWarningHours":
 		case "updateMaxConsecutiveAutoResponses":
+		case "updateRemoteMaxDevices":
 		case "addAutopilotPrompt":
 		case "editAutopilotPrompt":
 		case "removeAutopilotPrompt":
@@ -565,6 +567,7 @@ function applySettingsData(s) {
 		sessionWarningHours = s.sessionWarningHours;
 	if (s.maxConsecutiveAutoResponses !== undefined)
 		maxConsecutiveAutoResponses = s.maxConsecutiveAutoResponses;
+	if (s.remoteMaxDevices !== undefined) remoteMaxDevices = s.remoteMaxDevices;
 	if (s.humanLikeDelayEnabled !== undefined)
 		humanLikeDelayEnabled = s.humanLikeDelayEnabled;
 	if (s.humanLikeDelayMin !== undefined)
@@ -698,6 +701,7 @@ function applySettingsToUI() {
 	updateResponseTimeoutUI();
 	updateSessionWarningHoursUI();
 	updateMaxAutoResponsesUI();
+	updateRemoteMaxDevicesUI();
 	updateHumanDelayUI();
 	renderAutopilotPromptsList();
 	renderPromptsList();

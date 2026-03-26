@@ -57,6 +57,7 @@ const REPLACEABLE_OUTBOUND_TYPES = new Set([
 	"toggleQueue",
 	"toggleAutopilot",
 	"updateResponseTimeout",
+	"updateRemoteMaxDevices",
 	"searchFiles",
 	"getState",
 	"chatCancel",
@@ -238,6 +239,7 @@ function mapToRemoteMessage(msg) {
 		case "updateHumanDelayMax":
 		case "updateSessionWarningHours":
 		case "updateMaxConsecutiveAutoResponses":
+		case "updateRemoteMaxDevices":
 		case "addAutopilotPrompt":
 		case "editAutopilotPrompt":
 		case "removeAutopilotPrompt":
@@ -604,6 +606,7 @@ function applySettingsData(s) {
 		sessionWarningHours = s.sessionWarningHours;
 	if (s.maxConsecutiveAutoResponses !== undefined)
 		maxConsecutiveAutoResponses = s.maxConsecutiveAutoResponses;
+	if (s.remoteMaxDevices !== undefined) remoteMaxDevices = s.remoteMaxDevices;
 	if (s.humanLikeDelayEnabled !== undefined)
 		humanLikeDelayEnabled = s.humanLikeDelayEnabled;
 	if (s.humanLikeDelayMin !== undefined)
@@ -737,6 +740,7 @@ function applySettingsToUI() {
 	updateResponseTimeoutUI();
 	updateSessionWarningHoursUI();
 	updateMaxAutoResponsesUI();
+	updateRemoteMaxDevicesUI();
 	updateHumanDelayUI();
 	renderAutopilotPromptsList();
 	renderPromptsList();
@@ -774,6 +778,14 @@ const DEFAULT_MAX_AUTO_RESPONSES =
 	typeof TASKSYNC_DEFAULT_MAX_AUTO_RESPONSES !== "undefined"
 		? TASKSYNC_DEFAULT_MAX_AUTO_RESPONSES
 		: 5;
+const DEFAULT_REMOTE_MAX_DEVICES =
+	typeof TASKSYNC_DEFAULT_REMOTE_MAX_DEVICES !== "undefined"
+		? TASKSYNC_DEFAULT_REMOTE_MAX_DEVICES
+		: 2;
+const MIN_REMOTE_MAX_DEVICES =
+	typeof TASKSYNC_MIN_REMOTE_MAX_DEVICES !== "undefined"
+		? TASKSYNC_MIN_REMOTE_MAX_DEVICES
+		: 1;
 const MAX_AUTO_RESPONSES_LIMIT =
 	typeof TASKSYNC_MAX_AUTO_RESPONSES_LIMIT !== "undefined"
 		? TASKSYNC_MAX_AUTO_RESPONSES_LIMIT
@@ -829,6 +841,7 @@ let autopilotPrompts = [];
 let responseTimeout = RESPONSE_TIMEOUT_DEFAULT;
 let sessionWarningHours = DEFAULT_SESSION_WARNING_HOURS;
 let maxConsecutiveAutoResponses = DEFAULT_MAX_AUTO_RESPONSES;
+let remoteMaxDevices = DEFAULT_REMOTE_MAX_DEVICES;
 
 // Human-like delay: random jitter simulates natural reading/typing time
 let humanLikeDelayEnabled = true;
@@ -906,6 +919,7 @@ let autopilotPromptsList,
 	saveAutopilotPromptBtn,
 	cancelAutopilotPromptBtn;
 let responseTimeoutSelect, sessionWarningHoursSelect, maxAutoResponsesInput;
+let remoteMaxDevicesInput;
 let humanDelayToggle,
 	humanDelayRangeContainer,
 	humanDelayMinInput,
@@ -1347,6 +1361,26 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(maxAutoSection);
 
+	// Remote Max Devices section - number input
+	let remoteMaxDevicesSection = document.createElement("div");
+	remoteMaxDevicesSection.className = "settings-section";
+	remoteMaxDevicesSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-broadcast"></span> Remote Max Devices' +
+		'<span class="settings-info-icon" title="Maximum number of devices that can be connected to the remote server at the same time. Minimum: 1.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		"</div>" +
+		'<div class="form-row">' +
+		'<input type="number" class="form-input" id="remote-max-devices-input" min="' +
+		MIN_REMOTE_MAX_DEVICES +
+		'" value="' +
+		DEFAULT_REMOTE_MAX_DEVICES +
+		'" />' +
+		"</div>";
+	modalContent.appendChild(remoteMaxDevicesSection);
+
 	// Human-Like Delay section - toggle + min/max inputs
 	let humanDelaySection = document.createElement("div");
 	humanDelaySection.className = "settings-section";
@@ -1425,6 +1459,7 @@ function createSettingsModal() {
 		"session-warning-hours-select",
 	);
 	maxAutoResponsesInput = document.getElementById("max-auto-responses-input");
+	remoteMaxDevicesInput = document.getElementById("remote-max-devices-input");
 	humanDelayToggle = document.getElementById("human-delay-toggle");
 	humanDelayRangeContainer = document.getElementById("human-delay-range");
 	humanDelayMinInput = document.getElementById("human-delay-min-input");
@@ -1715,6 +1750,16 @@ function bindEventListeners() {
 		maxAutoResponsesInput.addEventListener(
 			"blur",
 			handleMaxAutoResponsesChange,
+		);
+	}
+	if (remoteMaxDevicesInput) {
+		remoteMaxDevicesInput.addEventListener(
+			"change",
+			handleRemoteMaxDevicesChange,
+		);
+		remoteMaxDevicesInput.addEventListener(
+			"blur",
+			handleRemoteMaxDevicesChange,
 		);
 	}
 	if (humanDelayToggle) {
@@ -2297,6 +2342,14 @@ function handleExtensionMessage(event) {
 				typeof message.maxConsecutiveAutoResponses === "number"
 					? message.maxConsecutiveAutoResponses
 					: DEFAULT_MAX_AUTO_RESPONSES;
+			remoteMaxDevices =
+				typeof message.remoteMaxDevices === "number" &&
+				Number.isFinite(message.remoteMaxDevices)
+					? Math.max(
+							MIN_REMOTE_MAX_DEVICES,
+							Math.floor(message.remoteMaxDevices),
+						)
+					: DEFAULT_REMOTE_MAX_DEVICES;
 			humanLikeDelayEnabled = message.humanLikeDelayEnabled !== false;
 			humanLikeDelayMin =
 				typeof message.humanLikeDelayMin === "number"
@@ -2314,6 +2367,7 @@ function handleExtensionMessage(event) {
 			updateResponseTimeoutUI();
 			updateSessionWarningHoursUI();
 			updateMaxAutoResponsesUI();
+			updateRemoteMaxDevicesUI();
 			updateHumanDelayUI();
 			renderPromptsList();
 			break;
@@ -3783,6 +3837,24 @@ function handleMaxAutoResponsesChange() {
 function updateMaxAutoResponsesUI() {
 	if (!maxAutoResponsesInput) return;
 	maxAutoResponsesInput.value = maxConsecutiveAutoResponses;
+}
+
+function handleRemoteMaxDevicesChange() {
+	if (!remoteMaxDevicesInput) return;
+	let value = parseInt(remoteMaxDevicesInput.value, 10);
+	if (!isNaN(value) && value >= MIN_REMOTE_MAX_DEVICES) {
+		remoteMaxDevices = Math.max(MIN_REMOTE_MAX_DEVICES, Math.floor(value));
+		vscode.postMessage({
+			type: "updateRemoteMaxDevices",
+			value: remoteMaxDevices,
+		});
+	}
+	remoteMaxDevicesInput.value = String(remoteMaxDevices);
+}
+
+function updateRemoteMaxDevicesUI() {
+	if (!remoteMaxDevicesInput) return;
+	remoteMaxDevicesInput.value = String(remoteMaxDevices);
 }
 
 /**

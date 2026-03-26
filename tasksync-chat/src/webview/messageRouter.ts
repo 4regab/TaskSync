@@ -149,6 +149,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 		case "updateMaxConsecutiveAutoResponses":
 			settingsH.handleUpdateMaxConsecutiveAutoResponses(p, message.value);
 			break;
+		case "updateRemoteMaxDevices":
+			settingsH.handleUpdateRemoteMaxDevices(p, message.value);
+			break;
 		case "updateHumanDelaySetting":
 			settingsH.handleUpdateHumanDelaySetting(p, message.enabled);
 			break;

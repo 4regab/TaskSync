@@ -92,6 +92,17 @@ export async function dispatchSettingsMessage(
 			return true;
 		}
 
+		case "updateRemoteMaxDevices": {
+			const val = Number(msg.value);
+			if (!Number.isFinite(val)) {
+				sendWsError(ws, "Invalid value", ErrorCode.INVALID_INPUT);
+				return true;
+			}
+			await settingsH.handleUpdateRemoteMaxDevices(provider, val);
+			broadcastSettingsChanged(provider, broadcastFn);
+			return true;
+		}
+
 		case "updateAutopilotText": {
 			const text = typeof msg.text === "string" ? msg.text : "";
 			await settingsH.handleUpdateAutopilotText(provider, text);

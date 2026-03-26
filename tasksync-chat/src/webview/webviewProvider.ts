@@ -216,6 +216,7 @@ export class TaskSyncWebviewProvider
 					e.affectsConfiguration(`${CONFIG_SECTION}.autoAnswerText`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
+					e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.sessionWarningHours`) ||
 					e.affectsConfiguration(
 						`${CONFIG_SECTION}.maxConsecutiveAutoResponses`,

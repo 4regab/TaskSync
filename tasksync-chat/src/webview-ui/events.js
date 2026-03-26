@@ -191,6 +191,16 @@ function bindEventListeners() {
 			handleMaxAutoResponsesChange,
 		);
 	}
+	if (remoteMaxDevicesInput) {
+		remoteMaxDevicesInput.addEventListener(
+			"change",
+			handleRemoteMaxDevicesChange,
+		);
+		remoteMaxDevicesInput.addEventListener(
+			"blur",
+			handleRemoteMaxDevicesChange,
+		);
+	}
 	if (humanDelayToggle) {
 		humanDelayToggle.addEventListener("click", toggleHumanDelaySetting);
 		humanDelayToggle.addEventListener("keydown", function (e) {

@@ -63,6 +63,14 @@ function handleExtensionMessage(event) {
 				typeof message.maxConsecutiveAutoResponses === "number"
 					? message.maxConsecutiveAutoResponses
 					: DEFAULT_MAX_AUTO_RESPONSES;
+			remoteMaxDevices =
+				typeof message.remoteMaxDevices === "number" &&
+				Number.isFinite(message.remoteMaxDevices)
+					? Math.max(
+							MIN_REMOTE_MAX_DEVICES,
+							Math.floor(message.remoteMaxDevices),
+						)
+					: DEFAULT_REMOTE_MAX_DEVICES;
 			humanLikeDelayEnabled = message.humanLikeDelayEnabled !== false;
 			humanLikeDelayMin =
 				typeof message.humanLikeDelayMin === "number"
@@ -80,6 +88,7 @@ function handleExtensionMessage(event) {
 			updateResponseTimeoutUI();
 			updateSessionWarningHoursUI();
 			updateMaxAutoResponsesUI();
+			updateRemoteMaxDevicesUI();
 			updateHumanDelayUI();
 			renderPromptsList();
 			break;

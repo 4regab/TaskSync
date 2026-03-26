@@ -435,6 +435,26 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(maxAutoSection);
 
+	// Remote Max Devices section - number input
+	let remoteMaxDevicesSection = document.createElement("div");
+	remoteMaxDevicesSection.className = "settings-section";
+	remoteMaxDevicesSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-broadcast"></span> Remote Max Devices' +
+		'<span class="settings-info-icon" title="Maximum number of devices that can be connected to the remote server at the same time. Minimum: 1.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		"</div>" +
+		'<div class="form-row">' +
+		'<input type="number" class="form-input" id="remote-max-devices-input" min="' +
+		MIN_REMOTE_MAX_DEVICES +
+		'" value="' +
+		DEFAULT_REMOTE_MAX_DEVICES +
+		'" />' +
+		"</div>";
+	modalContent.appendChild(remoteMaxDevicesSection);
+
 	// Human-Like Delay section - toggle + min/max inputs
 	let humanDelaySection = document.createElement("div");
 	humanDelaySection.className = "settings-section";
@@ -513,6 +533,7 @@ function createSettingsModal() {
 		"session-warning-hours-select",
 	);
 	maxAutoResponsesInput = document.getElementById("max-auto-responses-input");
+	remoteMaxDevicesInput = document.getElementById("remote-max-devices-input");
 	humanDelayToggle = document.getElementById("human-delay-toggle");
 	humanDelayRangeContainer = document.getElementById("human-delay-range");
 	humanDelayMinInput = document.getElementById("human-delay-min-input");

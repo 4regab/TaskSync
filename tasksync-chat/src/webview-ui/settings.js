@@ -133,6 +133,24 @@ function updateMaxAutoResponsesUI() {
 	maxAutoResponsesInput.value = maxConsecutiveAutoResponses;
 }
 
+function handleRemoteMaxDevicesChange() {
+	if (!remoteMaxDevicesInput) return;
+	let value = parseInt(remoteMaxDevicesInput.value, 10);
+	if (!isNaN(value) && value >= MIN_REMOTE_MAX_DEVICES) {
+		remoteMaxDevices = Math.max(MIN_REMOTE_MAX_DEVICES, Math.floor(value));
+		vscode.postMessage({
+			type: "updateRemoteMaxDevices",
+			value: remoteMaxDevices,
+		});
+	}
+	remoteMaxDevicesInput.value = String(remoteMaxDevices);
+}
+
+function updateRemoteMaxDevicesUI() {
+	if (!remoteMaxDevicesInput) return;
+	remoteMaxDevicesInput.value = String(remoteMaxDevices);
+}
+
 /**
  * Toggle human-like delay. When enabled, a random delay (jitter)
  * between min and max seconds is applied before each auto-response,

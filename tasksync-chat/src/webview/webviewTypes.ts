@@ -105,6 +105,7 @@ export type ToWebviewMessage =
 			responseTimeout: number;
 			sessionWarningHours: number;
 			maxConsecutiveAutoResponses: number;
+			remoteMaxDevices: number;
 			humanLikeDelayEnabled: boolean;
 			humanLikeDelayMin: number;
 			humanLikeDelayMax: number;
@@ -177,6 +178,7 @@ export type FromWebviewMessage =
 	| { type: "updateResponseTimeout"; value: number }
 	| { type: "updateSessionWarningHours"; value: number }
 	| { type: "updateMaxConsecutiveAutoResponses"; value: number }
+	| { type: "updateRemoteMaxDevices"; value: number }
 	| { type: "updateHumanDelaySetting"; enabled: boolean }
 	| { type: "updateHumanDelayMin"; value: number }
 	| { type: "updateHumanDelayMax"; value: number }

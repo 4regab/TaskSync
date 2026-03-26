@@ -3,12 +3,14 @@ import * as vscode from "vscode";
 import {
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
+	DEFAULT_REMOTE_MAX_DEVICES,
 	DEFAULT_SESSION_WARNING_HOURS,
 	HUMAN_DELAY_MAX_LOWER,
 	HUMAN_DELAY_MAX_UPPER,
 	HUMAN_DELAY_MIN_LOWER,
 	HUMAN_DELAY_MIN_UPPER,
 	MAX_CONSECUTIVE_AUTO_RESPONSES_LIMIT,
+	MIN_REMOTE_MAX_DEVICES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
 	SESSION_WARNING_HOURS_MAX,
 	SESSION_WARNING_HOURS_MIN,
@@ -32,6 +34,7 @@ import {
 	handleUpdateHumanDelaySetting,
 	handleUpdateInteractiveApprovalSetting,
 	handleUpdateMaxConsecutiveAutoResponses,
+	handleUpdateRemoteMaxDevices,
 	handleUpdateResponseTimeout,
 	handleUpdateSendWithCtrlEnterSetting,
 	handleUpdateSessionWarningHours,
@@ -404,6 +407,7 @@ describe("buildSettingsPayload", () => {
 		const config = createMockConfig({
 			responseTimeout: "30",
 			maxConsecutiveAutoResponses: 5,
+			remoteMaxDevices: 4,
 		});
 		config.inspect.mockReturnValue({ defaultValue: "Continue" });
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
@@ -426,6 +430,7 @@ describe("buildSettingsPayload", () => {
 		expect(payload.queueEnabled).toBe(false);
 		expect(payload.responseTimeout).toBe(30);
 		expect(payload.maxConsecutiveAutoResponses).toBe(5);
+		expect(payload.remoteMaxDevices).toBe(4);
 	});
 });
 
@@ -813,6 +818,69 @@ describe("handleUpdateMaxConsecutiveAutoResponses", () => {
 		const p = createMockP();
 		await handleUpdateMaxConsecutiveAutoResponses(p, Infinity);
 		expect(config.update).not.toHaveBeenCalled();
+	});
+});
+
+describe("handleUpdateRemoteMaxDevices", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates with provided value", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateRemoteMaxDevices(p, 6);
+		expect(config.update).toHaveBeenCalledWith(
+			"remoteMaxDevices",
+			6,
+			vscode.ConfigurationTarget.Global,
+		);
+	});
+
+	it("clamps to minimum", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateRemoteMaxDevices(p, 0);
+		expect(config.update).toHaveBeenCalledWith(
+			"remoteMaxDevices",
+			MIN_REMOTE_MAX_DEVICES,
+			vscode.ConfigurationTarget.Global,
+		);
+	});
+
+	it("rejects non-finite values", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateRemoteMaxDevices(p, Number.NaN);
+		expect(config.update).not.toHaveBeenCalled();
+	});
+
+	it("defaults payload value when config is invalid", () => {
+		const config = createMockConfig({
+			responseTimeout: "30",
+			maxConsecutiveAutoResponses: 5,
+			remoteMaxDevices: Number.NaN,
+		});
+		config.inspect.mockReturnValue({ defaultValue: "Continue" });
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		const payload = buildSettingsPayload(p);
+		expect(payload.remoteMaxDevices).toBe(DEFAULT_REMOTE_MAX_DEVICES);
 	});
 });
 

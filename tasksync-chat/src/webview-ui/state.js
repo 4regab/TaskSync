@@ -28,6 +28,14 @@ const DEFAULT_MAX_AUTO_RESPONSES =
 	typeof TASKSYNC_DEFAULT_MAX_AUTO_RESPONSES !== "undefined"
 		? TASKSYNC_DEFAULT_MAX_AUTO_RESPONSES
 		: 5;
+const DEFAULT_REMOTE_MAX_DEVICES =
+	typeof TASKSYNC_DEFAULT_REMOTE_MAX_DEVICES !== "undefined"
+		? TASKSYNC_DEFAULT_REMOTE_MAX_DEVICES
+		: 2;
+const MIN_REMOTE_MAX_DEVICES =
+	typeof TASKSYNC_MIN_REMOTE_MAX_DEVICES !== "undefined"
+		? TASKSYNC_MIN_REMOTE_MAX_DEVICES
+		: 1;
 const MAX_AUTO_RESPONSES_LIMIT =
 	typeof TASKSYNC_MAX_AUTO_RESPONSES_LIMIT !== "undefined"
 		? TASKSYNC_MAX_AUTO_RESPONSES_LIMIT
@@ -83,6 +91,7 @@ let autopilotPrompts = [];
 let responseTimeout = RESPONSE_TIMEOUT_DEFAULT;
 let sessionWarningHours = DEFAULT_SESSION_WARNING_HOURS;
 let maxConsecutiveAutoResponses = DEFAULT_MAX_AUTO_RESPONSES;
+let remoteMaxDevices = DEFAULT_REMOTE_MAX_DEVICES;
 
 // Human-like delay: random jitter simulates natural reading/typing time
 let humanLikeDelayEnabled = true;
@@ -160,6 +169,7 @@ let autopilotPromptsList,
 	saveAutopilotPromptBtn,
 	cancelAutopilotPromptBtn;
 let responseTimeoutSelect, sessionWarningHoursSelect, maxAutoResponsesInput;
+let remoteMaxDevicesInput;
 let humanDelayToggle,
 	humanDelayRangeContainer,
 	humanDelayMinInput,

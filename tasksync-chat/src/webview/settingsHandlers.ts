@@ -4,12 +4,14 @@ import {
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
 	DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
+	DEFAULT_REMOTE_MAX_DEVICES,
 	DEFAULT_SESSION_WARNING_HOURS,
 	HUMAN_DELAY_MAX_LOWER,
 	HUMAN_DELAY_MAX_UPPER,
 	HUMAN_DELAY_MIN_LOWER,
 	HUMAN_DELAY_MIN_UPPER,
 	MAX_CONSECUTIVE_AUTO_RESPONSES_LIMIT,
+	MIN_REMOTE_MAX_DEVICES,
 	RESPONSE_TIMEOUT_ALLOWED_VALUES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
 	SESSION_WARNING_HOURS_MAX,
@@ -89,6 +91,28 @@ export function readResponseTimeoutMinutes(
 		String(RESPONSE_TIMEOUT_DEFAULT_MINUTES),
 	);
 	return normalizeResponseTimeout(configuredTimeout);
+}
+
+export function normalizeRemoteMaxDevices(value: unknown): number {
+	let parsedValue: number;
+
+	if (typeof value === "number") {
+		parsedValue = value;
+	} else if (typeof value === "string") {
+		const normalizedValue = value.trim();
+		if (normalizedValue.length === 0) {
+			return DEFAULT_REMOTE_MAX_DEVICES;
+		}
+		parsedValue = Number(normalizedValue);
+	} else {
+		return DEFAULT_REMOTE_MAX_DEVICES;
+	}
+
+	if (!Number.isFinite(parsedValue) || !Number.isInteger(parsedValue)) {
+		return DEFAULT_REMOTE_MAX_DEVICES;
+	}
+
+	return Math.max(MIN_REMOTE_MAX_DEVICES, parsedValue);
 }
 
 export function loadSettings(p: P): void {
@@ -236,6 +260,7 @@ export function buildSettingsPayload(p: P): {
 	responseTimeout: number;
 	sessionWarningHours: number;
 	maxConsecutiveAutoResponses: number;
+	remoteMaxDevices: number;
 	humanLikeDelayEnabled: boolean;
 	humanLikeDelayMin: number;
 	humanLikeDelayMax: number;
@@ -255,6 +280,9 @@ export function buildSettingsPayload(p: P): {
 		maxConsecutiveAutoResponses: config.get<number>(
 			"maxConsecutiveAutoResponses",
 			DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
+		),
+		remoteMaxDevices: normalizeRemoteMaxDevices(
+			config.get<number>("remoteMaxDevices", DEFAULT_REMOTE_MAX_DEVICES),
 		),
 		humanLikeDelayEnabled: p._humanLikeDelayEnabled,
 		humanLikeDelayMin: p._humanLikeDelayMin,
@@ -468,6 +496,22 @@ export async function handleUpdateMaxConsecutiveAutoResponses(
 			"maxConsecutiveAutoResponses",
 			clamped,
 			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+}
+
+export async function handleUpdateRemoteMaxDevices(
+	p: P,
+	value: number,
+): Promise<void> {
+	if (!Number.isFinite(value)) return;
+	const normalized = Math.max(MIN_REMOTE_MAX_DEVICES, Math.floor(value));
+	await withConfigGuard(p, async () => {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		await config.update(
+			"remoteMaxDevices",
+			normalized,
+			vscode.ConfigurationTarget.Global,
 		);
 	});
 }

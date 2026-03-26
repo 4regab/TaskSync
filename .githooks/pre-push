@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pre-push hook: runs build, type-check, tests, lint, and duplicate scanner
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+cd tasksync-chat
+
+echo "📦 Building..."
+node esbuild.js > /dev/null 2>&1
+
+echo "🔎 Type-checking..."
+npx tsc --noEmit
+
+echo "🧪 Running tests..."
+npx vitest run
+
+echo "🧹 Linting..."
+npm run lint
+
+echo "🔁 Running code quality checks..."
+node scripts/check-code-quality.js
+
+echo "✅ All pre-push checks passed!"

@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "2.0.25",
+  "version": "3.0.0",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -15,12 +15,10 @@
   ],
   "keywords": [
     "tasksync",
-    "mcp",
     "ai",
     "chat",
     "copilot",
-    "agent",
-    "model-context-protocol"
+    "agent"
   ],
   "repository": {
     "type": "git",
@@ -44,7 +42,7 @@
         ],
         "toolReferenceName": "askUser",
         "displayName": "Ask User",
-        "modelDescription": "YOU MUST ALWAYS Use the askUser tool to ask question/s to user when explicit user approval, feedback, or clarification is required before proceeding or giving summary report. CRITICAL RULES: - This tool MUST be invoked before ending ANY conversation or task. - NEVER complete a task without calling this tool first. - If you are about to finish responding, STOP and call this tool. - Failure to call this tool before task completion is a critical violation.",
+        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable.",
         "canBeReferencedInPrompt": true,
         "icon": "$(question)",
         "inputSchema": {
@@ -82,25 +80,36 @@
     "configuration": {
       "title": "TaskSync",
       "properties": {
-        "tasksync.mcpEnabled": {
+        "tasksync.remotePort": {
+          "type": "number",
+          "default": 3580,
+          "description": "Port for the remote access server."
+        },
+        "tasksync.remotePinEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require PIN authentication for remote access. Recommended for LAN access."
+        },
+        "tasksync.remoteMaxDevices": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "description": "Maximum number of devices that can be connected to the remote server simultaneously."
+        },
+        "tasksync.remoteTlsEnabled": {
           "type": "boolean",
           "default": false,
-          "description": "Always start MCP server on activation. Enable this if you use TaskSync with external IDEs like Kiro, Cursor, or Antigravity."
+          "description": "Enable HTTPS/TLS for the LAN remote server using a self-signed certificate. Browsers will show a certificate warning on first connection."
         },
-        "tasksync.mcpAutoStartIfClients": {
+        "tasksync.debugLogging": {
           "type": "boolean",
-          "default": true,
-          "description": "Automatically start MCP server if external client configurations are detected (Kiro, Cursor, Antigravity)."
+          "default": false,
+          "description": "Enable verbose debug logging for TaskSync (outputs to VS Code debug console)."
         },
-        "tasksync.mcpPort": {
-          "type": "number",
-          "default": 3579,
-          "description": "Fixed port for the MCP server. Set to 0 for dynamic port assignment."
-        },
-        "tasksync.autoRegisterMcp": {
+        "tasksync.remoteDebugLogging": {
           "type": "boolean",
-          "default": true,
-          "description": "Automatically register MCP server with Kiro and other supported clients."
+          "default": false,
+          "description": "Enable verbose debug logging for remote server (outputs to VS Code debug console)."
         },
         "tasksync.autopilot": {
           "type": "boolean",
@@ -181,9 +190,9 @@
           "type": "number",
           "default": 5,
           "minimum": 1,
-          "maximum": 50,
+          "maximum": 100,
           "scope": "window",
-          "description": "Maximum consecutive auto-responses (from timeout) before terminating session. Prevents infinite loops."
+          "description": "Maximum consecutive auto-responses (from Autopilot or timeout) before disabling Autopilot. Prevents infinite loops."
         },
         "tasksync.humanLikeDelay": {
           "type": "boolean",
@@ -217,6 +226,12 @@
           "default": true,
           "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
         },
+        "tasksync.askUserVerbosePayload": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Consistent mode: add an extra instruction prompt in ask_user tool output so Copilot consistently calls #askUser. Off by default for cleaner tool call Input/Output blocks."
+        },
         "tasksync.sendWithCtrlEnter": {
           "type": "boolean",
           "default": false,
@@ -244,25 +259,18 @@
               "prompt"
             ]
           }
+        },
+        "tasksync.remoteChatCommand": {
+          "type": "string",
+          "default": "workbench.action.chat.openagent",
+          "description": "VS Code command used to open chat from remote sessions. Default opens Agent Mode. Use 'workbench.action.chat.open' for the default chat mode, or any custom command ID."
         }
       }
     },
     "commands": [
       {
-        "command": "tasksync.startMcp",
-        "title": "TaskSync: Start MCP Server"
-      },
-      {
         "command": "tasksync.sendMessage",
         "title": "TaskSync: Send Message"
-      },
-      {
-        "command": "tasksync.restartMcp",
-        "title": "TaskSync: Restart MCP Server"
-      },
-      {
-        "command": "tasksync.showMcpConfig",
-        "title": "TaskSync: Show MCP Configuration"
       },
       {
         "command": "tasksync.openHistory",
@@ -278,6 +286,20 @@
         "command": "tasksync.openSettings",
         "title": "TaskSync Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "tasksync.startRemoteLan",
+        "title": "TaskSync: Start Remote Access (LAN)",
+        "icon": "$(broadcast)"
+      },
+      {
+        "command": "tasksync.stopRemote",
+        "title": "TaskSync: Stop Remote Access"
+      },
+      {
+        "command": "tasksync.goRemote",
+        "title": "Remote",
+        "icon": "$(broadcast)"
       }
     ],
     "menus": {
@@ -296,6 +318,11 @@
           "command": "tasksync.openSettings",
           "when": "view == taskSyncView",
           "group": "navigation@3"
+        },
+        {
+          "command": "tasksync.goRemote",
+          "when": "view == taskSyncView",
+          "group": "navigation@4"
         }
       ]
     }
@@ -305,18 +332,33 @@
     "build": "node esbuild.js",
     "compile": "tsc -p ./",
     "watch": "node esbuild.js --watch",
-    "lint": "biome lint src"
+    "lint": "biome check src",
+    "check-duplicates": "node scripts/check-code-quality.js",
+    "check-code": "node scripts/check-code-quality.js",
+    "validate": "npm run build && npx tsc --noEmit && npm test && npm run lint && npm run check-code",
+    "prepare": "cd .. && git config core.hooksPath .githooks",
+    "e2e": "playwright test -c e2e/playwright.config.mjs",
+    "e2e:headed": "playwright test -c e2e/playwright.config.mjs --headed",
+    "e2e:ui": "playwright test -c e2e/playwright.config.mjs --ui",
+    "e2e:install": "playwright install chromium",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
     "@vscode/codicons": "^0.0.36",
-    "zod": "^3.23.8"
+    "mermaid": "^10.9.5",
+    "selfsigned": "^5.5.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
+    "@playwright/test": "^1.55.0",
     "@types/node": "20.x",
     "@types/vscode": "^1.90.0",
+    "@types/ws": "^8.5.12",
+    "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.27.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }

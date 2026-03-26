@@ -1,0 +1,164 @@
+/* ==================== Login Page Styles ==================== */
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	background: #1e1e1e;
+	color: #d4d4d4;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+
+.container {
+	max-width: 320px;
+	width: 100%;
+	text-align: center;
+}
+
+.logo {
+	width: 80px;
+	height: 80px;
+	margin-bottom: 20px;
+}
+
+h1 {
+	font-size: 24px;
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: #fff;
+}
+
+.subtitle {
+	color: #808080;
+	margin-bottom: 32px;
+	font-size: 14px;
+}
+
+.pin-input {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	margin-bottom: 24px;
+}
+
+.pin-digit {
+	width: 48px;
+	height: 56px;
+	font-size: 24px;
+	text-align: center;
+	border: 2px solid #3c3c3c;
+	border-radius: 8px;
+	background: #252526;
+	color: #fff;
+	outline: none;
+	transition: border-color 0.2s;
+}
+
+.pin-digit:focus {
+	border-color: #0078d4;
+}
+
+.pin-digit.error {
+	border-color: #f14c4c;
+	animation: shake 0.3s;
+}
+
+@keyframes shake {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+
+	25% {
+		transform: translateX(-5px);
+	}
+
+	75% {
+		transform: translateX(5px);
+	}
+}
+
+.error-message {
+	color: #f14c4c;
+	font-size: 14px;
+	margin-bottom: 16px;
+	min-height: 20px;
+}
+
+.submit-btn {
+	width: 100%;
+	padding: 14px;
+	font-size: 16px;
+	font-weight: 600;
+	border: none;
+	border-radius: 8px;
+	background: #0078d4;
+	color: #fff;
+	cursor: pointer;
+	transition: background 0.2s;
+}
+
+.submit-btn:hover {
+	background: #1e8ad4;
+}
+
+.submit-btn:disabled {
+	background: #3c3c3c;
+	color: #808080;
+	cursor: not-allowed;
+}
+
+.connecting {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 16px;
+	color: #d4d4d4;
+	font-size: 14px;
+}
+
+.connecting.visible {
+	display: flex;
+}
+
+.spinner {
+	width: 20px;
+	height: 20px;
+	border: 2px solid #3c3c3c;
+	border-top-color: #0078d4;
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.no-pin {
+	display: none;
+}
+
+.no-pin.visible {
+	display: block;
+}
+
+.pin-digit-extra {
+	opacity: 0.4;
+}
+
+.pin-digit-extra.active {
+	opacity: 1;
+}

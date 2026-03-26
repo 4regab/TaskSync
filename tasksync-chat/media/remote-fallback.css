@@ -1,0 +1,252 @@
+/**
+ * TaskSync Remote - CSS Variable Fallbacks
+ * Defines --vscode-* CSS variables for standalone browser mode (Remote PWA)
+ * Uses VS Code dark theme colors
+ */
+
+:root {
+    /* Core colors */
+    --vscode-foreground: #cccccc;
+    --vscode-focusBorder: #007fd4;
+    --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --vscode-font-size: 13px;
+    --vscode-font-weight: 400;
+
+    /* Sidebar / Background */
+    --vscode-sideBar-background: #1e1e1e;
+    --vscode-sideBar-foreground: #cccccc;
+    --vscode-sideBarSectionHeader-background: #252526;
+    --vscode-sideBarTitle-foreground: #bbbbbb;
+
+    /* Editor */
+    --vscode-editor-background: #1e1e1e;
+    --vscode-editor-foreground: #d4d4d4;
+    --vscode-editorWidget-background: #252526;
+    --vscode-editorWidget-border: #454545;
+
+    /* Input */
+    --vscode-input-background: #3c3c3c;
+    --vscode-input-border: #3c3c3c;
+    --vscode-input-foreground: #cccccc;
+    --vscode-input-placeholderForeground: #808080;
+    --vscode-inputOption-activeBorder: #007acc;
+
+    /* Button */
+    --vscode-button-background: #0e639c;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-hoverBackground: #1177bb;
+    --vscode-button-secondaryBackground: #3a3d41;
+    --vscode-button-secondaryForeground: #cccccc;
+    --vscode-button-secondaryHoverBackground: #45494e;
+
+    /* List / Dropdown */
+    --vscode-list-hoverBackground: #2a2d2e;
+    --vscode-list-activeSelectionBackground: #094771;
+    --vscode-list-activeSelectionForeground: #ffffff;
+    --vscode-list-focusBackground: #062f4a;
+    --vscode-dropdown-background: #3c3c3c;
+    --vscode-dropdown-border: #3c3c3c;
+    --vscode-dropdown-foreground: #f0f0f0;
+
+    /* Scrollbar */
+    --vscode-scrollbarSlider-background: rgba(121, 121, 121, 0.4);
+    --vscode-scrollbarSlider-hoverBackground: rgba(100, 100, 100, 0.7);
+    --vscode-scrollbarSlider-activeBackground: rgba(191, 191, 191, 0.4);
+
+    /* Badge */
+    --vscode-badge-background: #4d4d4d;
+    --vscode-badge-foreground: #ffffff;
+
+    /* Text colors */
+    --vscode-textLink-foreground: #3794ff;
+    --vscode-textLink-activeForeground: #3794ff;
+    --vscode-descriptionForeground: #9d9d9d;
+
+    /* Borders */
+    --vscode-panel-border: #2b2b2b;
+    --vscode-contrastBorder: transparent;
+
+    /* Checkbox */
+    --vscode-checkbox-background: #3c3c3c;
+    --vscode-checkbox-border: #3c3c3c;
+    --vscode-checkbox-foreground: #f0f0f0;
+
+    /* Menu */
+    --vscode-menu-background: #252526;
+    --vscode-menu-foreground: #cccccc;
+    --vscode-menu-selectionBackground: #094771;
+    --vscode-menu-selectionForeground: #ffffff;
+    --vscode-menu-separatorBackground: #454545;
+
+    /* Notifications */
+    --vscode-notificationCenter-border: #303031;
+    --vscode-notifications-background: #252526;
+    --vscode-notifications-foreground: #cccccc;
+
+    /* Icons */
+    --vscode-icon-foreground: #c5c5c5;
+
+    /* Error / Warning / Info */
+    --vscode-errorForeground: #f48771;
+    --vscode-editorError-foreground: #f14c4c;
+    --vscode-editorWarning-foreground: #cca700;
+    --vscode-editorInfo-foreground: #3794ff;
+
+    /* Git colors */
+    --vscode-gitDecoration-addedResourceForeground: #81b88b;
+    --vscode-gitDecoration-modifiedResourceForeground: #e2c08d;
+    --vscode-gitDecoration-deletedResourceForeground: #c74e39;
+
+    /* Panel */
+    --vscode-panel-background: #1e1e1e;
+
+    /* Misc */
+    --vscode-quickInput-background: #252526;
+    --vscode-quickInputList-focusBackground: #062f4a;
+    --vscode-keybindingLabel-background: rgba(128, 128, 128, 0.17);
+    --vscode-keybindingLabel-foreground: #cccccc;
+    --vscode-keybindingLabel-border: rgba(51, 51, 51, 0.6);
+    --vscode-keybindingLabel-bottomBorder: rgba(68, 68, 68, 0.6);
+}
+
+/* Remote-specific styling */
+body.remote-mode {
+    padding-top: 48px;
+    /* Account for fixed header */
+}
+
+/* Remote header bar */
+.remote-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: #252526;
+    border-bottom: 1px solid #3c3c3c;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 1000;
+}
+
+.remote-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.remote-header-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #fff;
+}
+
+.remote-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #808080;
+}
+
+.remote-status.connected {
+    background: #4ec9b0;
+}
+
+.remote-status.disconnected {
+    background: #f14c4c;
+}
+
+.remote-session-timer {
+    min-width: 52px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #8a8a8a;
+}
+
+.remote-session-timer.active {
+    color: #d4d4d4;
+}
+
+.remote-session-timer.frozen {
+    color: #d7ba7d;
+}
+
+.remote-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.remote-btn {
+    padding: 6px 12px;
+    background: #3c3c3c;
+    color: #cccccc;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.remote-btn:hover {
+    background: #4c4c4c;
+}
+
+.remote-btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+}
+
+.remote-btn.active {
+    background: #0e639c;
+    color: #ffffff;
+}
+
+.remote-btn.active:hover {
+    background: #1177bb;
+}
+
+/* Hide VS Code-only settings in remote mode */
+.remote-mode .vscode-only {
+    display: none !important;
+}
+
+/* Mobile optimizations */
+@media (max-width: 480px) {
+    .remote-header {
+        padding: 0 12px;
+    }
+
+    .remote-session-timer {
+        min-width: 46px;
+        font-size: 11px;
+    }
+
+    .main-container {
+        padding: 8px;
+    }
+
+    .input-container {
+        padding: 8px;
+    }
+}
+
+/* Noscript fallback message */
+.noscript-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: system-ui;
+    color: #ccc;
+    background: #1e1e1e;
+}

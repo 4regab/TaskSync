@@ -28,8 +28,6 @@ node_modules/**
 **/*.test.js
 **/*.spec.js
 dist/localization.js
-dist/mcpServer.js
-
 # Exclude all build artifacts except the bundled extension entrypoint
 dist/**
 !dist/extension.js

@@ -22,8 +22,9 @@ A dedicated VS Code sidebar extension with smart prompt queue system. _Setup ins
 **Features:**
 - Smart Queue Mode - batch responses for AI agents
 - Autopilot - let agents work autonomously with customizable auto-responses
+- Remote Access - control from your phone via LAN or Tailscale, with PWA and code review
 - Give new tasks/feedback using ask_user tool
-- File/folder references with `#` autocomplete
+- File, folder, tool, and context references with `#` autocomplete
 - Image paste support (copilot will view your image)
 - Tool call history with session tracking
 
@@ -59,14 +60,14 @@ For spec-driven development, use [Specs-Tasksync](https://github.com/4regab/Task
 
 [![TaskSync MCP](https://badge.mcpx.dev?type=server)](https://github.com/4regab/tasksync-mcp)
 
-This is an MCP server that helps with  feedback-oriented development workflows in AI-assisted development by letting users give feedback while the agent is working. It uses the `get_feedback` tool to collect your input from the `feedback.md` file in the workspace, which is sent back to the agent when you save.
+This is an MCP server that helps with feedback-oriented development workflows in AI-assisted development by letting users give feedback while the agent is working. It uses the `get_feedback` tool to collect your input from the `feedback.md` file in the workspace, which is sent back to the agent when you save.
 _Setup instructions: [TaskSync MCP Server](https://github.com/4regab/tasksync-mcp)_
 
 ---
 
 ## Best Practices (VS Code Copilot)
 
-For GPT models, use TaskSync MCP or Extension.
+For GPT models, use TaskSync Extension.
 
 Recommended settings for agent mode:
 ```json

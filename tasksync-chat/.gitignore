@@ -19,6 +19,10 @@ dist/**
 
 # testing
 /coverage
+/playwright-report
+/test-results
+/e2e/playwright-report
+/e2e/test-results
 
 # next.js
 /.next/
@@ -37,3 +41,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 *.vsix
+
+# Build artifact - copied from node_modules during build
+media/mermaid.min.js

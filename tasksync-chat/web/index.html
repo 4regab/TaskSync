@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- CSP is set via HTTP header by the server for dynamic ws://host:port origin -->
+    <title>TaskSync Remote</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <link rel="stylesheet" href="login.css">
+</head>
+
+<body>
+    <div class="container">
+        <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" stroke="#0078d4" stroke-width="4" fill="none" />
+            <path d="M30 50L45 65L70 35" stroke="#0078d4" stroke-width="6" stroke-linecap="round"
+                stroke-linejoin="round" />
+        </svg>
+
+        <h1>TaskSync Remote</h1>
+        <p class="subtitle">Enter the PIN shown in VS Code</p>
+
+        <div class="pin-input">
+            <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+                aria-label="PIN digit 1">
+            <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+                aria-label="PIN digit 2">
+            <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+                aria-label="PIN digit 3">
+            <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+                aria-label="PIN digit 4">
+            <input type="tel" class="pin-digit pin-digit-extra" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                autocomplete="off" aria-label="PIN digit 5">
+            <input type="tel" class="pin-digit pin-digit-extra" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                autocomplete="off" aria-label="PIN digit 6">
+        </div>
+
+        <p class="error-message" id="error"></p>
+
+        <button class="submit-btn" id="submit" disabled>Connect</button>
+
+        <div class="connecting" id="connecting">
+            <div class="spinner"></div>
+            <span>Connecting...</span>
+        </div>
+
+        <div class="no-pin" id="no-pin">
+            <p>Connecting to server...</p>
+        </div>
+    </div>
+
+    <!-- Shared constants (SSOT) -->
+    <script src="shared-constants.js"></script>
+
+    <script src="login.js"></script>
+</body>
+
+</html>

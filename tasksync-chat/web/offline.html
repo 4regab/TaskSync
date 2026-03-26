@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+    <title>TaskSync — Offline</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 400px;
+            padding: 2rem;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            color: #a0a0a0;
+            line-height: 1.5;
+        }
+
+        button {
+            margin-top: 1.5rem;
+            padding: 0.75rem 2rem;
+            background: #6c63ff;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #5a52d5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>You're offline</h1>
+        <p>TaskSync needs a network connection to reach the server. Check your connection and try again.</p>
+        <button onclick="location.reload()">Retry</button>
+    </div>
+</body>
+
+</html>

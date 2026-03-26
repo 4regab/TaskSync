@@ -92,7 +92,7 @@
         },
         "tasksync.remoteMaxDevices": {
           "type": "integer",
-          "default": 2,
+          "default": 1,
           "minimum": 1,
           "description": "Maximum number of devices that can be connected to the remote server simultaneously."
         },

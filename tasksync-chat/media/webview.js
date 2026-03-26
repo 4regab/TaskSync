@@ -706,12 +706,7 @@ function handlePendingToolCall(data) {
 		data.prompt ? data.prompt.length : 0,
 	);
 	if (typeof showPendingToolCall === "function") {
-		showPendingToolCall(
-			data.id,
-			data.prompt,
-			data.isApproval,
-			data.choices,
-		);
+		showPendingToolCall(data.id, data.prompt, data.isApproval, data.choices);
 	} else {
 		pendingToolCall = data;
 		isApprovalQuestion = data.isApproval || false;
@@ -809,7 +804,7 @@ const DEFAULT_MAX_AUTO_RESPONSES =
 const DEFAULT_REMOTE_MAX_DEVICES =
 	typeof TASKSYNC_DEFAULT_REMOTE_MAX_DEVICES !== "undefined"
 		? TASKSYNC_DEFAULT_REMOTE_MAX_DEVICES
-		: 2;
+		: 1;
 const MIN_REMOTE_MAX_DEVICES =
 	typeof TASKSYNC_MIN_REMOTE_MAX_DEVICES !== "undefined"
 		? TASKSYNC_MIN_REMOTE_MAX_DEVICES
@@ -1356,6 +1351,58 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(askUserVerbosePayloadSection);
 
+	// Human-Like Delay section - toggle + min/max inputs
+	let humanDelaySection = document.createElement("div");
+	humanDelaySection.className = "settings-section";
+	humanDelaySection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-pulse"></span> Human-Like Delay' +
+		'<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated responses.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch active" id="human-delay-toggle" role="switch" aria-checked="true" aria-label="Toggle Human-Like Delay" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row human-delay-range" id="human-delay-range">' +
+		'<label class="form-label-inline">Min (s):</label>' +
+		'<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="' +
+		HUMAN_DELAY_MIN_LOWER +
+		'" max="' +
+		HUMAN_DELAY_MIN_UPPER +
+		'" value="' +
+		DEFAULT_HUMAN_DELAY_MIN +
+		'" />' +
+		'<label class="form-label-inline">Max (s):</label>' +
+		'<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="' +
+		HUMAN_DELAY_MAX_LOWER +
+		'" max="' +
+		HUMAN_DELAY_MAX_UPPER +
+		'" value="' +
+		DEFAULT_HUMAN_DELAY_MAX +
+		'" />' +
+		"</div>";
+	modalContent.appendChild(humanDelaySection);
+
+	// Remote Max Devices section - number input
+	let remoteMaxDevicesSection = document.createElement("div");
+	remoteMaxDevicesSection.className = "settings-section";
+	remoteMaxDevicesSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-broadcast"></span> Remote Max Devices' +
+		'<span class="settings-info-icon" title="Maximum number of devices that can be connected to the remote server at the same time. Minimum: 1.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		"</div>" +
+		'<div class="form-row">' +
+		'<input type="number" class="form-input" id="remote-max-devices-input" min="' +
+		MIN_REMOTE_MAX_DEVICES +
+		'" value="' +
+		DEFAULT_REMOTE_MAX_DEVICES +
+		'" />' +
+		"</div>";
+	modalContent.appendChild(remoteMaxDevicesSection);
+
 	// Autopilot section with cycling prompts list
 	let autopilotSection = document.createElement("div");
 	autopilotSection.className = "settings-section";
@@ -1458,58 +1505,6 @@ function createSettingsModal() {
 		'" />' +
 		"</div>";
 	modalContent.appendChild(maxAutoSection);
-
-	// Remote Max Devices section - number input
-	let remoteMaxDevicesSection = document.createElement("div");
-	remoteMaxDevicesSection.className = "settings-section";
-	remoteMaxDevicesSection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-broadcast"></span> Remote Max Devices' +
-		'<span class="settings-info-icon" title="Maximum number of devices that can be connected to the remote server at the same time. Minimum: 1.">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		"</div>" +
-		'<div class="form-row">' +
-		'<input type="number" class="form-input" id="remote-max-devices-input" min="' +
-		MIN_REMOTE_MAX_DEVICES +
-		'" value="' +
-		DEFAULT_REMOTE_MAX_DEVICES +
-		'" />' +
-		"</div>";
-	modalContent.appendChild(remoteMaxDevicesSection);
-
-	// Human-Like Delay section - toggle + min/max inputs
-	let humanDelaySection = document.createElement("div");
-	humanDelaySection.className = "settings-section";
-	humanDelaySection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-pulse"></span> Human-Like Delay' +
-		'<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated responses.">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		'<div class="toggle-switch active" id="human-delay-toggle" role="switch" aria-checked="true" aria-label="Toggle Human-Like Delay" tabindex="0"></div>' +
-		"</div>" +
-		'<div class="form-row human-delay-range" id="human-delay-range">' +
-		'<label class="form-label-inline">Min (s):</label>' +
-		'<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="' +
-		HUMAN_DELAY_MIN_LOWER +
-		'" max="' +
-		HUMAN_DELAY_MIN_UPPER +
-		'" value="' +
-		DEFAULT_HUMAN_DELAY_MIN +
-		'" />' +
-		'<label class="form-label-inline">Max (s):</label>' +
-		'<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="' +
-		HUMAN_DELAY_MAX_LOWER +
-		'" max="' +
-		HUMAN_DELAY_MAX_UPPER +
-		'" value="' +
-		DEFAULT_HUMAN_DELAY_MAX +
-		'" />' +
-		"</div>";
-	modalContent.appendChild(humanDelaySection);
 
 	// Reusable Prompts section - plus button next to title
 	let promptsSection = document.createElement("div");
@@ -5437,8 +5432,7 @@ async function requestChangeDiff(filePath) {
 			applyChangeDiff(filePath, data.diff || "");
 		} catch (err) {
 			changesLoading = false;
-			changesError =
-				err && err.message ? err.message : "Failed to load diff.";
+			changesError = err && err.message ? err.message : "Failed to load diff.";
 			renderChangesPanel();
 		}
 		return;
@@ -5482,7 +5476,11 @@ function renderChangesPanel() {
 
 	if (changesSummary) {
 		var summaryText;
-		if (changesLoading && !changesState.staged.length && !changesState.unstaged.length) {
+		if (
+			changesLoading &&
+			!changesState.staged.length &&
+			!changesState.unstaged.length
+		) {
 			summaryText = "Loading git changes...";
 		} else {
 			var totalChanges =
@@ -5576,10 +5574,10 @@ function renderChangeGroup(container, items) {
 			var statusText = formatChangeStatusLabel(item.status || section);
 			var statusHtml = statusText
 				? '<span class="change-item-status ' +
-				escapeHtml(section) +
-				'">' +
-				escapeHtml(statusText) +
-				"</span>"
+					escapeHtml(section) +
+					'">' +
+					escapeHtml(statusText) +
+					"</span>"
 				: "";
 			var stats = resolveChangeStats(item);
 			var additions = stats ? Math.max(0, Number(stats.additions) || 0) : null;
@@ -5587,19 +5585,16 @@ function renderChangeGroup(container, items) {
 			var statsLabel =
 				additions !== null && deletions !== null
 					? '<span class="change-item-lines" aria-label="' +
-					escapeHtml(
-						additions +
-						" additions and " +
-						deletions +
-						" deletions",
-					) +
-					'">' +
-					'<span class="plus">+' +
-					escapeHtml(String(additions)) +
-					"</span>" +
-					'<span class="minus">-' +
-					escapeHtml(String(deletions)) +
-					"</span></span>"
+						escapeHtml(
+							additions + " additions and " + deletions + " deletions",
+						) +
+						'">' +
+						'<span class="plus">+' +
+						escapeHtml(String(additions)) +
+						"</span>" +
+						'<span class="minus">-' +
+						escapeHtml(String(deletions)) +
+						"</span></span>"
 					: '<span class="change-item-lines pending" aria-hidden="true">+? -?</span>';
 			return (
 				'<div class="change-item' +
@@ -5695,9 +5690,12 @@ async function prefetchChangeStats(requestToken) {
 	}
 
 	await Promise.all(
-		Array.from({ length: Math.min(maxConcurrent, filePaths.length) }, function () {
-			return worker();
-		}),
+		Array.from(
+			{ length: Math.min(maxConcurrent, filePaths.length) },
+			function () {
+				return worker();
+			},
+		),
 	);
 
 	if (requestToken === changeStatsRequestToken && changesPanelVisible) {
@@ -5706,11 +5704,7 @@ async function prefetchChangeStats(requestToken) {
 }
 
 async function fetchAndCacheChangeStats(filePath, requestToken) {
-	if (
-		!filePath ||
-		changeStatsByFile[filePath] ||
-		changeStatsInFlight[filePath]
-	)
+	if (!filePath || changeStatsByFile[filePath] || changeStatsInFlight[filePath])
 		return;
 
 	changeStatsInFlight[filePath] = true;
@@ -5720,7 +5714,9 @@ async function fetchAndCacheChangeStats(filePath, requestToken) {
 			"/api/diff?file=" + encodeURIComponent(filePath),
 		);
 		if (requestToken !== changeStatsRequestToken) return;
-		changeStatsByFile[filePath] = extractDiffStats(data && data.diff ? data.diff : "");
+		changeStatsByFile[filePath] = extractDiffStats(
+			data && data.diff ? data.diff : "",
+		);
 	} catch {
 		// Keep placeholder stats when diff cannot be loaded.
 	} finally {
@@ -5910,12 +5906,14 @@ function bindChangePanelEvents() {
 		};
 	}
 
-	changesSection.querySelectorAll("[data-select-change-file]").forEach(function (btn) {
-		btn.onclick = function () {
-			var filePath = btn.getAttribute("data-select-change-file");
-			if (filePath) handleChangeFileSelect(filePath);
-		};
-	});
+	changesSection
+		.querySelectorAll("[data-select-change-file]")
+		.forEach(function (btn) {
+			btn.onclick = function () {
+				var filePath = btn.getAttribute("data-select-change-file");
+				if (filePath) handleChangeFileSelect(filePath);
+			};
+		});
 }
 
     if (document.readyState === 'loading') {

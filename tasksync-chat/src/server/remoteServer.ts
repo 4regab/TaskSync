@@ -8,6 +8,7 @@ import {
 	buildAskUserRequestQuery,
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_CHAT_COMMAND,
+	DEFAULT_REMOTE_MAX_DEVICES,
 	DEFAULT_REMOTE_PORT,
 	DEFAULT_REMOTE_SESSION_QUERY,
 	ErrorCode,
@@ -148,7 +149,10 @@ export class RemoteServer {
 
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		this.authService.pinEnabled = config.get<boolean>("remotePinEnabled", true);
-		this.authService.maxDevices = config.get<number>("remoteMaxDevices", 2);
+		this.authService.maxDevices = config.get<number>(
+			"remoteMaxDevices",
+			DEFAULT_REMOTE_MAX_DEVICES,
+		);
 
 		this.tlsCert = config.get<boolean>("remoteTlsEnabled", false)
 			? await generateSelfSignedCert(getLocalIp())
@@ -168,7 +172,10 @@ export class RemoteServer {
 					"remotePinEnabled",
 					true,
 				);
-				this.authService.maxDevices = cfg.get<number>("remoteMaxDevices", 2);
+				this.authService.maxDevices = cfg.get<number>(
+					"remoteMaxDevices",
+					DEFAULT_REMOTE_MAX_DEVICES,
+				);
 				if (this.authService.pinEnabled) {
 					if (!wasPinEnabled) {
 						// PIN was just re-enabled — generate fresh PIN and clear all sessions
@@ -428,7 +435,7 @@ export class RemoteServer {
 	private async handleMessage(
 		ws: WebSocket,
 		clientIp: string,
-		msg: { type: string; [key: string]: unknown },
+		msg: { type: string;[key: string]: unknown },
 	): Promise<void> {
 		if (!msg || typeof msg.type !== "string") {
 			sendWsError(ws, "Invalid message format");

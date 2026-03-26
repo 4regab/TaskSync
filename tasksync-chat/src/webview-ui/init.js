@@ -376,6 +376,58 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(askUserVerbosePayloadSection);
 
+	// Human-Like Delay section - toggle + min/max inputs
+	let humanDelaySection = document.createElement("div");
+	humanDelaySection.className = "settings-section";
+	humanDelaySection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-pulse"></span> Human-Like Delay' +
+		'<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated responses.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch active" id="human-delay-toggle" role="switch" aria-checked="true" aria-label="Toggle Human-Like Delay" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row human-delay-range" id="human-delay-range">' +
+		'<label class="form-label-inline">Min (s):</label>' +
+		'<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="' +
+		HUMAN_DELAY_MIN_LOWER +
+		'" max="' +
+		HUMAN_DELAY_MIN_UPPER +
+		'" value="' +
+		DEFAULT_HUMAN_DELAY_MIN +
+		'" />' +
+		'<label class="form-label-inline">Max (s):</label>' +
+		'<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="' +
+		HUMAN_DELAY_MAX_LOWER +
+		'" max="' +
+		HUMAN_DELAY_MAX_UPPER +
+		'" value="' +
+		DEFAULT_HUMAN_DELAY_MAX +
+		'" />' +
+		"</div>";
+	modalContent.appendChild(humanDelaySection);
+
+	// Remote Max Devices section - number input
+	let remoteMaxDevicesSection = document.createElement("div");
+	remoteMaxDevicesSection.className = "settings-section";
+	remoteMaxDevicesSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-broadcast"></span> Remote Max Devices' +
+		'<span class="settings-info-icon" title="Maximum number of devices that can be connected to the remote server at the same time. Minimum: 1.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		"</div>" +
+		'<div class="form-row">' +
+		'<input type="number" class="form-input" id="remote-max-devices-input" min="' +
+		MIN_REMOTE_MAX_DEVICES +
+		'" value="' +
+		DEFAULT_REMOTE_MAX_DEVICES +
+		'" />' +
+		"</div>";
+	modalContent.appendChild(remoteMaxDevicesSection);
+
 	// Autopilot section with cycling prompts list
 	let autopilotSection = document.createElement("div");
 	autopilotSection.className = "settings-section";
@@ -478,58 +530,6 @@ function createSettingsModal() {
 		'" />' +
 		"</div>";
 	modalContent.appendChild(maxAutoSection);
-
-	// Remote Max Devices section - number input
-	let remoteMaxDevicesSection = document.createElement("div");
-	remoteMaxDevicesSection.className = "settings-section";
-	remoteMaxDevicesSection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-broadcast"></span> Remote Max Devices' +
-		'<span class="settings-info-icon" title="Maximum number of devices that can be connected to the remote server at the same time. Minimum: 1.">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		"</div>" +
-		'<div class="form-row">' +
-		'<input type="number" class="form-input" id="remote-max-devices-input" min="' +
-		MIN_REMOTE_MAX_DEVICES +
-		'" value="' +
-		DEFAULT_REMOTE_MAX_DEVICES +
-		'" />' +
-		"</div>";
-	modalContent.appendChild(remoteMaxDevicesSection);
-
-	// Human-Like Delay section - toggle + min/max inputs
-	let humanDelaySection = document.createElement("div");
-	humanDelaySection.className = "settings-section";
-	humanDelaySection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-pulse"></span> Human-Like Delay' +
-		'<span class="settings-info-icon" title="Add random delays (2-6s by default) before auto-responses. Simulates natural pacing for automated responses.">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		'<div class="toggle-switch active" id="human-delay-toggle" role="switch" aria-checked="true" aria-label="Toggle Human-Like Delay" tabindex="0"></div>' +
-		"</div>" +
-		'<div class="form-row human-delay-range" id="human-delay-range">' +
-		'<label class="form-label-inline">Min (s):</label>' +
-		'<input type="number" class="form-input form-input-small" id="human-delay-min-input" min="' +
-		HUMAN_DELAY_MIN_LOWER +
-		'" max="' +
-		HUMAN_DELAY_MIN_UPPER +
-		'" value="' +
-		DEFAULT_HUMAN_DELAY_MIN +
-		'" />' +
-		'<label class="form-label-inline">Max (s):</label>' +
-		'<input type="number" class="form-input form-input-small" id="human-delay-max-input" min="' +
-		HUMAN_DELAY_MAX_LOWER +
-		'" max="' +
-		HUMAN_DELAY_MAX_UPPER +
-		'" value="' +
-		DEFAULT_HUMAN_DELAY_MAX +
-		'" />' +
-		"</div>";
-	modalContent.appendChild(humanDelaySection);
 
 	// Reusable Prompts section - plus button next to title
 	let promptsSection = document.createElement("div");

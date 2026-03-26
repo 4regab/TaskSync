@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## TaskSync v3.0.1 (03-26-26)
+- feat: extend response timeout to 8 hours and add auto append feature
+
+
+## TaskSync v3.0.1 (03-26-26)
 - feat: replace Consistent mode with Auto Append in settings and UI
 - Added `tasksync.autoAppendEnabled` toggle and `tasksync.autoAppendText` setting
 - Auto Append text is now appended directly to ask_user response content (visible in chat flow)

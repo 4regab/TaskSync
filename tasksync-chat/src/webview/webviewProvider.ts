@@ -2,15 +2,16 @@ import * as vscode from "vscode";
 import {
 	buildAskUserRequestQuery,
 	CONFIG_SECTION,
-	DEFAULT_REMOTE_CHAT_COMMAND,
-	DEFAULT_REMOTE_SESSION_QUERY,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
-	MAX_QUEUE_PROMPT_LENGTH,
+	DEFAULT_REMOTE_CHAT_COMMAND,
+	DEFAULT_REMOTE_SESSION_QUERY,
 	DEFAULT_SESSION_WARNING_HOURS,
+	MAX_QUEUE_PROMPT_LENGTH,
 } from "../constants/remoteConstants";
 import { ContextManager, ContextReferenceType } from "../context";
 import type { RemoteServer } from "../server/remoteServer";
+import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import * as fileH from "./fileHandlers";
 import * as lifecycle from "./lifecycleHandlers";
 import * as router from "./messageRouter";
@@ -19,7 +20,6 @@ import * as remote from "./remoteApiHandlers";
 import * as session from "./sessionManager";
 import * as settingsH from "./settingsHandlers";
 import * as toolCall from "./toolCallHandler";
-import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import {
 	type AttachmentInfo,
 	type FileSearchResult,
@@ -45,7 +45,8 @@ export type {
 } from "./webviewTypes";
 
 export class TaskSyncWebviewProvider
-	implements vscode.WebviewViewProvider, vscode.Disposable {
+	implements vscode.WebviewViewProvider, vscode.Disposable
+{
 	public static readonly viewType = VIEW_TYPE;
 
 	// All underscore-prefixed members are "internal" by convention but public

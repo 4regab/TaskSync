@@ -181,7 +181,10 @@ export class GitService {
 				: undefined;
 
 		if (repoRoot && absoluteCandidate) {
-			const relFromRepo = path.relative(path.resolve(repoRoot), absoluteCandidate);
+			const relFromRepo = path.relative(
+				path.resolve(repoRoot),
+				absoluteCandidate,
+			);
 			if (!relFromRepo.startsWith("..") && !path.isAbsolute(relFromRepo)) {
 				return relFromRepo.replace(/\\/g, "/");
 			}

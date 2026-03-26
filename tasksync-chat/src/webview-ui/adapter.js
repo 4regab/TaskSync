@@ -667,12 +667,7 @@ function handlePendingToolCall(data) {
 		data.prompt ? data.prompt.length : 0,
 	);
 	if (typeof showPendingToolCall === "function") {
-		showPendingToolCall(
-			data.id,
-			data.prompt,
-			data.isApproval,
-			data.choices,
-		);
+		showPendingToolCall(data.id, data.prompt, data.isApproval, data.choices);
 	} else {
 		pendingToolCall = data;
 		isApprovalQuestion = data.isApproval || false;

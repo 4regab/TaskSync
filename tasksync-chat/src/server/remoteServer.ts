@@ -18,6 +18,7 @@ import {
 	WS_MAX_PAYLOAD,
 	WS_PROTOCOL_VERSION,
 } from "../constants/remoteConstants";
+import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import type { TaskSyncWebviewProvider } from "../webview/webviewProvider";
 import { notifyQueueChanged } from "../webview/webviewUtils";
 import { GitService } from "./gitService";
@@ -36,7 +37,6 @@ import {
 	sendWsError,
 	type TlsCert,
 } from "./serverUtils";
-import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 
 function getDebugEnabled(): boolean {
 	return vscode.workspace

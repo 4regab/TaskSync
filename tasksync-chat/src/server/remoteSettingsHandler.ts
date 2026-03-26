@@ -16,7 +16,7 @@ export async function dispatchSettingsMessage(
 	ws: WebSocket,
 	provider: P,
 	broadcastFn: (type: string, data: unknown) => void,
-	msg: { type: string;[key: string]: unknown },
+	msg: { type: string; [key: string]: unknown },
 ): Promise<boolean> {
 	switch (msg.type) {
 		case "updateSoundSetting":

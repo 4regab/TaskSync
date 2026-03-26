@@ -133,11 +133,7 @@ export function loadSettings(p: P): void {
 		"autopilotText",
 		defaultAutopilotText,
 	);
-	p._autopilotText = normalizeAutopilotText(
-		p,
-		configuredAutopilotText,
-		config,
-	);
+	p._autopilotText = normalizeAutopilotText(p, configuredAutopilotText, config);
 
 	// Load autopilot prompts array, falling back to autopilotText when empty.
 	const savedAutopilotPrompts = config.get<string[]>("autopilotPrompts", []);
@@ -182,9 +178,9 @@ export function loadSettings(p: P): void {
 	);
 	p._sessionWarningHours = Number.isFinite(configuredWarningHours)
 		? Math.min(
-			SESSION_WARNING_HOURS_MAX,
-			Math.max(SESSION_WARNING_HOURS_MIN, Math.floor(configuredWarningHours)),
-		)
+				SESSION_WARNING_HOURS_MAX,
+				Math.max(SESSION_WARNING_HOURS_MIN, Math.floor(configuredWarningHours)),
+			)
 		: DEFAULT_SESSION_WARNING_HOURS;
 	p._sendWithCtrlEnter = config.get<boolean>("sendWithCtrlEnter", false);
 	// Ensure min <= max

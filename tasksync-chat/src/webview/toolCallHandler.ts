@@ -316,12 +316,12 @@ export async function waitForUserResponse(
 		choices:
 			choices.length > 0
 				? choices.map(
-					(c: { label: string; value: string; shortLabel?: string }) => ({
-						label: c.label,
-						value: c.value,
-						shortLabel: c.shortLabel,
-					}),
-				)
+						(c: { label: string; value: string; shortLabel?: string }) => ({
+							label: c.label,
+							value: c.value,
+							shortLabel: c.shortLabel,
+						}),
+					)
 				: undefined,
 	});
 

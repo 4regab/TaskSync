@@ -783,8 +783,7 @@ async function requestChangeDiff(filePath) {
 			applyChangeDiff(filePath, data.diff || "");
 		} catch (err) {
 			changesLoading = false;
-			changesError =
-				err && err.message ? err.message : "Failed to load diff.";
+			changesError = err && err.message ? err.message : "Failed to load diff.";
 			renderChangesPanel();
 		}
 		return;
@@ -828,7 +827,11 @@ function renderChangesPanel() {
 
 	if (changesSummary) {
 		var summaryText;
-		if (changesLoading && !changesState.staged.length && !changesState.unstaged.length) {
+		if (
+			changesLoading &&
+			!changesState.staged.length &&
+			!changesState.unstaged.length
+		) {
 			summaryText = "Loading git changes...";
 		} else {
 			var totalChanges =
@@ -922,10 +925,10 @@ function renderChangeGroup(container, items) {
 			var statusText = formatChangeStatusLabel(item.status || section);
 			var statusHtml = statusText
 				? '<span class="change-item-status ' +
-				escapeHtml(section) +
-				'">' +
-				escapeHtml(statusText) +
-				"</span>"
+					escapeHtml(section) +
+					'">' +
+					escapeHtml(statusText) +
+					"</span>"
 				: "";
 			var stats = resolveChangeStats(item);
 			var additions = stats ? Math.max(0, Number(stats.additions) || 0) : null;
@@ -933,19 +936,16 @@ function renderChangeGroup(container, items) {
 			var statsLabel =
 				additions !== null && deletions !== null
 					? '<span class="change-item-lines" aria-label="' +
-					escapeHtml(
-						additions +
-						" additions and " +
-						deletions +
-						" deletions",
-					) +
-					'">' +
-					'<span class="plus">+' +
-					escapeHtml(String(additions)) +
-					"</span>" +
-					'<span class="minus">-' +
-					escapeHtml(String(deletions)) +
-					"</span></span>"
+						escapeHtml(
+							additions + " additions and " + deletions + " deletions",
+						) +
+						'">' +
+						'<span class="plus">+' +
+						escapeHtml(String(additions)) +
+						"</span>" +
+						'<span class="minus">-' +
+						escapeHtml(String(deletions)) +
+						"</span></span>"
 					: '<span class="change-item-lines pending" aria-hidden="true">+? -?</span>';
 			return (
 				'<div class="change-item' +
@@ -1041,9 +1041,12 @@ async function prefetchChangeStats(requestToken) {
 	}
 
 	await Promise.all(
-		Array.from({ length: Math.min(maxConcurrent, filePaths.length) }, function () {
-			return worker();
-		}),
+		Array.from(
+			{ length: Math.min(maxConcurrent, filePaths.length) },
+			function () {
+				return worker();
+			},
+		),
 	);
 
 	if (requestToken === changeStatsRequestToken && changesPanelVisible) {
@@ -1052,11 +1055,7 @@ async function prefetchChangeStats(requestToken) {
 }
 
 async function fetchAndCacheChangeStats(filePath, requestToken) {
-	if (
-		!filePath ||
-		changeStatsByFile[filePath] ||
-		changeStatsInFlight[filePath]
-	)
+	if (!filePath || changeStatsByFile[filePath] || changeStatsInFlight[filePath])
 		return;
 
 	changeStatsInFlight[filePath] = true;
@@ -1066,7 +1065,9 @@ async function fetchAndCacheChangeStats(filePath, requestToken) {
 			"/api/diff?file=" + encodeURIComponent(filePath),
 		);
 		if (requestToken !== changeStatsRequestToken) return;
-		changeStatsByFile[filePath] = extractDiffStats(data && data.diff ? data.diff : "");
+		changeStatsByFile[filePath] = extractDiffStats(
+			data && data.diff ? data.diff : "",
+		);
 	} catch {
 		// Keep placeholder stats when diff cannot be loaded.
 	} finally {
@@ -1256,10 +1257,12 @@ function bindChangePanelEvents() {
 		};
 	}
 
-	changesSection.querySelectorAll("[data-select-change-file]").forEach(function (btn) {
-		btn.onclick = function () {
-			var filePath = btn.getAttribute("data-select-change-file");
-			if (filePath) handleChangeFileSelect(filePath);
-		};
-	});
+	changesSection
+		.querySelectorAll("[data-select-change-file]")
+		.forEach(function (btn) {
+			btn.onclick = function () {
+				var filePath = btn.getAttribute("data-select-change-file");
+				if (filePath) handleChangeFileSelect(filePath);
+			};
+		});
 }

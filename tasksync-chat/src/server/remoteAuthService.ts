@@ -254,9 +254,7 @@ export class RemoteAuthService {
 
 		// Prefer session token auth for API requests from active remote app sessions.
 		// This avoids OTP-rotation failures while still binding tokens to client IP.
-		const headerToken = req.headers[
-			"x-tasksync-session"
-		] as string | undefined;
+		const headerToken = req.headers["x-tasksync-session"] as string | undefined;
 		const queryToken = url.searchParams.get("sessionToken") ?? undefined;
 		const suppliedToken = headerToken ?? queryToken;
 		if (suppliedToken && this.SESSION_TOKEN_PATTERN.test(suppliedToken)) {

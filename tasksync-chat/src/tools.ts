@@ -204,7 +204,11 @@ export function registerTools(
 					false,
 				);
 
-				const result = await askUser({ question: safeQuestion }, provider, token);
+				const result = await askUser(
+					{ question: safeQuestion },
+					provider,
+					token,
+				);
 
 				const resultPayload: {
 					response: string;
@@ -232,9 +236,7 @@ export function registerTools(
 				const resultParts: (
 					| vscode.LanguageModelTextPart
 					| vscode.LanguageModelDataPart
-				)[] = [
-					new vscode.LanguageModelTextPart(JSON.stringify(resultPayload)),
-				];
+				)[] = [new vscode.LanguageModelTextPart(JSON.stringify(resultPayload))];
 
 				// Add image attachments as LanguageModelDataPart for vision models
 				if (result.attachments && result.attachments.length > 0) {

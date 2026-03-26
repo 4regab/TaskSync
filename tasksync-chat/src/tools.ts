@@ -1,15 +1,35 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import {
-	AUTO_APPEND_DEFAULT_TEXT,
-	CONFIG_SECTION,
-} from "./constants/remoteConstants";
+import { AUTO_APPEND_DEFAULT_TEXT } from "./constants/remoteConstants";
 import { getImageMimeType } from "./utils/imageUtils";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
 import { appendAutoAppendText, debugLog } from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
+}
+
+/**
+ * Build the final response string with auto-append and always-append-reminder logic.
+ * Extracted from invoke() for testability.
+ */
+export function buildFinalResponse(
+	response: string,
+	autoAppendEnabled: boolean,
+	autoAppendText: string,
+	alwaysAppendReminder: boolean,
+): string {
+	let finalResponse = response;
+	if (autoAppendEnabled) {
+		finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
+	}
+	if (alwaysAppendReminder) {
+		finalResponse = appendAutoAppendText(
+			finalResponse,
+			AUTO_APPEND_DEFAULT_TEXT,
+		);
+	}
+	return finalResponse;
 }
 
 export interface AskUserToolResult {
@@ -201,19 +221,6 @@ export function registerTools(
 				safeQuestion.slice(0, 60),
 			);
 			try {
-				const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-				const autoAppendEnabled = config.get<boolean>(
-					"autoAppendEnabled",
-					config.get<boolean>("askUserVerbosePayload", false),
-				);
-				// Auto Append Rules: user-defined text (empty = append nothing)
-				const autoAppendText = config.get<string>("autoAppendText", "");
-				// Auto Reminder: predefined askUser instruction (separate toggle)
-				const alwaysAppendReminder = config.get<boolean>(
-					"alwaysAppendAskUserReminder",
-					false,
-				);
-
 				const result = await askUser(
 					{ question: safeQuestion },
 					provider,
@@ -221,18 +228,14 @@ export function registerTools(
 				);
 
 				// Build response with auto-append logic
-				let finalResponse = result.response;
-				// Auto Append Rules: only if enabled AND user provided custom text
-				if (autoAppendEnabled && autoAppendText) {
-					finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
-				}
-				// Auto Reminder: always appends predefined instruction when enabled
-				if (alwaysAppendReminder) {
-					finalResponse = appendAutoAppendText(
-						finalResponse,
-						AUTO_APPEND_DEFAULT_TEXT,
-					);
-				}
+				// Read from provider's in-memory state (set by loadSettings/webview toggles)
+				// instead of config.get() — avoids stale defaults when config writes fail
+				const finalResponse = buildFinalResponse(
+					result.response,
+					provider._autoAppendEnabled,
+					provider._autoAppendText,
+					provider._alwaysAppendReminder,
+				);
 
 				const resultPayload: {
 					response: string;

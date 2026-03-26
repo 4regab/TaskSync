@@ -2812,6 +2812,25 @@ button#send-btn:disabled {
     opacity: 1;
 }
 
+/* Inline info icon (for use within labels) */
+.settings-info-icon-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.settings-info-icon-inline .codicon {
+    font-size: 11px;
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.settings-info-icon-inline:hover .codicon {
+    opacity: 1;
+}
+
 /* Section header with toggle inline */
 .settings-section-header {
     display: flex;

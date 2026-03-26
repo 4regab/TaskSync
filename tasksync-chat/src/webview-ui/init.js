@@ -379,10 +379,11 @@ function createSettingsModal() {
 		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
 		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
 		'<div class="auto-append-reminder-row">' +
-		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder</label>' +
+		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder' +
+		'<span class="settings-info-icon-inline" title="Auto Append = YOUR custom rules (e.g. &quot;follow SOLID principles&quot;). If empty, nothing is appended.\n\nAuto Reminder = predefined instruction that tells the AI to call askUser. Enable this if your AI keeps ending without asking for feedback (common with GPT 5.4).\n\nBoth can be ON together.">' +
+		'<span class="codicon codicon-question"></span></span></label>' +
 		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
 		"</div>" +
-		'<p class="auto-append-note">When enabled, the askUser reminder instruction is always appended (recommended for GPT 5.4).</p>' +
 		"</div>";
 	modalContent.appendChild(autoAppendSection);
 

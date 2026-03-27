@@ -115,7 +115,8 @@ jobs:
         run: |
           cd ..
           git add tasksync-chat/package.json tasksync-chat/package-lock.json CHANGELOG.md
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          # Skip local git hooks in CI to avoid generated-file side effects leaving a dirty worktree.
+          git commit --no-verify -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
           # Rebase onto latest main to avoid non-fast-forward push failures when main advances during the run.
           # If rebase conflicts, abort and fail this step explicitly.
           if ! git pull --rebase origin main; then

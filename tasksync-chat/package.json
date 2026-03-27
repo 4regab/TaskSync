@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "engines": {
     "vscode": "^1.90.0"
   },

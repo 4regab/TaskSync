@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v3.0.5 (03-27-26)
+- fix: address Copilot review — explicit useQueuedPrompt, prompt length clamp, a11y
+
+
 ## TaskSync v3.0.4 (03-27-26)
 - CI: prevent Auto Release rebase failure from hook-side dirty working tree
 

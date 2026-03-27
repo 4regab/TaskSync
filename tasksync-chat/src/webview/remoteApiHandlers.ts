@@ -218,8 +218,6 @@ export function cancelPendingToolCall(
 	if (!toolCallId) return false;
 
 	const resolver = p._pendingRequests.get(toolCallId);
-	if (!resolver) return false;
-
 	debugLog(
 		"[TaskSync] cancelPendingToolCall — toolCallId:",
 		toolCallId,
@@ -240,22 +238,28 @@ export function cancelPendingToolCall(
 		entry.attachments = [];
 	}
 
-	resolver({
-		value: reason,
-		attachments: [],
-		queue: hasQueuedItems(p),
-		cancelled: true,
-	} as UserResponseResult);
-
 	p._currentToolCallId = null;
-	p._aiTurnActive = true; // AI will process the cancellation
-	debugLog(`[TaskSync] cancelPendingToolCall — cancelled, aiTurnActive: true`);
+	p._aiTurnActive = false;
+	debugLog(`[TaskSync] cancelPendingToolCall — cancelled, aiTurnActive: false`);
+	if (resolver) {
+		resolver({
+			value: reason,
+			attachments: [],
+			queue: hasQueuedItems(p),
+			cancelled: true,
+		} as UserResponseResult);
+	} else {
+		debugLog(
+			"[TaskSync] cancelPendingToolCall — missing resolver for toolCallId:",
+			toolCallId,
+		);
+	}
 	p._updateCurrentSessionUI();
 
 	if (entry) {
 		broadcastToolCallCompleted(p, entry);
 	}
-	return true;
+	return Boolean(resolver || entry);
 }
 
 /**

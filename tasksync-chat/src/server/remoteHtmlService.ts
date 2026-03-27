@@ -375,6 +375,9 @@ export class RemoteHtmlService {
 			<button class="remote-btn remote-btn-icon" id="remote-new-session-btn" title="New Session" aria-label="New Session">
 				<span class="codicon codicon-add"></span>
 			</button>
+			<button class="remote-btn remote-btn-icon" id="remote-reset-session-btn" title="Reset Session" aria-label="Reset Session">
+				<span class="codicon codicon-refresh"></span>
+			</button>
 			<button class="remote-btn remote-btn-icon" id="remote-changes-btn" title="Code Review" aria-label="Code Review">
 				<span class="codicon codicon-source-control"></span>
             </button>

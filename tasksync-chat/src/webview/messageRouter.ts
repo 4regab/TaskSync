@@ -76,6 +76,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 				console.error("[TaskSync] Failed to start fresh Copilot chat:", err);
 			});
 			break;
+		case "resetSession":
+			p.startNewSession();
+			break;
 		case "searchFiles":
 			fileH.handleSearchFiles(p, message.query);
 			break;

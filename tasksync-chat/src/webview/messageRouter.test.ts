@@ -51,7 +51,7 @@ describe("handleWebviewMessage session actions", () => {
 		);
 	});
 
-	it("passes useQueuedPrompt to startNewSessionAndResetCopilotChat", () => {
+	it("passes useQueuedPrompt true to startNewSessionAndResetCopilotChat", () => {
 		const p = createMockP();
 
 		handleWebviewMessage(p, {
@@ -62,6 +62,20 @@ describe("handleWebviewMessage session actions", () => {
 		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
 			undefined,
 			true,
+		);
+	});
+
+	it("passes useQueuedPrompt false to opt out of dequeuing", () => {
+		const p = createMockP();
+
+		handleWebviewMessage(p, {
+			type: "newSession",
+			useQueuedPrompt: false,
+		});
+
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
+			undefined,
+			false,
 		);
 	});
 

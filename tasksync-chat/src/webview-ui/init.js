@@ -722,6 +722,8 @@ function createNewSessionModal() {
 	textarea.className = "new-session-prompt-input";
 	textarea.placeholder = "Enter initial task or prompt (optional)";
 	textarea.rows = 3;
+	textarea.setAttribute("aria-label", "Initial task or prompt (optional)");
+	textarea.maxLength = 100000;
 	extra.appendChild(textarea);
 
 	var queueCheckboxRow = document.createElement("label");
@@ -757,8 +759,8 @@ function createNewSessionModal() {
 			if (initialPrompt) {
 				msg.initialPrompt = initialPrompt;
 			}
-			if (useQueuedPrompt && promptQueue.length > 0) {
-				msg.useQueuedPrompt = true;
+			if (promptQueue.length > 0) {
+				msg.useQueuedPrompt = useQueuedPrompt;
 			}
 			vscode.postMessage(msg);
 			// Clear textarea for next open

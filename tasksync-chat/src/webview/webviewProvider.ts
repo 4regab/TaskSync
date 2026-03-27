@@ -318,8 +318,10 @@ export class TaskSyncWebviewProvider
 		const trimmedPrompt = initialPrompt?.trim();
 
 		if (trimmedPrompt) {
-			// User typed a prompt in the modal — use it directly
-			chatQuery = buildAskUserRequestQuery(trimmedPrompt);
+			// User typed a prompt in the modal — use it directly (clamped to max length)
+			chatQuery = buildAskUserRequestQuery(
+				trimmedPrompt.slice(0, MAX_QUEUE_PROMPT_LENGTH),
+			);
 		} else if (useQueuedPrompt !== false) {
 			// Dequeue first item if available (default behavior when no explicit prompt)
 			const first = this._promptQueue[0];

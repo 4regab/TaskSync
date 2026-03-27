@@ -66,7 +66,6 @@ export function activate(context: vscode.ExtensionContext): void {
 			if (provider.openNewSessionModal()) {
 				return;
 			}
-
 			const answer = await vscode.window.showWarningMessage(
 				"Are you sure you want to start a new session? This will clear the current session history.",
 				{ modal: true },
@@ -74,6 +73,25 @@ export function activate(context: vscode.ExtensionContext): void {
 			);
 			if (answer === "Start New Session") {
 				await provider.startNewSessionAndResetCopilotChat();
+			}
+		},
+	);
+
+	// Reset current session command (triggered from view title bar)
+	const resetSessionCmd = vscode.commands.registerCommand(
+		"tasksync.resetSession",
+		async () => {
+			if (provider.openResetSessionModal()) {
+				return;
+			}
+
+			const answer = await vscode.window.showWarningMessage(
+				"Are you sure you want to reset the current session? This will clear the current session history without starting a new Copilot chat.",
+				{ modal: true },
+				"Reset Session",
+			);
+			if (answer === "Reset Session") {
+				provider.startNewSession();
 			}
 		},
 	);
@@ -281,6 +299,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		sendMessageCmd,
 		openHistoryCmd,
 		newSessionCmd,
+		resetSessionCmd,
 		openSettingsCmd,
 		startRemoteLanCmd,
 		stopRemoteCmd,

@@ -33,6 +33,8 @@ import {
 } from "./webviewTypes";
 import { debugLog, mergeAndDedup, notifyQueueChanged } from "./webviewUtils";
 
+const NEW_SESSION_STATUS_MESSAGE = "New session started — waiting for AI";
+
 // Re-export types for external consumers
 export type {
 	AttachmentInfo,
@@ -304,7 +306,10 @@ export class TaskSyncWebviewProvider
 	}
 
 	public async startNewSessionAndResetCopilotChat(): Promise<void> {
-		lifecycle.startNewSession(this);
+		lifecycle.startNewSession(this, {
+			remoteEventType: "newSession",
+			statusMessage: NEW_SESSION_STATUS_MESSAGE,
+		});
 
 		const first = this._promptQueue[0];
 		const queuedPrompt = first?.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH);
@@ -346,6 +351,14 @@ export class TaskSyncWebviewProvider
 		if (!this._view) return false;
 		this._view.webview.postMessage({
 			type: "openNewSessionModal",
+		} satisfies ToWebviewMessage);
+		return true;
+	}
+
+	public openResetSessionModal(): boolean {
+		if (!this._view) return false;
+		this._view.webview.postMessage({
+			type: "openResetSessionModal",
 		} satisfies ToWebviewMessage);
 		return true;
 	}

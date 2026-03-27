@@ -68,4 +68,15 @@ describe("RemoteHtmlService.handleHttp", () => {
 		expect(getBody()).toBe("Bad Request");
 		expect(serveFileSpy).not.toHaveBeenCalled();
 	});
+
+	it("includes a dedicated reset-session button in the remote header", () => {
+		const service = new RemoteHtmlService("/tmp/web", "/tmp/media");
+		(service as any)._cachedBodyTemplate = "<main>Remote body</main>";
+
+		const html = (service as any).generateRemoteAppHtml("localhost:3580");
+
+		expect(html).toContain('id="remote-new-session-btn"');
+		expect(html).toContain('id="remote-reset-session-btn"');
+		expect(html).toContain('title="Reset Session"');
+	});
 });

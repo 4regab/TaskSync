@@ -9,6 +9,11 @@ import * as fileH from "./fileHandlers";
 import type { FromWebviewMessage, P, ToWebviewMessage } from "./webviewTypes";
 import { debugLog, getNonce } from "./webviewUtils";
 
+interface StartNewSessionOptions {
+	remoteEventType?: "resetSession" | "newSession";
+	statusMessage?: string;
+}
+
 /** Cached HTML body template to avoid repeated synchronous I/O. */
 let cachedBodyTemplate: string | undefined;
 
@@ -232,9 +237,9 @@ export function disposeProvider(p: P): void {
 }
 
 /**
- * Start a new session: save history, clean up, and reset state.
+ * Reset current session state and optionally show a follow-up status in the chat area.
  */
-export function startNewSession(p: P): void {
+export function startNewSession(p: P, options?: StartNewSessionOptions): void {
 	debugLog(
 		`[TaskSync] startNewSession — currentToolCallId: ${p._currentToolCallId}, sessionCalls: ${p._currentSessionCalls.length}, aiTurnActive: ${p._aiTurnActive}, sessionTerminated: ${p._sessionTerminated}`,
 	);
@@ -244,18 +249,9 @@ export function startNewSession(p: P): void {
 	}
 	if (p._currentToolCallId) {
 		debugLog(
-			`[TaskSync] startNewSession — resolving pending request ${p._currentToolCallId} with [Session reset by user]`,
+			`[TaskSync] startNewSession — cancelling pending request ${p._currentToolCallId}`,
 		);
-		const resolve = p._pendingRequests.get(p._currentToolCallId);
-		if (resolve) {
-			resolve({
-				value: "[Session reset by user]",
-				queue: false,
-				attachments: [],
-			});
-		}
-		p._pendingRequests.delete(p._currentToolCallId);
-		p._currentToolCallId = null;
+		p.cancelPendingToolCall("[Session reset by user]");
 	}
 	p._consecutiveAutoResponses = 0;
 	p._autopilotIndex = 0;
@@ -275,10 +271,23 @@ export function startNewSession(p: P): void {
 		"[TaskSync] startNewSession — session reset complete, aiTurnActive: false, posting clear to webview",
 	);
 	p._updateViewTitle();
+	if (p._view) {
+		// Clear any stale badge immediately so the title bar reflects the reset even before the next UI refresh.
+		p._view.badge = undefined;
+	}
 	p._updateCurrentSessionUI();
 	p._updatePersistedHistoryUI();
-	p._view?.webview.postMessage({ type: "clear" } satisfies ToWebviewMessage);
+	const clearMessage: ToWebviewMessage = options?.statusMessage
+		? { type: "clear", statusMessage: options.statusMessage }
+		: { type: "clear" };
+	p._view?.webview.postMessage(clearMessage);
+	const remoteData = options?.statusMessage
+		? { statusMessage: options.statusMessage }
+		: {};
 
-	// Notify remote clients of session reset
-	p._remoteServer?.broadcast("newSession", {});
+	// Keep remote clients aligned with the local session semantics.
+	p._remoteServer?.broadcast(
+		options?.remoteEventType ?? "resetSession",
+		remoteData,
+	);
 }

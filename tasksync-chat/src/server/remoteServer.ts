@@ -637,23 +637,18 @@ export class RemoteServer {
 				this.provider.cancelPendingToolCall("[Cancelled by user]");
 				break;
 			case "newSession": {
-				this.provider.cancelPendingToolCall("[Session reset by user]");
-				this.provider.startNewSession();
-				const first = this.provider._promptQueue[0];
-				const query = first?.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH);
-				if (first) {
-					this.provider._promptQueue.shift();
-					notifyQueueChanged(this.provider);
-				}
-				const chatQuery = query
-					? buildAskUserRequestQuery(query)
-					: DEFAULT_REMOTE_SESSION_QUERY;
-				debugLog("newSession:", query ? "queue query" : "default greeting");
-				void openNewChatWithQuery(chatQuery).catch((e) =>
-					console.error("[TaskSync Remote] newSession error:", e),
-				);
+				debugLog("newSession: starting fresh remote chat");
+				void this.provider
+					.startNewSessionAndResetCopilotChat()
+					.catch((e) =>
+						console.error("[TaskSync Remote] newSession error:", e),
+					);
 				break;
 			}
+			case "resetSession":
+				debugLog("resetSession: clearing remote session state only");
+				this.provider.startNewSession();
+				break;
 			default: {
 				const p = this.provider;
 				if (await dispatchSettingsMessage(ws, p, broadcastFn, msg)) break;

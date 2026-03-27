@@ -72,9 +72,14 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 			p._updatePersistedHistoryUI();
 			break;
 		case "newSession":
-			void p.startNewSessionAndResetCopilotChat().catch((err: unknown) => {
-				console.error("[TaskSync] Failed to start fresh Copilot chat:", err);
-			});
+			void p
+				.startNewSessionAndResetCopilotChat(
+					message.initialPrompt,
+					message.useQueuedPrompt,
+				)
+				.catch((err: unknown) => {
+					console.error("[TaskSync] Failed to start fresh Copilot chat:", err);
+				});
 			break;
 		case "resetSession":
 			p.startNewSession();

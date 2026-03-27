@@ -3418,6 +3418,46 @@ button#send-btn:disabled {
     line-height: 1.4;
 }
 
+.new-session-extra {
+    margin: 0 0 12px 0;
+}
+
+.new-session-prompt-input {
+    width: 100%;
+    min-height: 54px;
+    max-height: 120px;
+    resize: vertical;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    padding: 6px 8px;
+    border: 1px solid var(--vscode-input-border, var(--vscode-widget-border));
+    border-radius: 4px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    box-sizing: border-box;
+    margin: 0 0 8px 0;
+}
+
+.new-session-prompt-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+}
+
+.new-session-queue-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.new-session-queue-checkbox input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
 .new-session-btn-row {
     display: flex;
     gap: 8px;

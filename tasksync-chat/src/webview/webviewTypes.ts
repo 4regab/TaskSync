@@ -157,7 +157,7 @@ export type FromWebviewMessage =
 	| { type: "removeHistoryItem"; callId: string }
 	| { type: "clearPersistedHistory" }
 	| { type: "openHistoryModal" }
-	| { type: "newSession" }
+	| { type: "newSession"; initialPrompt?: string; useQueuedPrompt?: boolean }
 	| { type: "resetSession" }
 	| { type: "searchFiles"; query: string }
 	| { type: "saveImage"; data: string; mimeType: string }

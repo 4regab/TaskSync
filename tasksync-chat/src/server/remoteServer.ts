@@ -21,7 +21,6 @@ import {
 } from "../constants/remoteConstants";
 import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import type { TaskSyncWebviewProvider } from "../webview/webviewProvider";
-import { notifyQueueChanged } from "../webview/webviewUtils";
 import { GitService } from "./gitService";
 import { RemoteAuthService } from "./remoteAuthService";
 import { dispatchGitMessage } from "./remoteGitHandlers";
@@ -55,7 +54,7 @@ function getRemoteChatCommand(): string {
 		.get<string>("remoteChatCommand", DEFAULT_REMOTE_CHAT_COMMAND);
 }
 
-/** Start a fresh chat session and send a query via Agent Mode. */
+/** Start a fresh chat session and send a query via the configured chat command. */
 async function openNewChatWithQuery(query: string): Promise<void> {
 	await startFreshCopilotChatWithQuery(
 		getRemoteChatCommand(),
@@ -585,7 +584,7 @@ export class RemoteServer {
 					"query length:",
 					prompt.length,
 				);
-				// Route through configured chat command (defaults to Agent Mode)
+				// Route through configured chat command (defaults to chat.open)
 				void openNewChatWithQuery(prompt).catch((e) =>
 					console.error("[TaskSync Remote] startSession:", e),
 				);
@@ -621,7 +620,7 @@ export class RemoteServer {
 				const userMessage = chatContent.slice(0, MAX_QUEUE_PROMPT_LENGTH);
 				const fullQuery = buildAskUserFollowUpQuery(userMessage);
 				debugLog(
-					"chatMessage/chatFollowUp: sending to Agent Mode, length:",
+					"chatMessage/chatFollowUp: sending to chat, length:",
 					fullQuery.length,
 					"content:",
 					userMessage.slice(0, 60),

@@ -1,6 +1,60 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AUTO_APPEND_DEFAULT_TEXT } from "./constants/remoteConstants";
 import { buildFinalResponse } from "./tools";
+
+const {
+	MockCancellationError,
+	registerToolMock,
+	showErrorMessageMock,
+	vscodeMock,
+} = vi.hoisted(() => {
+	const registerToolMock = vi.fn();
+	const showErrorMessageMock = vi.fn();
+
+	class MockCancellationError extends Error {}
+	class MockLanguageModelToolResult {
+		constructor(public readonly parts: unknown[]) {}
+	}
+	class MockLanguageModelTextPart {
+		constructor(public readonly value: string) {}
+	}
+
+	const vscodeMock = {
+		CancellationError: MockCancellationError,
+		ConfigurationTarget: {
+			Workspace: 2,
+		},
+		LanguageModelDataPart: {
+			image: vi.fn(),
+		},
+		LanguageModelTextPart: MockLanguageModelTextPart,
+		LanguageModelToolResult: MockLanguageModelToolResult,
+		lm: {
+			registerTool: registerToolMock,
+		},
+		window: {
+			showErrorMessage: showErrorMessageMock,
+		},
+		workspace: {
+			getConfiguration: () => ({
+				get: (_key: string, fallback: unknown) => fallback,
+			}),
+		},
+	};
+
+	(
+		globalThis as { __TASKSYNC_VSCODE_MOCK__?: unknown }
+	).__TASKSYNC_VSCODE_MOCK__ = vscodeMock;
+
+	return {
+		MockCancellationError,
+		registerToolMock,
+		showErrorMessageMock,
+		vscodeMock,
+	};
+});
+
+vi.mock("vscode", () => vscodeMock);
 
 describe("buildFinalResponse", () => {
 	const userResponse = "Here is my answer";
@@ -209,43 +263,8 @@ describe("buildFinalResponse", () => {
 			);
 			expect(result).toBe(`${tabbedResponse}\n\n${customText}`);
 		});
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const registerToolMock = vi.fn();
-const showErrorMessageMock = vi.fn();
-
-class MockCancellationError extends Error {}
-class MockLanguageModelToolResult {
-	constructor(public readonly parts: unknown[]) {}
-}
-class MockLanguageModelTextPart {
-	constructor(public readonly value: string) {}
-}
-
-const vscodeMock = {
-	CancellationError: MockCancellationError,
-	ConfigurationTarget: {
-		Workspace: 2,
-	},
-	LanguageModelDataPart: {
-		image: vi.fn(),
-	},
-	LanguageModelTextPart: MockLanguageModelTextPart,
-	LanguageModelToolResult: MockLanguageModelToolResult,
-	lm: {
-		registerTool: registerToolMock,
-	},
-	window: {
-		showErrorMessage: showErrorMessageMock,
-	},
-	workspace: {
-		getConfiguration: () => ({
-			get: (_key: string, fallback: unknown) => fallback,
-		}),
-	},
-};
-
-vi.mock("vscode", () => vscodeMock);
+	});
+});
 
 /**
  * Build a stable cancellation token stub for ask_user tests.

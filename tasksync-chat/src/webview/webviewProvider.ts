@@ -222,6 +222,9 @@ export class TaskSyncWebviewProvider
 					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendEnabled`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendText`) ||
+					e.affectsConfiguration(
+						`${CONFIG_SECTION}.alwaysAppendAskUserReminder`,
+					) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.askUserVerbosePayload`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilot`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotText`) ||

@@ -236,7 +236,7 @@
         },
         "tasksync.autoAppendEnabled": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "scope": "window",
           "description": "Auto Append: append instruction text to every ask_user response. Improves AI consistency in calling #askUser."
         },

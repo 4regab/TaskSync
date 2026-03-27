@@ -305,22 +305,37 @@ export class TaskSyncWebviewProvider
 		lifecycle.startNewSession(this);
 	}
 
-	public async startNewSessionAndResetCopilotChat(): Promise<void> {
+	public async startNewSessionAndResetCopilotChat(
+		initialPrompt?: string,
+		useQueuedPrompt?: boolean,
+	): Promise<void> {
 		lifecycle.startNewSession(this, {
 			remoteEventType: "newSession",
 			statusMessage: NEW_SESSION_STATUS_MESSAGE,
 		});
 
-		const first = this._promptQueue[0];
-		const queuedPrompt = first?.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH);
-		if (first) {
-			this._promptQueue.shift();
-			notifyQueueChanged(this);
-		}
+		let chatQuery: string;
+		const trimmedPrompt = initialPrompt?.trim();
 
-		const chatQuery = queuedPrompt
-			? buildAskUserRequestQuery(queuedPrompt)
-			: DEFAULT_REMOTE_SESSION_QUERY;
+		if (trimmedPrompt) {
+			// User typed a prompt in the modal — use it directly (clamped to max length)
+			chatQuery = buildAskUserRequestQuery(
+				trimmedPrompt.slice(0, MAX_QUEUE_PROMPT_LENGTH),
+			);
+		} else if (useQueuedPrompt !== false) {
+			// Dequeue first item if available (default behavior when no explicit prompt)
+			const first = this._promptQueue[0];
+			const queuedPrompt = first?.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH);
+			if (first) {
+				this._promptQueue.shift();
+				notifyQueueChanged(this);
+			}
+			chatQuery = queuedPrompt
+				? buildAskUserRequestQuery(queuedPrompt)
+				: DEFAULT_REMOTE_SESSION_QUERY;
+		} else {
+			chatQuery = DEFAULT_REMOTE_SESSION_QUERY;
+		}
 
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		const chatCommand = config.get<string>(

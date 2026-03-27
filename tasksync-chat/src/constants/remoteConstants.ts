@@ -79,7 +79,7 @@ export function buildAskUserFollowUpQuery(message: string): string {
 }
 
 // Default VS Code command for opening chat from remote sessions
-export const DEFAULT_REMOTE_CHAT_COMMAND = "workbench.action.chat.openagent";
+export const DEFAULT_REMOTE_CHAT_COMMAND = "workbench.action.chat.open";
 
 // Response timeout configuration (minutes)
 export const RESPONSE_TIMEOUT_ALLOWED_VALUES = new Set<number>([

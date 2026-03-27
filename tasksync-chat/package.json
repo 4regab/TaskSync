@@ -289,8 +289,8 @@
         },
         "tasksync.remoteChatCommand": {
           "type": "string",
-          "default": "workbench.action.chat.openagent",
-          "description": "VS Code command used to open chat from remote sessions. Default opens Agent Mode. Use 'workbench.action.chat.open' for the default chat mode, or any custom command ID."
+          "default": "workbench.action.chat.open",
+          "description": "VS Code command used to open chat from remote sessions. Default opens the chat panel without forcing a mode. Use 'workbench.action.chat.openagent' to force Agent Mode, or any custom command ID."
         }
       }
     },

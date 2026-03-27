@@ -1685,6 +1685,11 @@ function createSessionActionModal(config) {
 	warning.textContent = config.warningText;
 	content.appendChild(warning);
 
+	// Insert extra content (e.g. textarea, checkbox) before the button row
+	if (config.extraContent) {
+		content.appendChild(config.extraContent);
+	}
+
 	var btnRow = document.createElement("div");
 	btnRow.className = "new-session-btn-row";
 	var cancelBtn = document.createElement("button");
@@ -1700,7 +1705,11 @@ function createSessionActionModal(config) {
 	confirmBtn.textContent = config.confirmLabel;
 	confirmBtn.addEventListener("click", function () {
 		closeSessionActionModal(overlay);
-		vscode.postMessage({ type: config.messageType });
+		if (config.onConfirm) {
+			config.onConfirm();
+		} else {
+			vscode.postMessage({ type: config.messageType });
+		}
 	});
 	btnRow.appendChild(confirmBtn);
 	content.appendChild(btnRow);
@@ -1728,20 +1737,84 @@ function closeSessionActionModal(overlay) {
 }
 
 function createNewSessionModal() {
+	// Build extra content: textarea + queue checkbox
+	var extra = document.createElement("div");
+	extra.className = "new-session-extra";
+
+	var textarea = document.createElement("textarea");
+	textarea.id = "new-session-prompt";
+	textarea.className = "new-session-prompt-input";
+	textarea.placeholder = "Enter initial task or prompt (optional)";
+	textarea.rows = 3;
+	textarea.setAttribute("aria-label", "Initial task or prompt (optional)");
+	textarea.maxLength = 100000;
+	extra.appendChild(textarea);
+
+	var queueCheckboxRow = document.createElement("label");
+	queueCheckboxRow.className = "new-session-queue-checkbox hidden";
+	queueCheckboxRow.id = "new-session-queue-row";
+	var checkbox = document.createElement("input");
+	checkbox.type = "checkbox";
+	checkbox.id = "new-session-use-queue";
+	checkbox.checked = true;
+	queueCheckboxRow.appendChild(checkbox);
+	var queueLabel = document.createElement("span");
+	queueLabel.id = "new-session-queue-label";
+	queueLabel.textContent = "Use next queued prompt";
+	queueCheckboxRow.appendChild(queueLabel);
+	extra.appendChild(queueCheckboxRow);
+
 	newSessionModalOverlay = createSessionActionModal({
 		overlayId: "new-session-modal-overlay",
 		titleId: "new-session-modal-title",
 		title: "New Session",
 		noteHtml:
-			'<span class="codicon codicon-info"></span> Please check the model preselected in VS Code\'s Agent Mode before starting.',
+			'<span class="codicon codicon-info"></span> Please check the model and agent preselected in VS Code Chat before starting.',
 		warningText:
 			"This will clear the current session history and start a fresh Copilot chat session.",
 		confirmLabel: "New Session",
-		messageType: "newSession",
+		extraContent: extra,
+		onConfirm: function () {
+			var promptInput = document.getElementById("new-session-prompt");
+			var queueCheckbox = document.getElementById("new-session-use-queue");
+			var initialPrompt = promptInput ? promptInput.value.trim() : "";
+			var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
+			var msg = { type: "newSession" };
+			if (initialPrompt) {
+				msg.initialPrompt = initialPrompt;
+			}
+			if (promptQueue.length > 0) {
+				msg.useQueuedPrompt = useQueuedPrompt;
+			}
+			vscode.postMessage(msg);
+			// Clear textarea for next open
+			if (promptInput) promptInput.value = "";
+		},
 	});
 }
 
 function openNewSessionModal() {
+	if (!newSessionModalOverlay) return;
+	// Refresh queue checkbox visibility and label based on current queue state
+	var queueRow = document.getElementById("new-session-queue-row");
+	var queueLabel = document.getElementById("new-session-queue-label");
+	var queueCheckbox = document.getElementById("new-session-use-queue");
+	if (queueRow) {
+		if (promptQueue.length > 0) {
+			queueRow.classList.remove("hidden");
+			if (queueLabel) {
+				var preview = promptQueue[0].prompt;
+				if (preview.length > 60) preview = preview.slice(0, 60) + "…";
+				queueLabel.textContent = "Use next queued prompt: " + preview;
+			}
+			if (queueCheckbox) queueCheckbox.checked = true;
+		} else {
+			queueRow.classList.add("hidden");
+		}
+	}
+	// Clear textarea on open
+	var promptInput = document.getElementById("new-session-prompt");
+	if (promptInput) promptInput.value = "";
 	openSessionActionModal(newSessionModalOverlay);
 }
 

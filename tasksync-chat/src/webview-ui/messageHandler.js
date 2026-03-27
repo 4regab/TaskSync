@@ -26,6 +26,7 @@ function handleExtensionMessage(event) {
 			break;
 		case "updateCurrentSession":
 			currentSessionCalls = message.history || [];
+			_inputHistoryCache = null; // Invalidate cache when session updates
 			renderCurrentSession();
 			// Hide welcome section if we have completed tool calls
 			updateWelcomeSectionVisibility();
@@ -34,6 +35,7 @@ function handleExtensionMessage(event) {
 			break;
 		case "updatePersistedHistory":
 			persistedHistory = message.history || [];
+			_inputHistoryCache = null; // Invalidate cache when history updates
 			renderHistoryModal();
 			break;
 		case "openHistoryModal":

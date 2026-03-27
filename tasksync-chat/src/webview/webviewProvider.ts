@@ -590,7 +590,11 @@ export class TaskSyncWebviewProvider
 	}
 
 	private async _loadPersistedHistoryFromDiskAsync(): Promise<void> {
-		return persist.loadPersistedHistoryFromDiskAsync(this);
+		await persist.loadPersistedHistoryFromDiskAsync(this);
+		// Push loaded history to the webview if it's ready
+		if (this._webviewReady) {
+			this._updatePersistedHistoryUI();
+		}
 	}
 
 	_savePersistedHistoryToDisk(): void {

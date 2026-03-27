@@ -134,6 +134,10 @@ let slashDebounceTimer = null;
 // Persisted input value (restored from state)
 let persistedInputValue = previousState.inputValue || "";
 
+// Input history recall state (Up/Down arrow to cycle through past responses)
+let historyIndex = -1; // -1 = not navigating; 0..N = position in filtered history
+let historyDraft = ""; // Saves in-progress text when user starts navigating history
+
 // Edit mode state
 let editingPromptId = null;
 let editingOriginalPrompt = null;

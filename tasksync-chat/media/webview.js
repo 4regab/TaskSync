@@ -944,6 +944,10 @@ let slashDebounceTimer = null;
 // Persisted input value (restored from state)
 let persistedInputValue = previousState.inputValue || "";
 
+// Input history recall state (Up/Down arrow to cycle through past responses)
+let historyIndex = -1; // -1 = not navigating; 0..N = position in filtered history
+let historyDraft = ""; // Saves in-progress text when user starts navigating history
+
 // Edit mode state
 let editingPromptId = null;
 let editingOriginalPrompt = null;
@@ -2334,6 +2338,65 @@ function updateCardSelection() {
 }
 // ==================== Input Handling ====================
 
+// Cached input history (invalidated when currentSessionCalls changes)
+var _inputHistoryCache = null;
+var _inputHistoryCacheLen = -1;
+
+/**
+ * Build a deduplicated list of past user-typed responses (newest first)
+ * from the existing tool-call history. Filters out queued/autopilot responses,
+ * cancelled entries, approval shortcuts, and very short responses.
+ * Capped at 50 entries. Cached until session length changes.
+ */
+function getInputHistory() {
+	var sessionLen = currentSessionCalls ? currentSessionCalls.length : 0;
+	if (_inputHistoryCache && _inputHistoryCacheLen === sessionLen) {
+		return _inputHistoryCache;
+	}
+	var all = (currentSessionCalls || []).concat(persistedHistory || []);
+	var seen = {};
+	var result = [];
+	for (var i = 0; i < all.length; i++) {
+		if (result.length >= 50) break;
+		var e = all[i];
+		if (
+			e.status === "completed" &&
+			!e.isFromQueue &&
+			e.response &&
+			e.response.trim().length > 3
+		) {
+			var text = e.response.trim();
+			if (!seen[text]) {
+				seen[text] = true;
+				result.push(text);
+			}
+		}
+	}
+	_inputHistoryCache = result;
+	_inputHistoryCacheLen = sessionLen;
+	return result;
+}
+
+/**
+ * Check if the cursor is on the first line of a textarea.
+ */
+function isCursorOnFirstLine() {
+	if (!chatInput) return true;
+	var text = chatInput.value;
+	var pos = chatInput.selectionStart;
+	return text.lastIndexOf("\n", pos - 1) === -1;
+}
+
+/**
+ * Check if the cursor is on the last line of a textarea.
+ */
+function isCursorOnLastLine() {
+	if (!chatInput) return true;
+	var text = chatInput.value;
+	var pos = chatInput.selectionEnd;
+	return text.indexOf("\n", pos) === -1;
+}
+
 function autoResizeTextarea() {
 	if (!chatInput) return;
 	chatInput.style.height = "auto";
@@ -2415,6 +2478,8 @@ function handleTextareaInput() {
 	// Context items (#terminal, #problems) now handled via handleAutocomplete()
 	syncAttachmentsWithText();
 	updateSendButtonState();
+	// Reset history position on manual edits — edited text becomes the new "draft"
+	historyIndex = -1;
 	// Persist input value so it survives sidebar tab switches
 	saveWebviewState();
 }
@@ -2530,6 +2595,56 @@ function handleTextareaKeydown(e) {
 
 	// Context dropdown navigation removed - context now uses # via file autocomplete
 
+	// Up/Down arrow: cycle through past user responses when no dropdown is active
+	if (e.key === "ArrowUp") {
+		if (isCursorOnFirstLine()) {
+			var history = getInputHistory();
+			if (history.length > 0) {
+				e.preventDefault();
+				if (historyIndex === -1) {
+					// Starting navigation — save current draft
+					historyDraft = chatInput ? chatInput.value : "";
+					historyIndex = 0;
+				} else if (historyIndex < history.length - 1) {
+					historyIndex++;
+				}
+				if (chatInput) {
+					chatInput.value = history[historyIndex];
+					chatInput.selectionStart = chatInput.selectionEnd = 0;
+					autoResizeTextarea();
+					updateInputHighlighter();
+					updateSendButtonState();
+				}
+				return;
+			}
+		}
+	}
+
+	if (e.key === "ArrowDown" && historyIndex >= 0 && isCursorOnLastLine()) {
+		e.preventDefault();
+		var historyDown = getInputHistory();
+		if (historyIndex > 0) {
+			historyIndex--;
+			if (chatInput) {
+				chatInput.value = historyDown[historyIndex];
+				chatInput.selectionStart = chatInput.selectionEnd = 0;
+				autoResizeTextarea();
+				updateInputHighlighter();
+				updateSendButtonState();
+			}
+		} else {
+			// Past newest entry — restore draft
+			historyIndex = -1;
+			if (chatInput) {
+				chatInput.value = historyDraft;
+				autoResizeTextarea();
+				updateInputHighlighter();
+				updateSendButtonState();
+			}
+		}
+		return;
+	}
+
 	let isPlainEnter =
 		e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey;
 	let isCtrlOrCmdEnter =
@@ -2588,6 +2703,11 @@ function handleSendFromShortcut() {
 }
 
 function handleSend() {
+	// Reset history navigation and invalidate cache on every send
+	historyIndex = -1;
+	historyDraft = "";
+	_inputHistoryCache = null;
+
 	let text = chatInput ? chatInput.value.trim() : "";
 	if (!text && currentAttachments.length === 0) {
 		// If choices are selected and input is empty, send the selected choices
@@ -2789,6 +2909,7 @@ function handleExtensionMessage(event) {
 			break;
 		case "updateCurrentSession":
 			currentSessionCalls = message.history || [];
+			_inputHistoryCache = null; // Invalidate cache when session updates
 			renderCurrentSession();
 			// Hide welcome section if we have completed tool calls
 			updateWelcomeSectionVisibility();
@@ -2797,6 +2918,7 @@ function handleExtensionMessage(event) {
 			break;
 		case "updatePersistedHistory":
 			persistedHistory = message.history || [];
+			_inputHistoryCache = null; // Invalidate cache when history updates
 			renderHistoryModal();
 			break;
 		case "openHistoryModal":

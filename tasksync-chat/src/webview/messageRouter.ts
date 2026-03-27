@@ -219,6 +219,7 @@ export function handleWebviewReady(p: P): void {
 	// Send initial queue state and current session history
 	p._updateQueueUI();
 	p._updateCurrentSessionUI();
+	p._updatePersistedHistoryUI();
 
 	// If there's a pending tool call message that was never sent, send it now
 	if (p._pendingToolCallMessage) {

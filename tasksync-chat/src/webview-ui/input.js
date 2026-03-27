@@ -16,7 +16,7 @@ function getInputHistory() {
 		return _inputHistoryCache;
 	}
 	var all = (currentSessionCalls || []).concat(persistedHistory || []);
-	var seen = {};
+	var seen = Object.create(null);
 	var result = [];
 	for (var i = 0; i < all.length; i++) {
 		if (result.length >= 50) break;

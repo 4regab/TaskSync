@@ -23,6 +23,7 @@ function handleExtensionMessage(event) {
 			break;
 		case "toolCallCompleted":
 			addToolCallToCurrentSession(message.entry, message.sessionTerminated);
+			_inputHistoryCache = null; // Invalidate cache when entries are added
 			break;
 		case "updateCurrentSession":
 			currentSessionCalls = message.history || [];

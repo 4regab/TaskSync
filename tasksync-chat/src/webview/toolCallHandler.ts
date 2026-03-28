@@ -44,7 +44,8 @@ export function cancelSupersededPendingRequest(p: P): void {
 	const oldResolve = p._pendingRequests.get(oldToolCallId);
 	if (oldResolve) {
 		oldResolve({
-			value: "[CANCELLED: New request superseded this one]",
+			value:
+				"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]",
 			queue: hasQueuedItems(p),
 			attachments: [],
 			cancelled: true,

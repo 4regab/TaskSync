@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v3.0.7 (03-28-26)
+- fix: remove deprecated wordWrap (redundant with overflowWrap)
+
+
 ## TaskSync v3.0.6 (03-28-26)
 - refactor: extract ASKUSER_SUPERSEDED_MESSAGE constant, add mid-flight cancellation test
 

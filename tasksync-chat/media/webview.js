@@ -2385,23 +2385,78 @@ function getInputHistory() {
 }
 
 /**
- * Check if the cursor is on the first line of a textarea.
+ * Create a hidden mirror div that replicates the textarea's text rendering.
+ * Used to measure visual line positions for word-wrapped text.
  */
-function isCursorOnFirstLine() {
-	if (!chatInput) return true;
-	var text = chatInput.value;
-	var pos = chatInput.selectionStart;
-	return text.lastIndexOf("\n", pos - 1) === -1;
+function createTextareaMirror() {
+	var mirror = document.createElement("div");
+	var cs = getComputedStyle(chatInput);
+	mirror.style.position = "absolute";
+	mirror.style.visibility = "hidden";
+	mirror.style.height = "auto";
+	mirror.style.whiteSpace = cs.whiteSpace;
+	mirror.style.overflowWrap = cs.overflowWrap;
+	mirror.style.wordBreak = cs.wordBreak;
+	mirror.style.width = chatInput.clientWidth + "px";
+	mirror.style.font = cs.font;
+	mirror.style.lineHeight = cs.lineHeight;
+	mirror.style.letterSpacing = cs.letterSpacing;
+	mirror.style.padding = cs.padding;
+	mirror.style.boxSizing = "border-box";
+	mirror.style.tabSize = cs.tabSize || "8";
+	return mirror;
 }
 
 /**
- * Check if the cursor is on the last line of a textarea.
+ * Check if two character positions are on the same visual line in the textarea.
+ * Renders the full text in a hidden mirror div with zero-width probes at both
+ * positions, then compares their vertical offsets. Using offsetTop equality
+ * avoids rounding issues that height-difference comparisons are prone to.
  */
-function isCursorOnLastLine() {
+function areSameVisualLine(posA, posB) {
+	if (!chatInput) return true;
+	var text = chatInput.value;
+	var first = Math.min(posA, posB);
+	var second = Math.max(posA, posB);
+
+	var mirror = createTextareaMirror();
+	mirror.appendChild(document.createTextNode(text.substring(0, first)));
+	var probeA = document.createElement("span");
+	probeA.textContent = "\u200b";
+	mirror.appendChild(probeA);
+	mirror.appendChild(document.createTextNode(text.substring(first, second)));
+	var probeB = document.createElement("span");
+	probeB.textContent = "\u200b";
+	mirror.appendChild(probeB);
+	mirror.appendChild(document.createTextNode(text.substring(second)));
+	document.body.appendChild(mirror);
+
+	var same = probeA.offsetTop === probeB.offsetTop;
+	document.body.removeChild(mirror);
+	return same;
+}
+
+/**
+ * Check if the cursor is on the first visual line of the textarea.
+ * Accounts for word-wrapped text, not just logical newlines.
+ */
+function isCursorOnFirstVisualLine() {
+	if (!chatInput) return true;
+	var pos = chatInput.selectionStart;
+	if (pos === 0) return true;
+	return areSameVisualLine(0, pos);
+}
+
+/**
+ * Check if the cursor is on the last visual line of the textarea.
+ * Accounts for word-wrapped text, not just logical newlines.
+ */
+function isCursorOnLastVisualLine() {
 	if (!chatInput) return true;
 	var text = chatInput.value;
 	var pos = chatInput.selectionEnd;
-	return text.indexOf("\n", pos) === -1;
+	if (pos >= text.length) return true;
+	return areSameVisualLine(pos, text.length);
 }
 
 function autoResizeTextarea() {
@@ -2604,7 +2659,7 @@ function handleTextareaKeydown(e) {
 
 	// Up/Down arrow: cycle through past user responses when no dropdown is active
 	if (e.key === "ArrowUp") {
-		if (isCursorOnFirstLine()) {
+		if (isCursorOnFirstVisualLine()) {
 			var history = getInputHistory();
 			if (history.length > 0) {
 				e.preventDefault();
@@ -2627,7 +2682,11 @@ function handleTextareaKeydown(e) {
 		}
 	}
 
-	if (e.key === "ArrowDown" && historyIndex >= 0 && isCursorOnLastLine()) {
+	if (
+		e.key === "ArrowDown" &&
+		historyIndex >= 0 &&
+		isCursorOnLastVisualLine()
+	) {
 		e.preventDefault();
 		var historyDown = getInputHistory();
 		if (historyIndex > 0) {

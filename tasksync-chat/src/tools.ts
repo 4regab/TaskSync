@@ -103,13 +103,23 @@ export async function askUser(
 			cancellation.promise,
 		]);
 
-		// Handle case where request was superseded by another call
+		// Handle case where request was superseded by another call.
+		// IMPORTANT: Do NOT throw CancellationError here — that kills the entire
+		// ToolCallingLoop in VS Code's Copilot Chat (buildPrompt2 checks isCancelled
+		// on tool results and throws CancellationError, _runLoop catches it and breaks).
+		// Instead, return the cancelled message as a normal result so the LLM sees it
+		// and can call ask_user again. Real user cancellation (Stop button) is handled
+		// by the CancellationToken/createCancellationPromise path which correctly throws.
 		if (result.cancelled) {
 			debugLog(
 				"[TaskSync] askUser — superseded/cancelled, response:",
 				result.value.slice(0, 80),
 			);
-			throw new vscode.CancellationError();
+			return {
+				response: result.value,
+				attachments: [],
+				queue: result.queue,
+			};
 		}
 		debugLog(
 			"[TaskSync] askUser — user responded:",

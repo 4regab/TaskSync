@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AUTO_APPEND_DEFAULT_TEXT } from "./constants/remoteConstants";
+import {
+	ASKUSER_SUPERSEDED_MESSAGE,
+	AUTO_APPEND_DEFAULT_TEXT,
+} from "./constants/remoteConstants";
 import { buildFinalResponse } from "./tools";
 
 const {
@@ -290,40 +293,51 @@ beforeEach(() => {
 });
 
 /**
- * Verify that cancelled ask_user results stop the LM turn instead of becoming fake replies.
+ * Verify that cancelled ask_user results are returned as normal text
+ * (NOT CancellationError) so the LLM can see the message and call ask_user again.
+ * CancellationError kills the ToolCallingLoop — only real token cancellation should throw it.
  */
 describe("askUser cancellation handling", () => {
 	/**
-	 * A cancelled provider result must propagate as a cancellation error.
+	 * A superseded provider result must return as normal text, not throw.
 	 */
-	it("throws CancellationError when waitForUserResponse returns a cancelled result", async () => {
+	it("returns cancelled message as normal result when waitForUserResponse returns a cancelled result", async () => {
 		const { askUser } = await import("./tools");
 		const provider = {
 			waitForUserResponse: vi.fn().mockResolvedValue({
-				value: "[Session reset by user]",
+				value: ASKUSER_SUPERSEDED_MESSAGE,
 				attachments: [],
 				queue: false,
 				cancelled: true,
 			}),
 		};
 
-		await expect(
-			askUser({ question: "Reset?" }, provider as any, createToken() as any),
-		).rejects.toBeInstanceOf(MockCancellationError);
+		const result = await askUser(
+			{ question: "Reset?" },
+			provider as any,
+			createToken() as any,
+		);
+		expect(result.response).toBe(ASKUSER_SUPERSEDED_MESSAGE);
+		expect(result.attachments).toEqual([]);
+		expect(result.queue).toBe(false);
 	});
 
 	/**
-	 * The registered LM tool must rethrow cancellation so Copilot stops the old turn cleanly.
+	 * The registered LM tool must return a LanguageModelToolResult (not throw)
+	 * for superseded requests so the LLM sees the message.
 	 */
-	it("rethrows CancellationError from the registered tool invoke handler", async () => {
+	it("returns LanguageModelToolResult for superseded requests from the registered tool invoke handler", async () => {
 		const { registerTools } = await import("./tools");
 		const provider = {
 			waitForUserResponse: vi.fn().mockResolvedValue({
-				value: "[Session reset by user]",
+				value: ASKUSER_SUPERSEDED_MESSAGE,
 				attachments: [],
 				queue: false,
 				cancelled: true,
 			}),
+			_autoAppendEnabled: false,
+			_autoAppendText: "",
+			_alwaysAppendReminder: false,
 		};
 		const context = { subscriptions: [] as unknown[] };
 
@@ -332,12 +346,74 @@ describe("askUser cancellation handling", () => {
 		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
 		expect(toolDefinition).toBeTruthy();
 
-		await expect(
-			toolDefinition.invoke(
-				{ input: { question: "Reset?" } },
-				createToken() as any,
-			),
-		).rejects.toBeInstanceOf(MockCancellationError);
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Reset?" } },
+			createToken() as any,
+		);
+		// Should return a result, not throw
+		expect(result).toBeTruthy();
+		expect(result.parts).toBeDefined();
+		expect(result.parts.length).toBe(1);
+		// The response text should contain the cancelled message
+		const textPart = result.parts[0];
+		const parsed = JSON.parse(textPart.value);
+		expect(parsed.response).toBe(ASKUSER_SUPERSEDED_MESSAGE);
 		expect(showErrorMessageMock).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * Real token cancellation (CancellationToken fires) must still throw CancellationError.
+	 */
+	it("throws CancellationError when token is already cancelled before starting", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			waitForUserResponse: vi.fn(),
+		};
+
+		const cancelledToken = {
+			isCancellationRequested: true,
+			onCancellationRequested: vi.fn(() => ({
+				dispose: vi.fn(),
+			})),
+		};
+
+		await expect(
+			askUser({ question: "Test?" }, provider as any, cancelledToken as any),
+		).rejects.toBeInstanceOf(MockCancellationError);
+	});
+
+	/**
+	 * Mid-flight cancellation: token fires while waitForUserResponse is still pending.
+	 * The createCancellationPromise race must cause askUser to reject with CancellationError.
+	 */
+	it("throws CancellationError when token fires mid-flight during waitForUserResponse", async () => {
+		const { askUser } = await import("./tools");
+
+		// waitForUserResponse never resolves — simulates the user hasn't responded yet
+		const provider = {
+			waitForUserResponse: vi.fn(() => new Promise<never>(() => {})),
+		};
+
+		// Capture the onCancellationRequested callback so we can fire it manually
+		let cancelCallback: (() => void) | undefined;
+		const token = {
+			isCancellationRequested: false,
+			onCancellationRequested: vi.fn((cb: () => void) => {
+				cancelCallback = cb;
+				return { dispose: vi.fn() };
+			}),
+		};
+
+		const promise = askUser(
+			{ question: "Pending?" },
+			provider as any,
+			token as any,
+		);
+
+		// Fire the cancellation callback to simulate the Stop button
+		expect(cancelCallback).toBeDefined();
+		cancelCallback!();
+
+		await expect(promise).rejects.toBeInstanceOf(MockCancellationError);
 	});
 });

@@ -57,6 +57,11 @@ export const HUMAN_DELAY_MIN_UPPER = 30; // maximum allowed for "min delay" inpu
 export const HUMAN_DELAY_MAX_LOWER = 2; // minimum allowed for "max delay" input
 export const HUMAN_DELAY_MAX_UPPER = 60; // maximum allowed for "max delay" input
 
+// Superseded ask_user directive — returned as normal tool result (not CancellationError)
+// so the ToolCallingLoop keeps running. Instructs the LLM to re-ask the same question.
+export const ASKUSER_SUPERSEDED_MESSAGE =
+	"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]";
+
 // Shared askUser prompt fragments (used by both local and remote session starts)
 export const ASKUSER_VISIBILITY_TEXT =
 	"The user can ONLY see messages you send via the #askUser tool — your normal chat responses are invisible to them.";

@@ -4,6 +4,7 @@
  */
 import * as vscode from "vscode";
 import {
+	ASKUSER_SUPERSEDED_MESSAGE,
 	CONFIG_SECTION,
 	DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
 } from "../constants/remoteConstants";
@@ -44,7 +45,7 @@ export function cancelSupersededPendingRequest(p: P): void {
 	const oldResolve = p._pendingRequests.get(oldToolCallId);
 	if (oldResolve) {
 		oldResolve({
-			value: "[CANCELLED: New request superseded this one]",
+			value: ASKUSER_SUPERSEDED_MESSAGE,
 			queue: hasQueuedItems(p),
 			attachments: [],
 			cancelled: true,

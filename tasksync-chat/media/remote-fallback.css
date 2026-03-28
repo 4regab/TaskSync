@@ -9,7 +9,7 @@
     --vscode-foreground: #cccccc;
     --vscode-focusBorder: #007fd4;
     --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --vscode-font-size: 13px;
+    --vscode-font-size: 16px;
     --vscode-font-weight: 400;
 
     /* Sidebar / Background */
@@ -249,4 +249,11 @@ body.remote-mode {
     font-family: system-ui;
     color: #ccc;
     background: #1e1e1e;
+}
+
+/* SSOT: Prevent auto-zoom on input focus (triggered when font-size < 16px) */
+body.remote-mode input,
+body.remote-mode textarea,
+body.remote-mode select {
+    font-size: max(var(--vscode-font-size), 16px) !important;
 }

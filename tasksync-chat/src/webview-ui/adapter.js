@@ -4,6 +4,11 @@ const isRemoteMode = typeof acquireVsCodeApi === "undefined";
 // Debug mode: enable via localStorage.setItem('TASKSYNC_DEBUG', 'true')
 const REMOTE_DEBUG =
 	isRemoteMode && localStorage.getItem("TASKSYNC_DEBUG") === "true";
+/** Detect Safari (excludes Chrome/Chromium-based and iOS alternative browsers). */
+const isRemoteSafari =
+	isRemoteMode &&
+	/Safari/.test(navigator.userAgent) &&
+	!/(Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS)/.test(navigator.userAgent);
 function debugLog(...args) {
 	if (REMOTE_DEBUG) console.log("[TaskSync Debug]", ...args);
 }
@@ -242,7 +247,9 @@ function updateRemoteConnectionStatus(status, reason) {
 		} else if (reason === "shutdown") {
 			indicator.title = "Server stopped";
 		} else if (reason === "max-attempts") {
-			indicator.title = "Connection failed - server unreachable";
+			indicator.title = isRemoteSafari
+				? "Connection failed \u2014 Safari may block WebSocket when Private Relay is on. Disable it in Settings \u2192 Safari \u2192 Privacy, or use Chrome."
+				: "Connection failed - server unreachable";
 		} else {
 			indicator.title = "Disconnected - reconnecting...";
 		}

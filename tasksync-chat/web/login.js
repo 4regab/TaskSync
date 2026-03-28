@@ -5,6 +5,11 @@ const LOGIN_CONNECT_TIMEOUT_MS = 10000; // WebSocket connection timeout
 const SESSION_KEYS = TASKSYNC_SESSION_KEYS; // Reference shared SSOT constant
 const getWsProtocol = getTaskSyncWsProtocol; // Reference shared SSOT helper
 
+/** Detect Safari (excludes Chrome/Chromium-based and iOS alternative browsers). */
+const isSafari =
+	/Safari/.test(navigator.userAgent) &&
+	!/(Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS)/.test(navigator.userAgent);
+
 // Register service worker for PWA support (caching, offline, install)
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker
@@ -163,7 +168,11 @@ function attemptConnect() {
                 ws.close();
             } catch { }
             setConnecting(false);
-            setError("Connection timed out");
+            if (isSafari) {
+                setError("Connection timed out \u2014 Safari may block WebSocket when iCloud Private Relay is on. Try disabling it in Settings \u2192 Safari \u2192 Privacy (\u201cHide IP Address\u201d \u2192 \u201cTrackers Only\u201d), or use Chrome instead.");
+            } else {
+                setError("Connection timed out");
+            }
         }
     }, LOGIN_CONNECT_TIMEOUT_MS);
 
@@ -210,7 +219,11 @@ function attemptConnect() {
     ws.onerror = () => {
         clearTimeout(connectTimeout);
         setConnecting(false);
-        setError("Connection failed");
+        if (isSafari) {
+            setError("Connection failed \u2014 Safari may block WebSocket when iCloud Private Relay is on. Try disabling it in Settings \u2192 Safari \u2192 Privacy (\u201cHide IP Address\u201d \u2192 \u201cTrackers Only\u201d), or use Chrome instead.");
+        } else {
+            setError("Connection failed");
+        }
     };
 
     ws.onclose = () => {

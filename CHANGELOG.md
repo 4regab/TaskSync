@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## TaskSync v3.0.6 (03-28-26)
+- refactor: extract ASKUSER_SUPERSEDED_MESSAGE constant, add mid-flight cancellation test
+
+
 ## TaskSync v3.0.5 (03-27-26)
 - fix: address Copilot review — explicit useQueuedPrompt, prompt length clamp, a11y
 

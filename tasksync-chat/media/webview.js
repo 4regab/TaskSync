@@ -2394,9 +2394,10 @@ function createTextareaMirror() {
 	mirror.style.position = "absolute";
 	mirror.style.visibility = "hidden";
 	mirror.style.height = "auto";
-	mirror.style.whiteSpace = "pre-wrap";
-	mirror.style.wordWrap = "break-word";
-	mirror.style.overflowWrap = "break-word";
+	mirror.style.whiteSpace = cs.whiteSpace;
+	mirror.style.wordWrap = cs.wordWrap;
+	mirror.style.overflowWrap = cs.overflowWrap;
+	mirror.style.wordBreak = cs.wordBreak;
 	mirror.style.width = chatInput.clientWidth + "px";
 	mirror.style.font = cs.font;
 	mirror.style.lineHeight = cs.lineHeight;

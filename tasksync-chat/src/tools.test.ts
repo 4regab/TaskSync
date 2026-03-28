@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AUTO_APPEND_DEFAULT_TEXT } from "./constants/remoteConstants";
+import {
+	ASKUSER_SUPERSEDED_MESSAGE,
+	AUTO_APPEND_DEFAULT_TEXT,
+} from "./constants/remoteConstants";
 import { buildFinalResponse } from "./tools";
 
 const {
@@ -302,8 +305,7 @@ describe("askUser cancellation handling", () => {
 		const { askUser } = await import("./tools");
 		const provider = {
 			waitForUserResponse: vi.fn().mockResolvedValue({
-				value:
-					"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]",
+				value: ASKUSER_SUPERSEDED_MESSAGE,
 				attachments: [],
 				queue: false,
 				cancelled: true,
@@ -315,9 +317,7 @@ describe("askUser cancellation handling", () => {
 			provider as any,
 			createToken() as any,
 		);
-		expect(result.response).toBe(
-			"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]",
-		);
+		expect(result.response).toBe(ASKUSER_SUPERSEDED_MESSAGE);
 		expect(result.attachments).toEqual([]);
 		expect(result.queue).toBe(false);
 	});
@@ -330,8 +330,7 @@ describe("askUser cancellation handling", () => {
 		const { registerTools } = await import("./tools");
 		const provider = {
 			waitForUserResponse: vi.fn().mockResolvedValue({
-				value:
-					"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]",
+				value: ASKUSER_SUPERSEDED_MESSAGE,
 				attachments: [],
 				queue: false,
 				cancelled: true,
@@ -358,9 +357,7 @@ describe("askUser cancellation handling", () => {
 		// The response text should contain the cancelled message
 		const textPart = result.parts[0];
 		const parsed = JSON.parse(textPart.value);
-		expect(parsed.response).toBe(
-			"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]",
-		);
+		expect(parsed.response).toBe(ASKUSER_SUPERSEDED_MESSAGE);
 		expect(showErrorMessageMock).not.toHaveBeenCalled();
 	});
 
@@ -383,5 +380,40 @@ describe("askUser cancellation handling", () => {
 		await expect(
 			askUser({ question: "Test?" }, provider as any, cancelledToken as any),
 		).rejects.toBeInstanceOf(MockCancellationError);
+	});
+
+	/**
+	 * Mid-flight cancellation: token fires while waitForUserResponse is still pending.
+	 * The createCancellationPromise race must cause askUser to reject with CancellationError.
+	 */
+	it("throws CancellationError when token fires mid-flight during waitForUserResponse", async () => {
+		const { askUser } = await import("./tools");
+
+		// waitForUserResponse never resolves — simulates the user hasn't responded yet
+		const provider = {
+			waitForUserResponse: vi.fn(() => new Promise<never>(() => {})),
+		};
+
+		// Capture the onCancellationRequested callback so we can fire it manually
+		let cancelCallback: (() => void) | undefined;
+		const token = {
+			isCancellationRequested: false,
+			onCancellationRequested: vi.fn((cb: () => void) => {
+				cancelCallback = cb;
+				return { dispose: vi.fn() };
+			}),
+		};
+
+		const promise = askUser(
+			{ question: "Pending?" },
+			provider as any,
+			token as any,
+		);
+
+		// Fire the cancellation callback to simulate the Stop button
+		expect(cancelCallback).toBeDefined();
+		cancelCallback!();
+
+		await expect(promise).rejects.toBeInstanceOf(MockCancellationError);
 	});
 });

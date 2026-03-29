@@ -256,15 +256,11 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 12px;
+    padding: 16px 12px 8px;
     text-align: center;
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 10px;
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--vscode-input-background) 85%, transparent),
-        transparent
-    );
+    border: none;
+    border-radius: 0;
+    background: none;
 }
 
 .welcome-logo {
@@ -372,6 +368,7 @@ body {
     flex-direction: column;
     gap: 10px;
     min-height: 0;
+    padding-top: 4px;
 }
 
 .sessions-panel-header {
@@ -1719,7 +1716,9 @@ body:not(.remote-mode) .changes-section {
 }
 
 /* --- Input Area Container (wrapper for dropdown + input-wrapper) --- */
-.input-area-container {
+.input-area-container,
+#input-area-container,
+.composer-wrap {
     position: relative;
     flex-shrink: 0;
     overflow: visible;

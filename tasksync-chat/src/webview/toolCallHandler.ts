@@ -104,7 +104,6 @@ function postPendingToActiveWebview(
 			isApproval,
 			choices: choices.length > 0 ? choices : undefined,
 		} satisfies ToWebviewMessage);
-		p.playNotificationSound();
 		return;
 	}
 
@@ -357,6 +356,10 @@ export async function waitForUserResponse(
 
 	if (activeSession) {
 		postPendingToActiveWebview(p, session, pendingEntry);
+	}
+
+	if (p._webviewReady && p._view) {
+		p.playNotificationSound();
 	}
 
 	if (activeSession) {

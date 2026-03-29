@@ -115,4 +115,76 @@ describe("waitForUserResponse", () => {
 			attachments: [],
 		});
 	});
+
+	it("plays notification sound for a new pending ask_user even when the session is not active", async () => {
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+			get: vi.fn((key: string, defaultValue?: unknown) =>
+				key === "responseTimeout" ? "0" : defaultValue,
+			),
+			inspect: vi.fn(),
+		} as any);
+
+		const session = {
+			id: "2",
+			title: "Agent 2",
+			status: "active",
+			queue: [],
+			queueEnabled: true,
+			history: [],
+			attachments: [],
+			autopilotEnabled: false,
+			waitingOnUser: false,
+			createdAt: Date.now(),
+			pendingToolCallId: null,
+			sessionStartTime: null,
+			sessionFrozenElapsed: null,
+			sessionTerminated: false,
+			sessionWarningShown: false,
+			aiTurnActive: false,
+			consecutiveAutoResponses: 0,
+			autopilotIndex: 0,
+		};
+
+		const p = {
+			_bindSession: vi.fn(() => session),
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+			},
+			_pendingRequests: new Map(),
+			_toolCallSessionMap: new Map(),
+			_currentSessionCallsMap: new Map(),
+			_currentToolCallId: null,
+			_webviewReady: true,
+			_view: {
+				webview: {
+					postMessage: vi.fn(),
+				},
+				show: vi.fn(),
+			},
+			playNotificationSound: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+			_saveSessionsToDisk: vi.fn(),
+			_syncActiveSessionState: vi.fn(),
+			_clearResponseTimeoutTimer: vi.fn(),
+			_applyHumanLikeDelay: vi.fn(),
+			_remoteServer: { broadcast: vi.fn() },
+		} as any;
+
+		const promise = waitForUserResponse(p, "Off-thread question?", "2");
+		expect(p.playNotificationSound).toHaveBeenCalledTimes(1);
+
+		const resolvePending = p._pendingRequests.get(session.pendingToolCallId);
+		expect(typeof resolvePending).toBe("function");
+		resolvePending({
+			value: "Answer",
+			queue: false,
+			attachments: [],
+		});
+
+		await expect(promise).resolves.toMatchObject({
+			value: "Answer",
+			queue: false,
+			attachments: [],
+		});
+	});
 });

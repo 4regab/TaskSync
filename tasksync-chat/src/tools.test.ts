@@ -420,4 +420,32 @@ describe("askUser cancellation handling", () => {
 
 		await expect(promise).rejects.toBeInstanceOf(MockCancellationError);
 	});
+
+	it("auto-assigns a session_id when the tool is invoked without one", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "7" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Handled",
+				attachments: [],
+				queue: false,
+			}),
+		};
+
+		const result = await askUser(
+			{ question: "Start from Copilot chat" },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith(
+			"Start from Copilot chat",
+			"7",
+		);
+		expect(result.response).toContain('TaskSync auto-assigned session_id "7"');
+		expect(result.response).toContain(
+			"Use this exact session_id on every future ask_user call in this chat.",
+		);
+	});
 });

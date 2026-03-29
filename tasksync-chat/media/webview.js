@@ -4052,13 +4052,16 @@ function scrollToBottom() {
  */
 function renderSessionsList() {
 	var sessionsListEl = document.getElementById("sessions-list");
+	var sessionsPanelEl = document.getElementById("sessions-panel");
 	if (!sessionsListEl) return;
 
 	if (!sessions || sessions.length === 0) {
-		sessionsListEl.innerHTML =
-			'<div class="sessions-empty" style="padding: 20px; text-align: center; color: var(--vscode-descriptionForeground);">No sessions yet. Click + to start.</div>';
+		sessionsListEl.innerHTML = "";
+		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
 		return;
 	}
+
+	if (sessionsPanelEl) sessionsPanelEl.classList.remove("hidden");
 
 	// Sort: active sessions first (newest first), then archived
 	var sorted = sessions.slice().sort(function (a, b) {
@@ -4095,12 +4098,6 @@ function renderSessionsList() {
 				promptPreview = lastH.prompt || promptPreview;
 			}
 			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
-
-			var historyCount = session.history
-				? session.history.filter(function (h) {
-						return h.status === "completed";
-					}).length
-				: 0;
 
 			var formatTime = function (ts) {
 				if (!ts) return "";

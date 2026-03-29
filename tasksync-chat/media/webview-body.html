@@ -33,11 +33,7 @@
                 <p class="welcome-autopilot-info">Use the TaskSync title bar buttons to start a new agent session, inspect history, or open settings.</p>
             </div>
 
-            <section class="sessions-panel" aria-label="Copilot agent sessions">
-                <div class="sessions-panel-header">
-                    <span class="sessions-panel-title">Copilot Agent Sessions</span>
-                    <span class="sessions-panel-subtitle">Open a thread to answer that agent.</span>
-                </div>
+            <section class="sessions-panel hidden" id="sessions-panel" aria-label="Copilot agent sessions">
                 <div class="sessions-list-container" id="sessions-list">
                     <!-- Sessions will be injected here by rendering.js -->
                 </div>
@@ -65,7 +61,7 @@
         </div>
 
         <!-- Input Composer -->
-        <div class="composer-wrap" id="input-area-container">
+        <div class="composer-wrap input-area-container" id="input-area-container">
             <!-- File Autocomplete Dropdown -->
             <div class="autocomplete-dropdown hidden" id="autocomplete-dropdown">
                 <div class="autocomplete-list" id="autocomplete-list"></div>

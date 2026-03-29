@@ -299,6 +299,7 @@ export function handleWebviewReady(p: P): void {
 			isApproval,
 			choices: choices.length > 0 ? choices : undefined,
 		} satisfies ToWebviewMessage);
+		p.playNotificationSound?.();
 		p._pendingToolCallMessage = null;
 	}
 	// If there's an active pending request (webview was hidden/recreated while waiting),
@@ -327,6 +328,7 @@ export function handleWebviewReady(p: P): void {
 				isApproval,
 				choices: choices.length > 0 ? choices : undefined,
 			} satisfies ToWebviewMessage);
+			p.playNotificationSound?.();
 		}
 	}
 }

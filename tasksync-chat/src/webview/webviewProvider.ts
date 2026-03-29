@@ -433,6 +433,21 @@ export class TaskSyncWebviewProvider
 		return session;
 	}
 
+	public createSessionForMissingId(): ChatSession {
+		const session = this._sessionManager.createSession(
+			this._sessionManager.getNextAgentTitle(),
+			this._sessionManager.getNextSessionId(),
+			{
+				queueEnabled: this._queueEnabled,
+				autopilotEnabled: this._autopilotEnabled,
+			},
+			false,
+		);
+		this._updateSessionsUI();
+		this._saveSessionsToDisk();
+		return session;
+	}
+
 	public _clearResponseTimeoutTimer(
 		toolCallId: string | null | undefined,
 	): void {

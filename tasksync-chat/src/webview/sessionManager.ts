@@ -4,10 +4,7 @@
 import * as vscode from "vscode";
 
 import type { P, ToWebviewMessage } from "./webviewTypes";
-import { debugLog, formatElapsed, getHumanLikeDelayMs } from "./webviewUtils";
-
-const _TIMER_TOOLTIP =
-	"It is advisable to start a new session and use another premium request prompt after 2-4h or 50 tool calls";
+import { debugLog, getHumanLikeDelayMs } from "./webviewUtils";
 
 /**
  * Apply a random human-like delay before an automated response.
@@ -38,24 +35,9 @@ export async function applyHumanLikeDelay(p: P, label?: string): Promise<void> {
  */
 export function updateViewTitle(p: P): void {
 	if (p._view) {
-		const callCount = p._currentSessionCalls.length;
-		if (p._sessionFrozenElapsed !== null) {
-			p._view.title = formatElapsed(p._sessionFrozenElapsed);
-			p._view.badge =
-				callCount > 0
-					? { value: callCount, tooltip: _TIMER_TOOLTIP }
-					: undefined;
-		} else if (p._sessionStartTime !== null) {
-			p._view.title = formatElapsed(Date.now() - p._sessionStartTime);
-			p._view.badge =
-				callCount > 0
-					? { value: callCount, tooltip: _TIMER_TOOLTIP }
-					: undefined;
-		} else {
-			p._view.title = undefined;
-			p._view.description = undefined;
-			p._view.badge = undefined;
-		}
+		p._view.title = undefined;
+		p._view.description = undefined;
+		p._view.badge = undefined;
 		p._view.webview.postMessage({
 			type: "updateSessionTimer",
 			startTime: p._sessionStartTime,
@@ -75,9 +57,6 @@ export function startSessionTimerInterval(p: P): void {
 	p._sessionTimerInterval = setInterval(() => {
 		if (p._sessionStartTime !== null && p._sessionFrozenElapsed === null) {
 			const elapsed = Date.now() - p._sessionStartTime;
-			if (p._view) {
-				p._view.title = formatElapsed(elapsed);
-			}
 			const warningThresholdMs = p._sessionWarningHours * 60 * 60 * 1000;
 			if (
 				p._sessionWarningHours > 0 &&

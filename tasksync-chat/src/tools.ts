@@ -41,6 +41,10 @@ export interface AskUserToolResult {
 	queue: boolean;
 }
 
+function buildAssignedSessionInstruction(sessionId: string): string {
+	return `TaskSync auto-assigned session_id "${sessionId}" for this Copilot chat because it was omitted. Use this exact session_id on every future ask_user call in this chat.`;
+}
+
 /**
  * Reads a file as Uint8Array for efficient binary handling
  */
@@ -84,9 +88,11 @@ export async function askUser(
 	provider: TaskSyncWebviewProvider,
 	token: vscode.CancellationToken,
 ): Promise<AskUserToolResult> {
+	let effectiveSessionId = params.session_id?.trim() || "";
+	let autoAssignedSessionId: string | undefined;
 	debugLog(
 		"[TaskSync] askUser invoked — session_id:",
-		params.session_id,
+		effectiveSessionId || "<missing>",
 		"question:",
 		params.question.slice(0, 80),
 	);
@@ -96,13 +102,14 @@ export async function askUser(
 		throw new vscode.CancellationError();
 	}
 
-	if (!params.session_id || params.session_id.trim().length === 0) {
-		return {
-			response:
-				"TaskSync rejected ask_user because session_id is required. Start a TaskSync conversation and pass that exact session_id on every ask_user call.",
-			attachments: [],
-			queue: false,
-		};
+	if (!effectiveSessionId) {
+		const assignedSession = provider.createSessionForMissingId();
+		autoAssignedSessionId = assignedSession.id;
+		effectiveSessionId = assignedSession.id;
+		debugLog(
+			"[TaskSync] askUser — auto-assigned missing session_id:",
+			autoAssignedSessionId,
+		);
 	}
 
 	// Create cancellation promise with cleanup capability
@@ -111,7 +118,7 @@ export async function askUser(
 	try {
 		// Race the user response against cancellation
 		const result = await Promise.race([
-			provider.waitForUserResponse(params.question, params.session_id),
+			provider.waitForUserResponse(params.question, effectiveSessionId),
 			cancellation.promise,
 		]);
 
@@ -123,12 +130,19 @@ export async function askUser(
 		// and can call ask_user again. Real user cancellation (Stop button) is handled
 		// by the CancellationToken/createCancellationPromise path which correctly throws.
 		if (result.cancelled) {
+			let cancelledResponse = result.value;
+			if (autoAssignedSessionId) {
+				cancelledResponse = appendAutoAppendText(
+					cancelledResponse,
+					buildAssignedSessionInstruction(autoAssignedSessionId),
+				);
+			}
 			debugLog(
 				"[TaskSync] askUser — superseded/cancelled, response:",
-				result.value.slice(0, 80),
+				cancelledResponse.slice(0, 80),
 			);
 			return {
-				response: result.value,
+				response: cancelledResponse,
 				attachments: [],
 				queue: result.queue,
 			};
@@ -164,6 +178,13 @@ export async function askUser(
 					validAttachments.push(att.uri);
 				}
 			}
+		}
+
+		if (autoAssignedSessionId) {
+			responseText = appendAutoAppendText(
+				responseText,
+				buildAssignedSessionInstruction(autoAssignedSessionId),
+			);
 		}
 
 		debugLog(

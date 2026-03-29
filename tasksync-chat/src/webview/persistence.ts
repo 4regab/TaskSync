@@ -236,10 +236,18 @@ export async function loadSessionsFromDiskAsync(p: P): Promise<void> {
 /**
  * Save sessions to disk (async).
  */
+/**
+ * Save sessions to disk (debounced).
+ */
 export function saveSessionsToDisk(p: P): void {
-	saveSessionsToDiskAsync(p).catch((error) => {
-		console.error("[TaskSync] Failed to save sessions:", error);
-	});
+	if (p._sessionSaveTimer) {
+		clearTimeout(p._sessionSaveTimer);
+	}
+	p._sessionSaveTimer = setTimeout(() => {
+		saveSessionsToDiskAsync(p).catch((error) => {
+			console.error("[TaskSync] Failed to save sessions:", error);
+		});
+	}, p._SESSION_SAVE_DEBOUNCE_MS);
 }
 
 /**

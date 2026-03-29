@@ -436,8 +436,25 @@ export function handleSubmit(
 			p._saveSessionsToDisk();
 		} else {
 			debugLog(
-				`[TaskSync] handleSubmit — no resolve found for toolCallId: ${currentPendingId}, rejecting stale submit`,
+				`[TaskSync] handleSubmit — no resolve found for toolCallId: ${currentPendingId}, stale state — queueing message instead of dropping it`,
 			);
+			// Resolver is gone (e.g. after reload) — queue the message so the user's input isn't lost
+			if (value && value.trim()) {
+				const queuedPrompt: QueuedPrompt = {
+					id: generateId("q"),
+					prompt: value.trim(),
+					attachments: attachments.length > 0 ? [...attachments] : undefined,
+				};
+				activeSession.queue.push(queuedPrompt);
+				activeSession.queueEnabled = true;
+				p._queueEnabled = true;
+				notifyQueueChanged(p);
+			}
+			// Clean up the stale pending state
+			activeSession.pendingToolCallId = null;
+			activeSession.waitingOnUser = false;
+			p._syncActiveSessionState();
+			p._saveSessionsToDisk();
 		}
 	} else {
 		debugLog(

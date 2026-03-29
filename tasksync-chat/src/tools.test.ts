@@ -433,7 +433,7 @@ describe("askUser cancellation handling", () => {
 		};
 
 		const result = await askUser(
-			{ question: "Start from Copilot chat" },
+			{ question: "Start from Copilot chat", session_id: "auto" },
 			provider as any,
 			createToken() as any,
 		);

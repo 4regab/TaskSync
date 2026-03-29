@@ -194,6 +194,10 @@ export function disposeProvider(p: P): void {
 		clearTimeout(p._queueSaveTimer);
 		p._queueSaveTimer = null;
 	}
+	if (p._sessionSaveTimer) {
+		clearTimeout(p._sessionSaveTimer);
+		p._sessionSaveTimer = null;
+	}
 	if (p._historySaveTimer) {
 		clearTimeout(p._historySaveTimer);
 		p._historySaveTimer = null;

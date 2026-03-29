@@ -7,7 +7,7 @@ import { appendAutoAppendText, debugLog } from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
-	session_id?: string;
+	session_id: string;
 }
 
 /**
@@ -89,6 +89,10 @@ export async function askUser(
 	token: vscode.CancellationToken,
 ): Promise<AskUserToolResult> {
 	let effectiveSessionId = params.session_id?.trim() || "";
+	// Treat "auto" as a bootstrap signal — same as missing
+	if (effectiveSessionId.toLowerCase() === "auto") {
+		effectiveSessionId = "";
+	}
 	let autoAssignedSessionId: string | undefined;
 	debugLog(
 		"[TaskSync] askUser invoked — session_id:",

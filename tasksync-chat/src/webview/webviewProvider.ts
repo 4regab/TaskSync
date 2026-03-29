@@ -11,10 +11,7 @@ import {
 } from "../constants/remoteConstants";
 import { ContextManager, ContextReferenceType } from "../context";
 import type { RemoteServer } from "../server/remoteServer";
-import {
-	startFreshCopilotChatWithQuery,
-	startNewSessionChat,
-} from "../utils/chatSessionUtils";
+import { startNewSessionChat } from "../utils/chatSessionUtils";
 import { ChatSessionManager } from "./chatSessionManager";
 import * as fileH from "./fileHandlers";
 import * as lifecycle from "./lifecycleHandlers";
@@ -58,6 +55,15 @@ export class TaskSyncWebviewProvider
 
 	// All underscore-prefixed members are "internal" by convention but public
 	// for handler module access. See webviewTypes.ts P type.
+	//
+	// MIRROR FIELD CONVENTION:
+	// Fields marked "Mirrors the ACTIVE session's ..." are copies of the active
+	// ChatSession's state. They exist for backward compatibility with the webview
+	// and handler modules. The canonical source of truth is always the ChatSession
+	// object in _sessionManager. When a handler writes to both the session field
+	// AND the mirror field, call _syncActiveSessionState() afterward to ensure
+	// consistency. If only the session was updated, _syncActiveSessionState()
+	// will copy the new value into the mirror field automatically.
 	_view?: vscode.WebviewView;
 
 	// Multi-session orchestration manager
@@ -107,6 +113,10 @@ export class TaskSyncWebviewProvider
 	_queueSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 	readonly _QUEUE_SAVE_DEBOUNCE_MS = 300;
+
+	// Debounce timer for session persistence
+	_sessionSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	readonly _SESSION_SAVE_DEBOUNCE_MS = 500;
 
 	// Debounce timer for history persistence (async background saves)
 	_historySaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -812,6 +822,15 @@ export class TaskSyncWebviewProvider
 
 	private async _loadSessionsFromDiskAsync(): Promise<void> {
 		await persist.loadSessionsFromDiskAsync(this);
+		// Clear stale pending state: after a reload, Promise resolvers are gone
+		// so any persisted pendingToolCallId can never be resolved.
+		for (const session of this._sessionManager.getAllSessions()) {
+			if (session.pendingToolCallId) {
+				session.pendingToolCallId = null;
+				session.waitingOnUser = false;
+				session.aiTurnActive = false;
+			}
+		}
 		this._syncActiveSessionState();
 		this._updateSessionsUI();
 	}

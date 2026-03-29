@@ -46,6 +46,12 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 function renderCurrentSession() {
 	if (!toolHistoryArea) return;
 
+	// Clear old chat stream bubbles when switching/re-rendering session
+	if (chatStreamArea) {
+		chatStreamArea.innerHTML = "";
+		chatStreamArea.classList.add("hidden");
+	}
+
 	let completedCalls = currentSessionCalls.filter(function (tc) {
 		return tc.status === "completed";
 	});
@@ -508,19 +514,30 @@ function renderMermaidDiagrams() {
 }
 
 /**
- * Update welcome section visibility based on current session state
- * Hide welcome when there are completed tool calls or a pending call
+ * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {
-	if (!welcomeSection) return;
-	let hasCompletedCalls = currentSessionCalls.some(function (tc) {
-		return tc.status === "completed";
-	});
-	let hasPendingMessage =
-		pendingMessage && !pendingMessage.classList.contains("hidden");
-	let shouldHide =
-		hasCompletedCalls || pendingToolCall !== null || hasPendingMessage;
-	welcomeSection.classList.toggle("hidden", shouldHide);
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+
+	// If there's an active session, show the thread shell, hide the hub
+	if (activeSessionId) {
+		if (hubEl) hubEl.classList.add("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		// Update thread head title
+		var activeSession = (sessions || []).find(function (s) {
+			return s.id === activeSessionId;
+		});
+		var stageTitle = document.getElementById("stage-title");
+		if (activeSession) {
+			if (stageTitle) stageTitle.textContent = activeSession.title;
+		}
+	} else {
+		// No active session: show the hub, hide the thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.add("hidden");
+	}
 }
 
 /**
@@ -531,4 +548,125 @@ function scrollToBottom() {
 	requestAnimationFrame(function () {
 		chatContainer.scrollTop = chatContainer.scrollHeight;
 	});
+}
+
+// ==================== Multi-Session Rendering ====================
+
+/**
+ * Render the sessions list in the workspace-hub.
+ * Displays each session as a clickable row.
+ */
+function renderSessionsList() {
+	var sessionsListEl = document.getElementById("sessions-list");
+	if (!sessionsListEl) return;
+
+	if (!sessions || sessions.length === 0) {
+		sessionsListEl.innerHTML =
+			'<div class="sessions-empty" style="padding: 20px; text-align: center; color: var(--vscode-descriptionForeground);">No sessions yet. Click + to start.</div>';
+		return;
+	}
+
+	// Sort: active sessions first (newest first), then archived
+	var sorted = sessions.slice().sort(function (a, b) {
+		if (a.status !== b.status) {
+			return a.status === "active" ? -1 : 1;
+		}
+		return b.createdAt - a.createdAt;
+	});
+
+	var html = sorted
+		.map(function (session) {
+			var isActive = session.id === activeSessionId;
+			var isWaiting = session.waitingOnUser;
+			var isArchived = session.status === "archived";
+
+			var rowClass =
+				"chat-row" +
+				(isActive ? " active" : "") +
+				(isWaiting ? " waiting" : "") +
+				(isArchived ? " archived" : "");
+
+			// Default preview snippet
+			var promptPreview = "Tap to view thread...";
+			if (session.history && session.history.length > 0) {
+				var lastHistory = session.history[0]; // Assuming reversed (newest first)? Or last?
+				// Let's grab the last prompt block string:
+				var lastH = session.history[session.history.length - 1]; // standard order
+				if (
+					session.history[0] &&
+					session.history[0].timestamp > (lastH ? lastH.timestamp : 0)
+				) {
+					lastH = session.history[0]; // Wait, if history is [newest, ...oldest] then 0 is latest
+				}
+				promptPreview = lastH.prompt || promptPreview;
+			}
+			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
+
+			var historyCount = session.history
+				? session.history.filter(function (h) {
+						return h.status === "completed";
+					}).length
+				: 0;
+
+			var formatTime = function (ts) {
+				if (!ts) return "";
+				var d = new Date(ts);
+				return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+			};
+			var timeStr = formatTime(session.createdAt);
+
+			return (
+				'<div class="' +
+				rowClass +
+				'" data-session-id="' +
+				escapeHtml(session.id) +
+				'">' +
+				'<div class="chat-row-main">' +
+				'<div class="chat-row-top">' +
+				"<strong>" +
+				escapeHtml(session.title) +
+				"</strong>" +
+				"<span>" +
+				escapeHtml(timeStr) +
+				"</span>" +
+				"</div>" +
+				'<div class="chat-row-preview">' +
+				escapeHtml(promptPreview).substring(0, 100) +
+				"</div>" +
+				"</div>" +
+				'<div class="session-thread-actions">' +
+				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
+				escapeHtml(session.id) +
+				'" title="Delete session" aria-label="Delete session ' +
+				escapeHtml(session.title) +
+				'"><span class="codicon codicon-trash"></span></button>' +
+				"</div>" +
+				"</div>"
+			);
+		})
+		.join("");
+
+	sessionsListEl.innerHTML = html;
+
+	// Bind click handlers for session switching
+	sessionsListEl.querySelectorAll(".chat-row").forEach(function (item) {
+		item.addEventListener("click", function () {
+			var sessionId = item.getAttribute("data-session-id");
+			if (sessionId) {
+				vscode.postMessage({ type: "switchSession", sessionId: sessionId });
+			}
+		});
+	});
+
+	sessionsListEl
+		.querySelectorAll(".session-delete-btn")
+		.forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				var sessionId = btn.getAttribute("data-delete-session-id");
+				if (sessionId) {
+					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
+				}
+			});
+		});
 }

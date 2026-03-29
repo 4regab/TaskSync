@@ -46,13 +46,7 @@ function init() {
 		initCardSelection();
 		initChangesPanel();
 
-		// Restore persisted input value (when user switches sidebar tabs and comes back)
-		if (chatInput && persistedInputValue) {
-			chatInput.value = persistedInputValue;
-			autoResizeTextarea();
-			updateInputHighlighter();
-			updateSendButtonState();
-		}
+		restoreActiveSessionComposerState();
 
 		// Restore attachments display
 		if (currentAttachments.length > 0) {
@@ -73,12 +67,41 @@ function init() {
  * Save webview state to persist across sidebar visibility changes
  */
 function saveWebviewState() {
+	saveActiveSessionComposerState();
 	vscode.setState({
 		inputValue: chatInput ? chatInput.value : "",
 		attachments: currentAttachments.filter(function (a) {
 			return !a.isTemporary;
 		}), // Don't persist temp images
+		sessionComposerState: sessionComposerState,
 	});
+}
+
+function getComposerStateKey() {
+	return activeSessionId || "__hub__";
+}
+
+function saveActiveSessionComposerState() {
+	var key = getComposerStateKey();
+	sessionComposerState[key] = {
+		inputValue: chatInput ? chatInput.value : "",
+	};
+}
+
+function restoreActiveSessionComposerState() {
+	if (!chatInput) return;
+	var key = getComposerStateKey();
+	var saved = sessionComposerState[key];
+	var nextValue =
+		saved && typeof saved.inputValue === "string"
+			? saved.inputValue
+			: !activeSessionId && persistedInputValue
+				? persistedInputValue
+				: "";
+	chatInput.value = nextValue;
+	autoResizeTextarea();
+	updateInputHighlighter();
+	updateSendButtonState();
 }
 
 function cacheDOMElements() {
@@ -114,7 +137,15 @@ function cacheDOMElements() {
 	changesDiffTitle = document.getElementById("changes-diff-title");
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
-	remoteSessionTimerEl = document.getElementById("remote-session-timer");
+	hubNewSessionBtn = document.getElementById("hub-new-session-btn");
+	hubHistoryBtn = document.getElementById("hub-history-btn");
+	hubSettingsBtn = document.getElementById("hub-settings-btn");
+	threadBackBtn = document.getElementById("thread-back-btn");
+	threadHistoryBtn = document.getElementById("thread-history-btn");
+	threadSettingsBtn = document.getElementById("thread-settings-btn");
+	remoteSessionTimerEl =
+		document.getElementById("remote-session-timer") ||
+		document.getElementById("stage-sub");
 	if (!remoteSessionTimerEl && isRemoteMode) {
 		var remoteHeaderLeft = document.querySelector(".remote-header-left");
 		if (remoteHeaderLeft) {

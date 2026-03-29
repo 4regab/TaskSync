@@ -16,6 +16,7 @@ function handleExtensionMessage(event) {
 		case "toolCallPending":
 			showPendingToolCall(
 				message.id,
+				message.sessionId,
 				message.prompt,
 				message.isApproval,
 				message.choices,
@@ -38,6 +39,18 @@ function handleExtensionMessage(event) {
 			persistedHistory = message.history || [];
 			_inputHistoryCache = null; // Invalidate cache when history updates
 			renderHistoryModal();
+			break;
+		case "updateSessions":
+			if (typeof saveActiveSessionComposerState === "function") {
+				saveActiveSessionComposerState();
+			}
+			sessions = Array.isArray(message.sessions) ? message.sessions : [];
+			activeSessionId = message.activeSessionId || null;
+			renderSessionsList();
+			if (typeof restoreActiveSessionComposerState === "function") {
+				restoreActiveSessionComposerState();
+			}
+			updateWelcomeSectionVisibility();
 			break;
 		case "openHistoryModal":
 			openHistoryModal();
@@ -138,6 +151,15 @@ function handleExtensionMessage(event) {
 			pendingToolCall = null;
 			lastPendingContentHtml = "";
 			isProcessingResponse = false;
+			if (activeSessionId) {
+				sessionComposerState[activeSessionId] = { inputValue: "" };
+			}
+			if (chatInput) {
+				chatInput.value = "";
+				chatInput.style.height = "auto";
+				updateInputHighlighter();
+				updateSendButtonState();
+			}
 			renderCurrentSession();
 			if (pendingMessage) {
 				if (
@@ -156,6 +178,18 @@ function handleExtensionMessage(event) {
 				}
 			}
 			updateWelcomeSectionVisibility();
+			break;
+		case "clearPendingState":
+			pendingToolCall = null;
+			lastPendingContentHtml = "";
+			isProcessingResponse = false;
+			if (pendingMessage) {
+				pendingMessage.classList.add("hidden");
+				pendingMessage.innerHTML = "";
+			}
+			hideApprovalModal();
+			hideChoicesBar();
+			renderCurrentSession();
 			break;
 		case "updateSessionTimer":
 			updateRemoteSessionTimerState(
@@ -193,6 +227,16 @@ function updateRemoteSessionTimerState(startTime, frozenElapsed) {
 function renderRemoteSessionTimer() {
 	if (!remoteSessionTimerEl) return;
 
+	if (remoteSessionStartTime === null && remoteSessionFrozenElapsed === null) {
+		remoteSessionTimerEl.textContent = "";
+		remoteSessionTimerEl.classList.add("hidden");
+		remoteSessionTimerEl.classList.remove("inactive", "active", "frozen");
+		remoteSessionTimerEl.title = "Session timer (idle)";
+		return;
+	}
+
+	remoteSessionTimerEl.classList.remove("hidden");
+
 	var timerText = "0s";
 	var timerStateClass = "inactive";
 
@@ -221,8 +265,8 @@ function formatRemoteElapsed(ms) {
 	return s + "s";
 }
 
-function showPendingToolCall(id, prompt, isApproval, choices) {
-	pendingToolCall = { id: id, prompt: prompt };
+function showPendingToolCall(id, sessionId, prompt, isApproval, choices) {
+	pendingToolCall = { id: id, sessionId: sessionId, prompt: prompt };
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];

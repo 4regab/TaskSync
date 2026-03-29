@@ -43,3 +43,26 @@ export async function startFreshCopilotChatWithQuery(
 		throw err;
 	}
 }
+
+/**
+ * Start a new Copilot chat with session_id injected as a system instruction.
+ * The session_id is embedded in the opening prompt so that Copilot will pass
+ * it back in all subsequent tool invocations.
+ */
+export async function startNewSessionChat(
+	sessionId: string,
+	chatCommand: string,
+	initialPrompt?: string,
+	fallbackChatCommand?: string,
+): Promise<void> {
+	const sessionInstruction = `[SYSTEM]: You are operating in TaskSync Session ID: ${sessionId}. On EVERY ask_user tool call, you MUST include "session_id": "${sessionId}" in the tool input. Never omit it and never use a different value.`;
+	const fullQuery = initialPrompt
+		? `${sessionInstruction}\n\n${initialPrompt}`
+		: sessionInstruction;
+
+	await startFreshCopilotChatWithQuery(
+		chatCommand,
+		fullQuery,
+		fallbackChatCommand,
+	);
+}

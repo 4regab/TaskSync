@@ -83,6 +83,23 @@ function bindEventListeners() {
 			if (e.target === historyModalOverlay) closeHistoryModal();
 		});
 	}
+
+	// Hub & Thread Shell events
+	if (hubNewSessionBtn)
+		hubNewSessionBtn.addEventListener("click", openNewSessionModal);
+	if (hubHistoryBtn) hubHistoryBtn.addEventListener("click", openHistoryModal);
+	if (hubSettingsBtn)
+		hubSettingsBtn.addEventListener("click", openSettingsModal);
+	if (threadBackBtn) {
+		threadBackBtn.addEventListener("click", function () {
+			vscode.postMessage({ type: "switchSession", sessionId: null });
+		});
+	}
+	if (threadHistoryBtn)
+		threadHistoryBtn.addEventListener("click", openHistoryModal);
+	if (threadSettingsBtn)
+		threadSettingsBtn.addEventListener("click", openSettingsModal);
+
 	// Edit mode button events
 	if (editCancelBtn) editCancelBtn.addEventListener("click", cancelEditMode);
 	if (editConfirmBtn) editConfirmBtn.addEventListener("click", confirmEditMode);

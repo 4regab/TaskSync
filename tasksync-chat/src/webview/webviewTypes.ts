@@ -49,6 +49,7 @@ export interface UserResponseResult {
 // Tool call history entry
 export interface ToolCallEntry {
 	id: string;
+	sessionId?: string;
 	prompt: string;
 	response: string;
 	timestamp: number;
@@ -71,12 +72,36 @@ export interface ReusablePrompt {
 	prompt: string; // Full prompt text
 }
 
+// Chat session for multi-session orchestration
+export interface ChatSession {
+	id: string;
+	title: string;
+	status: "active" | "archived";
+	queue: QueuedPrompt[];
+	queueEnabled: boolean;
+	history: ToolCallEntry[];
+	attachments: AttachmentInfo[];
+	autopilotEnabled: boolean;
+	waitingOnUser: boolean;
+	createdAt: number;
+	/** The toolCallId currently pending for THIS session (null if not waiting) */
+	pendingToolCallId: string | null;
+	sessionStartTime: number | null;
+	sessionFrozenElapsed: number | null;
+	sessionTerminated: boolean;
+	sessionWarningShown: boolean;
+	aiTurnActive: boolean;
+	consecutiveAutoResponses: number;
+	autopilotIndex: number;
+}
+
 // Message types sent from extension to webview
 export type ToWebviewMessage =
 	| { type: "updateQueue"; queue: QueuedPrompt[]; enabled: boolean }
 	| {
 			type: "toolCallPending";
 			id: string;
+			sessionId: string;
 			prompt: string;
 			isApproval: boolean;
 			choices?: ParsedChoice[];
@@ -136,11 +161,23 @@ export type ToWebviewMessage =
 	| { type: "triggerSendFromShortcut" }
 	| { type: "openHistoryModal" }
 	| { type: "openNewSessionModal" }
-	| { type: "openResetSessionModal" };
+	| { type: "openResetSessionModal" }
+	| { type: "clearPendingState" }
+	| {
+			type: "updateSessions";
+			sessions: ChatSession[];
+			activeSessionId: string | null;
+	  };
 
 // Message types sent from webview to extension
 export type FromWebviewMessage =
-	| { type: "submit"; value: string; attachments: AttachmentInfo[] }
+	| {
+			type: "submit";
+			sessionId: string | null;
+			toolCallId?: string | null;
+			value: string;
+			attachments: AttachmentInfo[];
+	  }
 	| {
 			type: "addQueuePrompt";
 			prompt: string;
@@ -195,4 +232,7 @@ export type FromWebviewMessage =
 			contextType: string;
 			options?: Record<string, unknown>;
 	  }
-	| { type: "copyToClipboard"; text: string };
+	| { type: "copyToClipboard"; text: string }
+	| { type: "switchSession"; sessionId: string | null }
+	| { type: "archiveSession"; sessionId: string }
+	| { type: "deleteSession"; sessionId: string };

@@ -1,57 +1,145 @@
-<div class="main-container">
-    <!-- Chat Container -->
-    <div class="chat-container" id="chat-container">
-        <!-- Welcome Section - Let's build -->
-        <div class="welcome-section" id="welcome-section">
-            <div class="welcome-icon">
-                <img src="{{LOGO_URI}}" alt="TaskSync Logo" width="48" height="48" class="welcome-logo">
-            </div>
-            <h1 class="welcome-title">{{TITLE}}</h1>
-            <p class="welcome-subtitle">{{SUBTITLE}}</p>
-
-            <div class="welcome-cards">
-                <div class="welcome-card welcome-card-vibe" id="card-vibe">
-                    <div class="welcome-card-header">
-                        <span class="codicon codicon-comment-discussion"></span>
-                        <span class="welcome-card-title">Normal</span>
-                    </div>
-                    <p class="welcome-card-desc">Respond to each AI request directly. Full control over every
-                        interaction.</p>
+<div class="main-container orch">
+    <!-- Mobile Shell: Workspace Hub (Sessions List) -->
+    <div class="mobile-shell hub-shell" id="workspace-hub">
+        <div class="hub-scroll list" id="workspace-hub-scroll">
+            <div class="welcome-section" id="welcome-section">
+                <div class="welcome-icon">
+                    <img src="{{LOGO_URI}}" alt="TaskSync Logo" width="48" height="48" class="welcome-logo">
                 </div>
-                <div class="welcome-card welcome-card-spec" id="card-spec">
-                    <div class="welcome-card-header">
-                        <span class="codicon codicon-layers"></span>
-                        <span class="welcome-card-title">Queue</span>
+                <h1 class="welcome-title">{{TITLE}}</h1>
+                <p class="welcome-subtitle">{{SUBTITLE}}</p>
+
+                <div class="welcome-cards">
+                    <div class="welcome-card welcome-card-vibe" id="card-vibe">
+                        <div class="welcome-card-header">
+                            <span class="codicon codicon-comment-discussion"></span>
+                            <span class="welcome-card-title">Normal</span>
+                        </div>
+                        <p class="welcome-card-desc">Respond to each Copilot agent request directly. Full control over every interaction.</p>
                     </div>
-                    <p class="welcome-card-desc">Batch your responses. AI consumes from queue automatically, one by one.
-                    </p>
+                    <div class="welcome-card welcome-card-spec" id="card-spec">
+                        <div class="welcome-card-header">
+                            <span class="codicon codicon-layers"></span>
+                            <span class="welcome-card-title">Queue</span>
+                        </div>
+                        <p class="welcome-card-desc">Batch replies for each agent session. TaskSync feeds queued responses automatically, one by one.</p>
+                    </div>
                 </div>
+
+                <p class="welcome-autopilot-info"><strong>Multi-Agent Orchestrator</strong> keeps each Copilot session isolated with its own pending <code>ask_user</code>, queue, history, timer, and attachments.</p>
+                <p class="welcome-autopilot-info"><strong>Autopilot</strong> responds to <code>ask_user</code> prompts with your configured prompt list. Queued prompts still go first.</p>
+                <p class="welcome-autopilot-info"><strong>Auto Append</strong> is a Settings toggle that appends your configured text to every <code>ask_user</code> response so Copilot reliably loops back through the tool.</p>
+                <p class="welcome-autopilot-info"><strong>Remote server</strong> lets you control TaskSync from another device over LAN or Tailscale with a PIN.</p>
+                <p class="welcome-autopilot-info">Use the TaskSync title bar buttons to start a new agent session, inspect history, or open settings.</p>
             </div>
 
-            <p class="welcome-autopilot-info"><strong>Autopilot</strong> responds to <code>ask_user</code> prompts with
-                your configured prompt list. Queued prompts still go first.</p>
-            <p class="welcome-autopilot-info"><strong>Auto Append</strong> is a Settings toggle that appends your
-                configured
-                text to every <code>ask_user</code> response. A default prompt for the <code>askUser</code> tool
-                follow-up text is prefilled to make Copilot consistently use the tool.</p>
-            <p class="welcome-autopilot-info"><strong>Remote server</strong> lets you control TaskSync from another
-                device over LAN or Tailscale with a PIN. Max 1 device by default configurable in settings.</p>
-            <p class="welcome-autopilot-info">The session timer tracks one premium request at a time. Start a new
-                session after <strong>2-4 hours</strong> or about <strong>50 tool calls</strong>.</p>
-            <p class="welcome-autopilot-info"><strong>Seems stuck or Copilot stopped?</strong> Click <strong>+</strong>
-                to start a new session.</p>
+            <section class="sessions-panel" aria-label="Copilot agent sessions">
+                <div class="sessions-panel-header">
+                    <span class="sessions-panel-title">Copilot Agent Sessions</span>
+                    <span class="sessions-panel-subtitle">Open a thread to answer that agent.</span>
+                </div>
+                <div class="sessions-list-container" id="sessions-list">
+                    <!-- Sessions will be injected here by rendering.js -->
+                </div>
+            </section>
         </div>
-
-        <!-- Tool Call History Area -->
-        <div class="tool-history-area" id="tool-history-area"></div>
-
-        <!-- Remote Chat Messages Area -->
-        <div class="chat-stream-area hidden" id="chat-stream-area"></div>
-
-        <!-- Pending Tool Call Message -->
-        <div class="pending-message hidden" id="pending-message"></div>
     </div>
 
+    <!-- Mobile Shell: Thread View (Active Chat) -->
+    <div class="mobile-shell thread-shell hidden" id="thread-shell">
+        <div class="thread-head" id="stage-head">
+            <div class="thread-title">
+                <span class="back icon-btn" id="thread-back-btn" title="Back to Sessions" role="button" tabindex="0">
+                    <span class="codicon codicon-arrow-left"></span>
+                </span>
+                <strong id="stage-title">No session yet</strong>
+                <span id="stage-sub" class="hidden"></span>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div class="chat-container" id="chat-container">
+            <div class="chat-stream-area" id="tool-history-area"></div>
+            <div class="chat-stream-area hidden" id="chat-stream-area"></div>
+            <div class="pending-message hidden" id="pending-message"></div>
+        </div>
+
+        <!-- Input Composer -->
+        <div class="composer-wrap" id="input-area-container">
+            <!-- File Autocomplete Dropdown -->
+            <div class="autocomplete-dropdown hidden" id="autocomplete-dropdown">
+                <div class="autocomplete-list" id="autocomplete-list"></div>
+                <div class="autocomplete-empty hidden" id="autocomplete-empty">No files found</div>
+            </div>
+            <!-- Slash Command Autocomplete Dropdown -->
+            <div class="slash-dropdown hidden" id="slash-dropdown">
+                <div class="slash-list" id="slash-list"></div>
+                <div class="slash-empty hidden" id="slash-empty">No prompts found. Add prompts in Settings.</div>
+            </div>
+            <div class="input-wrapper" id="input-wrapper">
+                <!-- Queue Section -->
+                <div class="queue-section hidden" id="queue-section" role="region" aria-label="Prompt queue">
+                    <div class="queue-header" id="queue-header" role="button" tabindex="0" aria-expanded="true"
+                        aria-controls="queue-list">
+                        <div class="accordion-icon" aria-hidden="true">
+                            <span class="codicon codicon-chevron-down"></span>
+                        </div>
+                        <span class="queue-header-title">Prompt Queue</span>
+                        <span class="queue-count" id="queue-count" aria-live="polite">0</span>
+                    </div>
+                    <div class="queue-list" id="queue-list" role="list" aria-label="Queued prompts">
+                        <div class="queue-empty" role="status">No prompts in queue</div>
+                    </div>
+                </div>
+                <!-- Input Container -->
+                <div class="input-container" id="input-container">
+                    <div class="chips-container hidden" id="chips-container"></div>
+                    <div class="input-row">
+                        <div class="input-highlighter-wrapper">
+                            <div class="input-highlighter" id="input-highlighter" aria-hidden="true"></div>
+                            <textarea id="chat-input" placeholder="Message session... (# files, / prompts)"
+                                rows="1"
+                                aria-label="Message input. Use # for file references, / for saved prompts"></textarea>
+                        </div>
+                    </div>
+                    <div class="actions-bar">
+                        <div class="actions-left">
+                            <button id="attach-btn" class="icon-btn" title="Add attachment (+)" aria-label="Add attachment">
+                                <span class="codicon codicon-add"></span>
+                            </button>
+                            <div class="mode-selector" id="mode-selector">
+                                <button id="mode-btn" class="mode-btn" title="Select mode" aria-label="Select mode">
+                                    <span id="mode-label">Queue</span>
+                                    <span class="codicon codicon-chevron-down"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="actions-right">
+                            <span class="autopilot-label">Autopilot</span>
+                            <div class="toggle-switch" id="autopilot-toggle" role="switch" aria-checked="false"
+                                aria-label="Enable Autopilot mode" tabindex="0"></div>
+                            <button id="send-btn" title="Send message" aria-label="Send message">
+                                <span class="codicon codicon-arrow-up"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Mode Dropdown -->
+                <div class="mode-dropdown hidden" id="mode-dropdown">
+                    <div class="mode-option" data-mode="normal">
+                        <span class="codicon codicon-comment-discussion"></span>
+                        <span>Normal</span>
+                    </div>
+                    <div class="mode-option" data-mode="queue">
+                        <span class="codicon codicon-layers"></span>
+                        <span>Queue</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Git Changes Section -->
     <section class="changes-section hidden" id="changes-section" aria-label="Code review and git changes">
         <div class="changes-header">
             <div class="changes-header-copy">
@@ -72,11 +160,9 @@
                 </button>
             </div>
         </div>
-
         <div class="changes-toolbar">
             <div class="changes-status" id="changes-status" aria-live="polite"></div>
         </div>
-
         <div class="changes-content">
             <div class="changes-list-pane">
                 <div class="changes-group" id="changes-unstaged-group">
@@ -94,80 +180,4 @@
             </div>
         </div>
     </section>
-
-    <!-- Combined Input Wrapper (Queue + Input) -->
-    <div class="input-area-container" id="input-area-container">
-        <!-- File Autocomplete Dropdown - positioned outside input-wrapper to avoid clipping -->
-        <div class="autocomplete-dropdown hidden" id="autocomplete-dropdown">
-            <div class="autocomplete-list" id="autocomplete-list"></div>
-            <div class="autocomplete-empty hidden" id="autocomplete-empty">No files found</div>
-        </div>
-        <!-- Slash Command Autocomplete Dropdown -->
-        <div class="slash-dropdown hidden" id="slash-dropdown">
-            <div class="slash-list" id="slash-list"></div>
-            <div class="slash-empty hidden" id="slash-empty">No prompts found. Add prompts in Settings.</div>
-        </div>
-        <div class="input-wrapper" id="input-wrapper">
-            <!-- Prompt Queue Section - Integrated above input -->
-            <div class="queue-section hidden" id="queue-section" role="region" aria-label="Prompt queue">
-                <div class="queue-header" id="queue-header" role="button" tabindex="0" aria-expanded="true"
-                    aria-controls="queue-list">
-                    <div class="accordion-icon" aria-hidden="true">
-                        <span class="codicon codicon-chevron-down"></span>
-                    </div>
-                    <span class="queue-header-title">Prompt Queue</span>
-                    <span class="queue-count" id="queue-count" aria-live="polite">0</span>
-                </div>
-                <div class="queue-list" id="queue-list" role="list" aria-label="Queued prompts">
-                    <div class="queue-empty" role="status">No prompts in queue</div>
-                </div>
-            </div>
-
-            <!-- Input Area -->
-            <div class="input-container" id="input-container">
-                <!-- Attachment Chips INSIDE input container -->
-                <div class="chips-container hidden" id="chips-container"></div>
-                <div class="input-row">
-                    <div class="input-highlighter-wrapper">
-                        <div class="input-highlighter" id="input-highlighter" aria-hidden="true"></div>
-                        <textarea id="chat-input" placeholder="Reply to tool call. (use # for files, / for prompts)"
-                            rows="1"
-                            aria-label="Message input. Use # for file references, / for saved prompts"></textarea>
-                    </div>
-                </div>
-                <div class="actions-bar">
-                    <div class="actions-left">
-                        <button id="attach-btn" class="icon-btn" title="Add attachment (+)" aria-label="Add attachment">
-                            <span class="codicon codicon-add"></span>
-                        </button>
-                        <div class="mode-selector" id="mode-selector">
-                            <button id="mode-btn" class="mode-btn" title="Select mode" aria-label="Select mode">
-                                <span id="mode-label">Queue</span>
-                                <span class="codicon codicon-chevron-down"></span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="actions-right">
-                        <span class="autopilot-label">Autopilot</span>
-                        <div class="toggle-switch" id="autopilot-toggle" role="switch" aria-checked="false"
-                            aria-label="Enable Autopilot mode" tabindex="0"></div>
-                        <button id="send-btn" title="Send message" aria-label="Send message">
-                            <span class="codicon codicon-arrow-up"></span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <!-- Mode Dropdown - positioned outside input-container to avoid clipping -->
-            <div class="mode-dropdown hidden" id="mode-dropdown">
-                <div class="mode-option" data-mode="normal">
-                    <span class="codicon codicon-comment-discussion"></span>
-                    <span>Normal</span>
-                </div>
-                <div class="mode-option" data-mode="queue">
-                    <span class="codicon codicon-layers"></span>
-                    <span>Queue</span>
-                </div>
-            </div>
-        </div><!-- End input-wrapper -->
-    </div><!-- End input-area-container -->
 </div>

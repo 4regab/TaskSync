@@ -7,6 +7,7 @@ import { appendAutoAppendText, debugLog } from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
+	session_id?: string;
 }
 
 /**
@@ -84,7 +85,9 @@ export async function askUser(
 	token: vscode.CancellationToken,
 ): Promise<AskUserToolResult> {
 	debugLog(
-		"[TaskSync] askUser invoked — question:",
+		"[TaskSync] askUser invoked — session_id:",
+		params.session_id,
+		"question:",
 		params.question.slice(0, 80),
 	);
 	// Check if already cancelled before starting
@@ -93,13 +96,22 @@ export async function askUser(
 		throw new vscode.CancellationError();
 	}
 
+	if (!params.session_id || params.session_id.trim().length === 0) {
+		return {
+			response:
+				"TaskSync rejected ask_user because session_id is required. Start a TaskSync conversation and pass that exact session_id on every ask_user call.",
+			attachments: [],
+			queue: false,
+		};
+	}
+
 	// Create cancellation promise with cleanup capability
 	const cancellation = createCancellationPromise(token);
 
 	try {
 		// Race the user response against cancellation
 		const result = await Promise.race([
-			provider.waitForUserResponse(params.question),
+			provider.waitForUserResponse(params.question, params.session_id),
 			cancellation.promise,
 		]);
 
@@ -230,7 +242,7 @@ export function registerTools(
 			);
 			try {
 				const result = await askUser(
-					{ question: safeQuestion },
+					{ question: safeQuestion, session_id: params?.session_id },
 					provider,
 					token,
 				);

@@ -91,6 +91,8 @@ let remoteSessionFrozenElapsed = null;
 let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
+let sessions = []; // Multi-session orchestration: all sessions
+let activeSessionId = null; // Currently focused session ID
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -123,6 +125,7 @@ const CONTEXT_MENU_COPY_MAX_AGE_MS = 30000;
 // Tracks local edits to prevent stale settings overwriting user input mid-typing.
 let reusablePrompts = [];
 let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
+let sessionComposerState = previousState.sessionComposerState || {};
 
 // Slash command autocomplete state
 let slashDropdownVisible = false;
@@ -161,6 +164,8 @@ let chatContainer,
 	autocompleteEmpty;
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
+let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
+let threadBackBtn, threadHistoryBtn, threadSettingsBtn;
 let changesSection,
 	changesRefreshBtn,
 	changesCloseBtn,

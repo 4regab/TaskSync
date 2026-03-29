@@ -14,13 +14,29 @@ const ID2 = "q_200_def";
 const ID3 = "q_300_ghi";
 
 function createMockP(queue: Array<{ id: string; prompt: string }> = []) {
+	const activeQueue = queue.map((q) => ({ ...q }));
+	const activeSession = {
+		id: "1",
+		queue: activeQueue,
+		queueEnabled: true,
+		attachments: [],
+		history: [],
+		pendingToolCallId: null,
+		waitingOnUser: false,
+		aiTurnActive: false,
+	};
 	return {
-		_promptQueue: queue.map((q) => ({ ...q })),
+		_promptQueue: activeQueue,
 		_queueEnabled: true,
 		_queueVersion: 0,
 		_saveQueueToDisk: vi.fn(),
+		_saveSessionsToDisk: vi.fn(),
 		_updateQueueUI: vi.fn(),
+		_updateSessionsUI: vi.fn(),
 		_remoteServer: null,
+		_sessionManager: {
+			getActiveSession: () => activeSession,
+		},
 	} as any;
 }
 

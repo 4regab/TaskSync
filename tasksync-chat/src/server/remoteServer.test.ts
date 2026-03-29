@@ -80,4 +80,19 @@ describe("RemoteServer session actions", () => {
 		);
 		expect(provider.startNewSession).not.toHaveBeenCalled();
 	});
+
+	it("routes startSession through the session-aware fresh-chat path", async () => {
+		const { server, provider } = await createServer();
+
+		await server["handleMessage"]({} as any, "127.0.0.1", {
+			type: "startSession",
+			prompt: "Fix the failing tests",
+		});
+
+		expect(provider.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
+			"Fix the failing tests",
+			false,
+		);
+		expect(provider.startNewSession).not.toHaveBeenCalled();
+	});
 });

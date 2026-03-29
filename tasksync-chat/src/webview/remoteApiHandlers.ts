@@ -36,8 +36,8 @@ import {
 	debugLog,
 	generateId,
 	getFileIcon,
-	hasQueuedItems,
 	notifyQueueChanged,
+	sessionHasQueuedItems,
 } from "./webviewUtils";
 
 /**
@@ -46,6 +46,7 @@ import {
 export function getRemoteState(p: P): {
 	pending: {
 		id: string;
+		sessionId: string;
 		prompt: string;
 		choices?: Array<{ label: string; value: string; shortLabel?: string }>;
 		isApproval: boolean;
@@ -80,6 +81,10 @@ export function getRemoteState(p: P): {
 			pendingEntry && pendingEntry.status === "pending"
 				? {
 						id: pendingEntry.id,
+						sessionId:
+							pendingEntry.sessionId ??
+							p._sessionManager.getActiveSessionId() ??
+							"",
 						prompt: pendingEntry.prompt,
 						choices: parseChoices(pendingEntry.prompt).map((c) => ({
 							label: c.label,
@@ -152,10 +157,20 @@ export function getRemoteState(p: P): {
  */
 export function resolveRemoteResponse(
 	p: P,
+	sessionId: string,
 	toolCallId: string,
 	value: string,
 	attachments: AttachmentInfo[],
 ): boolean {
+	const session = p._getSession(sessionId);
+	if (!session || session.pendingToolCallId !== toolCallId) {
+		debugLog(
+			"[TaskSync] resolveRemoteResponse — session/toolCall mismatch:",
+			sessionId,
+			toolCallId,
+		);
+		return false;
+	}
 	const resolver = p._pendingRequests.get(toolCallId);
 	if (!resolver) {
 		debugLog(
@@ -173,19 +188,16 @@ export function resolveRemoteResponse(
 		attachments.length,
 	);
 	p._pendingRequests.delete(toolCallId);
+	p._toolCallSessionMap.delete(toolCallId);
 
 	// Reset consecutive auto-responses counter — remote manual response is human interaction
-	p._consecutiveAutoResponses = 0;
-
-	if (p._responseTimeoutTimer) {
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
-	}
+	session.consecutiveAutoResponses = 0;
+	p._clearResponseTimeoutTimer(toolCallId);
 
 	resolver({
 		value,
 		attachments,
-		queue: hasQueuedItems(p),
+		queue: sessionHasQueuedItems(session),
 	} as UserResponseResult);
 
 	const entry = p._currentSessionCallsMap.get(toolCallId);
@@ -196,10 +208,18 @@ export function resolveRemoteResponse(
 		entry.timestamp = Date.now();
 	}
 
-	p._currentToolCallId = null;
-	p._aiTurnActive = true; // AI is now processing the response
-	debugLog(`[TaskSync] resolveRemoteResponse — resolved, aiTurnActive: true`);
-	p._updateCurrentSessionUI();
+	session.pendingToolCallId = null;
+	session.waitingOnUser = false;
+	session.aiTurnActive = true;
+	debugLog(
+		`[TaskSync] resolveRemoteResponse — resolved for session ${session.id}, aiTurnActive: true`,
+	);
+	if (p._sessionManager.getActiveSessionId() === session.id) {
+		p._syncActiveSessionState();
+	} else {
+		p._updateSessionsUI();
+	}
+	p._saveSessionsToDisk();
 
 	if (entry) {
 		broadcastToolCallCompleted(p, entry);
@@ -213,8 +233,13 @@ export function resolveRemoteResponse(
 export function cancelPendingToolCall(
 	p: P,
 	reason = "[Cancelled by user]",
+	sessionId?: string,
 ): boolean {
-	const toolCallId = p._currentToolCallId;
+	const session =
+		(sessionId
+			? p._getSession?.(sessionId)
+			: p._sessionManager?.getActiveSession?.()) ?? undefined;
+	const toolCallId = session?.pendingToolCallId ?? p._currentToolCallId ?? null;
 	if (!toolCallId) return false;
 
 	const resolver = p._pendingRequests.get(toolCallId);
@@ -225,10 +250,8 @@ export function cancelPendingToolCall(
 		reason,
 	);
 	p._pendingRequests.delete(toolCallId);
-	if (p._responseTimeoutTimer) {
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
-	}
+	p._toolCallSessionMap.delete(toolCallId);
+	p._clearResponseTimeoutTimer?.(toolCallId);
 
 	const entry = p._currentSessionCallsMap.get(toolCallId);
 	if (entry) {
@@ -238,14 +261,22 @@ export function cancelPendingToolCall(
 		entry.attachments = [];
 	}
 
-	p._currentToolCallId = null;
-	p._aiTurnActive = false;
-	debugLog(`[TaskSync] cancelPendingToolCall — cancelled, aiTurnActive: false`);
+	if (session) {
+		session.pendingToolCallId = null;
+		session.waitingOnUser = false;
+		session.aiTurnActive = false;
+	} else {
+		p._currentToolCallId = null;
+		p._aiTurnActive = false;
+	}
+	debugLog(
+		`[TaskSync] cancelPendingToolCall — cancelled, session: ${session?.id ?? "unknown"}, aiTurnActive: false`,
+	);
 	if (resolver) {
 		resolver({
 			value: reason,
 			attachments: [],
-			queue: hasQueuedItems(p),
+			queue: session ? sessionHasQueuedItems(session) : false,
 			cancelled: true,
 		} as UserResponseResult);
 	} else {
@@ -254,7 +285,12 @@ export function cancelPendingToolCall(
 			toolCallId,
 		);
 	}
-	p._updateCurrentSessionUI();
+	if (session && p._sessionManager?.getActiveSessionId?.() === session.id) {
+		p._syncActiveSessionState?.();
+	} else {
+		p._updateSessionsUI();
+	}
+	p._saveSessionsToDisk?.();
 
 	if (entry) {
 		broadcastToolCallCompleted(p, entry);
@@ -270,20 +306,27 @@ export function addToQueueFromRemote(
 	prompt: string,
 	attachments: AttachmentInfo[],
 ): { error?: string; code?: string } {
+	const activeSession = p._sessionManager.getActiveSession();
 	const trimmed = (prompt || "").trim();
 	debugLog(
-		`[TaskSync] addToQueueFromRemote — prompt: "${trimmed.slice(0, 60)}", attachments: ${attachments.length}, queueSize: ${p._promptQueue.length}`,
+		`[TaskSync] addToQueueFromRemote — prompt: "${trimmed.slice(0, 60)}", attachments: ${attachments.length}, queueSize: ${activeSession?.queue.length ?? 0}`,
 	);
+	if (!activeSession) {
+		return {
+			error: "Open a conversation before queueing a prompt.",
+			code: ErrorCode.INVALID_INPUT,
+		};
+	}
 	if (!trimmed || trimmed.length > MAX_QUEUE_PROMPT_LENGTH) {
 		return { error: "Invalid prompt length", code: ErrorCode.INVALID_INPUT };
 	}
 
-	if (p._promptQueue.length >= MAX_QUEUE_SIZE) {
+	if (activeSession.queue.length >= MAX_QUEUE_SIZE) {
 		return { error: "Queue is full", code: ErrorCode.QUEUE_FULL };
 	}
 
 	const id = generateId("q");
-	p._promptQueue.push({ id, prompt: trimmed, attachments });
+	activeSession.queue.push({ id, prompt: trimmed, attachments });
 	notifyQueueChanged(p);
 	return {};
 }
@@ -303,7 +346,14 @@ export function editQueuePromptFromRemote(
 	promptId: string,
 	newPrompt: string,
 ): { error?: string; code?: string } {
-	const prompt = p._promptQueue.find(
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) {
+		return {
+			error: "Open a conversation before editing its queue.",
+			code: ErrorCode.INVALID_INPUT,
+		};
+	}
+	const prompt = activeSession.queue.find(
 		(item: { id: string }) => item.id === promptId,
 	);
 	if (!prompt) {

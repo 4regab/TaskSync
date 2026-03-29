@@ -15,8 +15,8 @@ import {
 	broadcastToolCallCompleted,
 	debugLog,
 	generateId,
-	hasQueuedItems,
 	notifyQueueChanged,
+	sessionHasQueuedItems,
 } from "./webviewUtils";
 
 /**
@@ -28,6 +28,14 @@ export function handleAddQueuePrompt(
 	id: string,
 	attachments: AttachmentInfo[],
 ): void {
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) {
+		debugLog(
+			"[TaskSync] handleAddQueuePrompt — ignored because there is no active session",
+		);
+		return;
+	}
+
 	const trimmed = prompt.trim();
 	if (!trimmed || trimmed.length > MAX_QUEUE_PROMPT_LENGTH) {
 		debugLog(
@@ -49,9 +57,10 @@ export function handleAddQueuePrompt(
 	// Check if we should auto-respond BEFORE adding to queue (race condition fix)
 	const currentCallId = p._currentToolCallId;
 	const shouldAutoRespond =
-		!!p._queueEnabled &&
+		!!activeSession.queueEnabled &&
 		currentCallId !== null &&
-		p._pendingRequests.has(currentCallId);
+		p._pendingRequests.has(currentCallId) &&
+		activeSession.pendingToolCallId === currentCallId;
 
 	let handledAsToolResponse = false;
 
@@ -66,6 +75,7 @@ export function handleAddQueuePrompt(
 				`[TaskSync] handleAddQueuePrompt — missing resolver for pending tool call ${currentCallId}, falling back to queue`,
 			);
 			p._pendingRequests.delete(currentCallId);
+			p._toolCallSessionMap.delete(currentCallId);
 			p._currentToolCallId = null;
 		} else {
 			const effectiveResponse = settingsH.applyAutoAppendToResponse(
@@ -85,6 +95,7 @@ export function handleAddQueuePrompt(
 			} else {
 				completedEntry = {
 					id: currentCallId,
+					sessionId: activeSession.id,
 					prompt: "Tool call",
 					response: effectiveResponse,
 					attachments: queuedPrompt.attachments || [],
@@ -92,7 +103,7 @@ export function handleAddQueuePrompt(
 					isFromQueue: true,
 					status: "completed",
 				};
-				p._currentSessionCalls.unshift(completedEntry);
+				activeSession.history.unshift(completedEntry);
 				p._currentSessionCallsMap.set(completedEntry.id, completedEntry);
 			}
 
@@ -101,46 +112,45 @@ export function handleAddQueuePrompt(
 				entry: completedEntry,
 			} satisfies ToWebviewMessage);
 
-			p._updateCurrentSessionUI();
-			p._saveQueueToDisk();
-			p._updateQueueUI();
+			activeSession.pendingToolCallId = null;
+			activeSession.waitingOnUser = false;
+			activeSession.aiTurnActive = true;
+			p._syncActiveSessionState();
+			p._saveSessionsToDisk();
 
 			broadcastToolCallCompleted(p, completedEntry);
 
-			// Clear response timeout timer (matches resolveRemoteResponse behavior)
-			if (p._responseTimeoutTimer) {
-				clearTimeout(p._responseTimeoutTimer);
-				p._responseTimeoutTimer = null;
-			}
+			p._clearResponseTimeoutTimer(currentCallId);
 
 			resolve({
 				value: queuedPrompt.prompt,
-				queue: hasQueuedItems(p),
+				queue: sessionHasQueuedItems(activeSession),
 				attachments: queuedPrompt.attachments || [],
 			});
-			p._aiTurnActive = true;
 			p._pendingRequests.delete(currentCallId);
-			p._currentToolCallId = null;
+			p._toolCallSessionMap.delete(currentCallId);
+
 			handledAsToolResponse = true;
 		}
 	}
 
 	if (!handledAsToolResponse) {
-		if (p._promptQueue.length >= MAX_QUEUE_SIZE) {
+		if (activeSession.queue.length >= MAX_QUEUE_SIZE) {
 			debugLog(
-				`[TaskSync] handleAddQueuePrompt — rejected: queue full (${p._promptQueue.length}/${MAX_QUEUE_SIZE})`,
+				`[TaskSync] handleAddQueuePrompt — rejected: queue full (${activeSession.queue.length}/${MAX_QUEUE_SIZE})`,
 			);
 			return;
 		}
 		debugLog(
-			`[TaskSync] handleAddQueuePrompt — no pending tool call, adding to queue (new size: ${p._promptQueue.length + 1})`,
+			`[TaskSync] handleAddQueuePrompt — no pending tool call, adding to session ${activeSession.id} queue (new size: ${activeSession.queue.length + 1})`,
 		);
-		p._promptQueue.push(queuedPrompt);
+		activeSession.queue.push(queuedPrompt);
 		notifyQueueChanged(p);
 	}
 
 	// Clear attachments after adding to queue
-	p._attachments = [];
+	activeSession.attachments = [];
+	p._attachments = activeSession.attachments;
 	p._updateAttachmentsUI();
 }
 
@@ -149,14 +159,17 @@ export function handleAddQueuePrompt(
  */
 export function handleRemoveQueuePrompt(p: P, promptId: string): void {
 	if (!isValidQueueId(promptId)) return;
-	const beforeLength = p._promptQueue.length;
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) return;
+	const beforeLength = activeSession.queue.length;
 	debugLog(
 		`[TaskSync] handleRemoveQueuePrompt — promptId: ${promptId}, queueSize before: ${beforeLength}`,
 	);
-	p._promptQueue = p._promptQueue.filter(
+	activeSession.queue = activeSession.queue.filter(
 		(pr: QueuedPrompt) => pr.id !== promptId,
 	);
-	if (p._promptQueue.length !== beforeLength) {
+	p._promptQueue = activeSession.queue;
+	if (activeSession.queue.length !== beforeLength) {
 		notifyQueueChanged(p);
 	}
 }
@@ -170,13 +183,17 @@ export function handleEditQueuePrompt(
 	newPrompt: string,
 ): void {
 	if (!isValidQueueId(promptId)) return;
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) return;
 	const trimmed = newPrompt.trim();
 	if (!trimmed || trimmed.length > MAX_QUEUE_PROMPT_LENGTH) return;
 
 	debugLog(
 		`[TaskSync] handleEditQueuePrompt — promptId: ${promptId}, newPrompt: "${trimmed.slice(0, 60)}"`,
 	);
-	const prompt = p._promptQueue.find((pr: QueuedPrompt) => pr.id === promptId);
+	const prompt = activeSession.queue.find(
+		(pr: QueuedPrompt) => pr.id === promptId,
+	);
 	if (prompt) {
 		prompt.prompt = trimmed;
 		notifyQueueChanged(p);
@@ -191,14 +208,19 @@ export function handleReorderQueue(
 	fromIndex: number,
 	toIndex: number,
 ): void {
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) return;
 	if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return;
 	if (fromIndex < 0 || toIndex < 0) return;
-	if (fromIndex >= p._promptQueue.length || toIndex >= p._promptQueue.length)
+	if (
+		fromIndex >= activeSession.queue.length ||
+		toIndex >= activeSession.queue.length
+	)
 		return;
 	if (fromIndex === toIndex) return;
 
-	const [removed] = p._promptQueue.splice(fromIndex, 1);
-	p._promptQueue.splice(toIndex, 0, removed);
+	const [removed] = activeSession.queue.splice(fromIndex, 1);
+	activeSession.queue.splice(toIndex, 0, removed);
 	notifyQueueChanged(p);
 }
 
@@ -206,12 +228,28 @@ export function handleReorderQueue(
  * Handle toggling queue enabled state.
  */
 export function handleToggleQueue(p: P, enabled: boolean): void {
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) {
+		debugLog(
+			`[TaskSync] handleToggleQueue — updating default mode with no active session, enabled: ${enabled}`,
+		);
+		p._queueEnabled = enabled;
+		p._saveQueueToDisk();
+		p._updateQueueUI();
+		p._remoteServer?.broadcast(
+			"settingsChanged",
+			settingsH.buildSettingsPayload(p),
+		);
+		return;
+	}
 	debugLog(
-		`[TaskSync] handleToggleQueue — enabled: ${enabled}, queueSize: ${p._promptQueue.length}`,
+		`[TaskSync] handleToggleQueue — enabled: ${enabled}, queueSize: ${activeSession.queue.length}`,
 	);
+	activeSession.queueEnabled = enabled;
 	p._queueEnabled = enabled;
-	p._saveQueueToDisk();
+	p._saveSessionsToDisk();
 	p._updateQueueUI();
+	p._updateSessionsUI();
 	p._remoteServer?.broadcast(
 		"settingsChanged",
 		settingsH.buildSettingsPayload(p),
@@ -222,10 +260,13 @@ export function handleToggleQueue(p: P, enabled: boolean): void {
  * Handle clearing the queue.
  */
 export function handleClearQueue(p: P): void {
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) return;
 	debugLog(
-		`[TaskSync] handleClearQueue — clearing ${p._promptQueue.length} items`,
+		`[TaskSync] handleClearQueue — clearing ${activeSession.queue.length} items`,
 	);
-	p._promptQueue = [];
+	activeSession.queue = [];
+	p._promptQueue = activeSession.queue;
 	notifyQueueChanged(p);
 }
 

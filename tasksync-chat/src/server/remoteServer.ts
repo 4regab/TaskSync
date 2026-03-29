@@ -5,12 +5,10 @@ import * as vscode from "vscode";
 import { WebSocket, WebSocketServer } from "ws";
 import {
 	buildAskUserFollowUpQuery,
-	buildAskUserRequestQuery,
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_CHAT_COMMAND,
 	DEFAULT_REMOTE_MAX_DEVICES,
 	DEFAULT_REMOTE_PORT,
-	DEFAULT_REMOTE_SESSION_QUERY,
 	ErrorCode,
 	isValidQueueId,
 	MAX_QUEUE_PROMPT_LENGTH,
@@ -19,7 +17,6 @@ import {
 	WS_MAX_PAYLOAD,
 	WS_PROTOCOL_VERSION,
 } from "../constants/remoteConstants";
-import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import type { TaskSyncWebviewProvider } from "../webview/webviewProvider";
 import { GitService } from "./gitService";
 import { RemoteAuthService } from "./remoteAuthService";
@@ -52,15 +49,6 @@ function getRemoteChatCommand(): string {
 	return vscode.workspace
 		.getConfiguration(CONFIG_SECTION)
 		.get<string>("remoteChatCommand", DEFAULT_REMOTE_CHAT_COMMAND);
-}
-
-/** Start a fresh chat session and send a query via the configured chat command. */
-async function openNewChatWithQuery(query: string): Promise<void> {
-	await startFreshCopilotChatWithQuery(
-		getRemoteChatCommand(),
-		query,
-		DEFAULT_REMOTE_CHAT_COMMAND,
-	);
 }
 
 export interface RemoteServerUrls {
@@ -469,9 +457,15 @@ export class RemoteServer {
 		switch (msg.type) {
 			case "respond": {
 				const id = typeof msg.id === "string" ? msg.id : "";
+				const sessionId =
+					typeof msg.sessionId === "string" ? msg.sessionId : "";
 				debugLog("respond: id=", id);
-				if (!id) {
-					sendWsError(ws, "Missing tool call ID", ErrorCode.INVALID_INPUT);
+				if (!id || !sessionId) {
+					sendWsError(
+						ws,
+						"Missing session or tool call ID",
+						ErrorCode.INVALID_INPUT,
+					);
 					return;
 				}
 				const value = typeof msg.value === "string" ? msg.value : "";
@@ -481,6 +475,7 @@ export class RemoteServer {
 				}
 				const attachments = normalizeAttachments(msg.attachments);
 				const accepted = this.provider.resolveRemoteResponse(
+					sessionId,
 					id,
 					value,
 					attachments,
@@ -575,19 +570,15 @@ export class RemoteServer {
 					typeof msg.prompt === "string" && msg.prompt.trim()
 						? msg.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH)
 						: "";
-				const prompt = rawPrompt
-					? buildAskUserRequestQuery(rawPrompt)
-					: DEFAULT_REMOTE_SESSION_QUERY;
 				debugLog(
 					"startSession:",
 					rawPrompt ? "custom prompt" : "default greeting",
-					"query length:",
-					prompt.length,
 				);
-				// Route through configured chat command (defaults to chat.open)
-				void openNewChatWithQuery(prompt).catch((e) =>
-					console.error("[TaskSync Remote] startSession:", e),
-				);
+				// Reuse the same session-aware path as the local New Session flow so
+				// Copilot receives the exact TaskSync session_id for subsequent ask_user calls.
+				void this.provider
+					.startNewSessionAndResetCopilotChat(rawPrompt || undefined, false)
+					.catch((e) => console.error("[TaskSync Remote] startSession:", e));
 				break;
 			}
 			case "getState": {

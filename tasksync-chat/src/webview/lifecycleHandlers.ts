@@ -221,10 +221,10 @@ export function disposeProvider(p: P): void {
 	}
 	p._pendingRequests.clear();
 
-	if (p._responseTimeoutTimer) {
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
+	for (const timer of p._responseTimeoutTimers.values()) {
+		clearTimeout(timer);
 	}
+	p._responseTimeoutTimers.clear();
 
 	p._stopSessionTimerInterval();
 	fileH.cleanupTempImagesFromEntries(p._currentSessionCalls);
@@ -240,43 +240,53 @@ export function disposeProvider(p: P): void {
  * Reset current session state and optionally show a follow-up status in the chat area.
  */
 export function startNewSession(p: P, options?: StartNewSessionOptions): void {
+	const activeSession = p._sessionManager.getActiveSession();
 	debugLog(
-		`[TaskSync] startNewSession — currentToolCallId: ${p._currentToolCallId}, sessionCalls: ${p._currentSessionCalls.length}, aiTurnActive: ${p._aiTurnActive}, sessionTerminated: ${p._sessionTerminated}`,
+		`[TaskSync] startNewSession — activeSession: ${activeSession?.id ?? "none"}, currentToolCallId: ${p._currentToolCallId}, sessionCalls: ${p._currentSessionCalls.length}, aiTurnActive: ${p._aiTurnActive}, sessionTerminated: ${p._sessionTerminated}`,
 	);
-	if (p._responseTimeoutTimer) {
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
+	if (!activeSession) {
+		p._view?.webview.postMessage(
+			options?.statusMessage
+				? { type: "clear", statusMessage: options.statusMessage }
+				: { type: "clear" },
+		);
+		return;
 	}
-	if (p._currentToolCallId) {
+
+	p._clearResponseTimeoutTimer(activeSession.pendingToolCallId);
+	if (activeSession.pendingToolCallId) {
 		debugLog(
-			`[TaskSync] startNewSession — cancelling pending request ${p._currentToolCallId}`,
+			`[TaskSync] startNewSession — cancelling pending request ${activeSession.pendingToolCallId}`,
 		);
 		p.cancelPendingToolCall("[Session reset by user]");
 	}
-	p._consecutiveAutoResponses = 0;
-	p._autopilotIndex = 0;
 
 	p.saveCurrentSessionToHistory();
-	fileH.cleanupTempImagesFromEntries(p._currentSessionCalls);
+	fileH.cleanupTempImagesFromEntries(activeSession.history);
+	for (const entry of activeSession.history) {
+		p._currentSessionCallsMap.delete(entry.id);
+		p._toolCallSessionMap.delete(entry.id);
+	}
 
-	p._currentSessionCalls = [];
-	p._currentSessionCallsMap.clear();
-	p._sessionStartTime = null;
-	p._sessionFrozenElapsed = null;
-	p._stopSessionTimerInterval();
-	p._sessionTerminated = false;
-	p._sessionWarningShown = false;
-	p._aiTurnActive = false;
+	activeSession.history = [];
+	activeSession.attachments = [];
+	activeSession.waitingOnUser = false;
+	activeSession.pendingToolCallId = null;
+	activeSession.sessionStartTime = null;
+	activeSession.sessionFrozenElapsed = null;
+	activeSession.sessionTerminated = false;
+	activeSession.sessionWarningShown = false;
+	activeSession.aiTurnActive = false;
+	activeSession.consecutiveAutoResponses = 0;
+	activeSession.autopilotIndex = 0;
+
 	debugLog(
 		"[TaskSync] startNewSession — session reset complete, aiTurnActive: false, posting clear to webview",
 	);
-	p._updateViewTitle();
-	if (p._view) {
-		// Clear any stale badge immediately so the title bar reflects the reset even before the next UI refresh.
-		p._view.badge = undefined;
-	}
-	p._updateCurrentSessionUI();
+	p._syncActiveSessionState();
 	p._updatePersistedHistoryUI();
+	p._updateSessionsUI();
+	p._saveSessionsToDisk();
 	const clearMessage: ToWebviewMessage = options?.statusMessage
 		? { type: "clear", statusMessage: options.statusMessage }
 		: { type: "clear" };

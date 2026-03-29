@@ -176,6 +176,8 @@ function mapToRemoteMessage(msg) {
 			if (pendingToolCall) {
 				return {
 					type: "respond",
+					sessionId:
+						msg.sessionId || pendingToolCall.sessionId || activeSessionId || "",
 					id: pendingToolCall.id,
 					value: msg.value,
 					attachments: msg.attachments || [],
@@ -470,6 +472,7 @@ function handleRemoteMessage(msg) {
 			clearTimeout(processingCheckTimer);
 			showPendingToolCall(
 				msg.data.id,
+				msg.data.sessionId,
 				msg.data.prompt,
 				msg.data.isApproval,
 				msg.data.choices,
@@ -749,7 +752,13 @@ function handlePendingToolCall(data) {
 		data.prompt ? data.prompt.length : 0,
 	);
 	if (typeof showPendingToolCall === "function") {
-		showPendingToolCall(data.id, data.prompt, data.isApproval, data.choices);
+		showPendingToolCall(
+			data.id,
+			data.sessionId,
+			data.prompt,
+			data.isApproval,
+			data.choices,
+		);
 	} else {
 		pendingToolCall = data;
 		isApprovalQuestion = data.isApproval || false;
@@ -908,6 +917,8 @@ let remoteSessionFrozenElapsed = null;
 let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
+let sessions = []; // Multi-session orchestration: all sessions
+let activeSessionId = null; // Currently focused session ID
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -940,6 +951,7 @@ const CONTEXT_MENU_COPY_MAX_AGE_MS = 30000;
 // Tracks local edits to prevent stale settings overwriting user input mid-typing.
 let reusablePrompts = [];
 let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
+let sessionComposerState = previousState.sessionComposerState || {};
 
 // Slash command autocomplete state
 let slashDropdownVisible = false;
@@ -978,6 +990,8 @@ let chatContainer,
 	autocompleteEmpty;
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
+let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
+let threadBackBtn, threadHistoryBtn, threadSettingsBtn;
 let changesSection,
 	changesRefreshBtn,
 	changesCloseBtn,
@@ -1081,13 +1095,7 @@ function init() {
 		initCardSelection();
 		initChangesPanel();
 
-		// Restore persisted input value (when user switches sidebar tabs and comes back)
-		if (chatInput && persistedInputValue) {
-			chatInput.value = persistedInputValue;
-			autoResizeTextarea();
-			updateInputHighlighter();
-			updateSendButtonState();
-		}
+		restoreActiveSessionComposerState();
 
 		// Restore attachments display
 		if (currentAttachments.length > 0) {
@@ -1108,12 +1116,41 @@ function init() {
  * Save webview state to persist across sidebar visibility changes
  */
 function saveWebviewState() {
+	saveActiveSessionComposerState();
 	vscode.setState({
 		inputValue: chatInput ? chatInput.value : "",
 		attachments: currentAttachments.filter(function (a) {
 			return !a.isTemporary;
 		}), // Don't persist temp images
+		sessionComposerState: sessionComposerState,
 	});
+}
+
+function getComposerStateKey() {
+	return activeSessionId || "__hub__";
+}
+
+function saveActiveSessionComposerState() {
+	var key = getComposerStateKey();
+	sessionComposerState[key] = {
+		inputValue: chatInput ? chatInput.value : "",
+	};
+}
+
+function restoreActiveSessionComposerState() {
+	if (!chatInput) return;
+	var key = getComposerStateKey();
+	var saved = sessionComposerState[key];
+	var nextValue =
+		saved && typeof saved.inputValue === "string"
+			? saved.inputValue
+			: !activeSessionId && persistedInputValue
+				? persistedInputValue
+				: "";
+	chatInput.value = nextValue;
+	autoResizeTextarea();
+	updateInputHighlighter();
+	updateSendButtonState();
 }
 
 function cacheDOMElements() {
@@ -1149,7 +1186,15 @@ function cacheDOMElements() {
 	changesDiffTitle = document.getElementById("changes-diff-title");
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
-	remoteSessionTimerEl = document.getElementById("remote-session-timer");
+	hubNewSessionBtn = document.getElementById("hub-new-session-btn");
+	hubHistoryBtn = document.getElementById("hub-history-btn");
+	hubSettingsBtn = document.getElementById("hub-settings-btn");
+	threadBackBtn = document.getElementById("thread-back-btn");
+	threadHistoryBtn = document.getElementById("thread-history-btn");
+	threadSettingsBtn = document.getElementById("thread-settings-btn");
+	remoteSessionTimerEl =
+		document.getElementById("remote-session-timer") ||
+		document.getElementById("stage-sub");
 	if (!remoteSessionTimerEl && isRemoteMode) {
 		var remoteHeaderLeft = document.querySelector(".remote-header-left");
 		if (remoteHeaderLeft) {
@@ -2114,6 +2159,23 @@ function bindEventListeners() {
 			if (e.target === historyModalOverlay) closeHistoryModal();
 		});
 	}
+
+	// Hub & Thread Shell events
+	if (hubNewSessionBtn)
+		hubNewSessionBtn.addEventListener("click", openNewSessionModal);
+	if (hubHistoryBtn) hubHistoryBtn.addEventListener("click", openHistoryModal);
+	if (hubSettingsBtn)
+		hubSettingsBtn.addEventListener("click", openSettingsModal);
+	if (threadBackBtn) {
+		threadBackBtn.addEventListener("click", function () {
+			vscode.postMessage({ type: "switchSession", sessionId: null });
+		});
+	}
+	if (threadHistoryBtn)
+		threadHistoryBtn.addEventListener("click", openHistoryModal);
+	if (threadSettingsBtn)
+		threadSettingsBtn.addEventListener("click", openSettingsModal);
+
 	// Edit mode button events
 	if (editCancelBtn) editCancelBtn.addEventListener("click", cancelEditMode);
 	if (editConfirmBtn) editConfirmBtn.addEventListener("click", confirmEditMode);
@@ -2849,6 +2911,8 @@ function handleSend() {
 	} else {
 		vscode.postMessage({
 			type: "submit",
+			sessionId: activeSessionId,
+			toolCallId: pendingToolCall ? pendingToolCall.id : null,
 			value: text,
 			attachments: currentAttachments,
 		});
@@ -2965,6 +3029,7 @@ function handleExtensionMessage(event) {
 		case "toolCallPending":
 			showPendingToolCall(
 				message.id,
+				message.sessionId,
 				message.prompt,
 				message.isApproval,
 				message.choices,
@@ -2987,6 +3052,18 @@ function handleExtensionMessage(event) {
 			persistedHistory = message.history || [];
 			_inputHistoryCache = null; // Invalidate cache when history updates
 			renderHistoryModal();
+			break;
+		case "updateSessions":
+			if (typeof saveActiveSessionComposerState === "function") {
+				saveActiveSessionComposerState();
+			}
+			sessions = Array.isArray(message.sessions) ? message.sessions : [];
+			activeSessionId = message.activeSessionId || null;
+			renderSessionsList();
+			if (typeof restoreActiveSessionComposerState === "function") {
+				restoreActiveSessionComposerState();
+			}
+			updateWelcomeSectionVisibility();
 			break;
 		case "openHistoryModal":
 			openHistoryModal();
@@ -3087,6 +3164,15 @@ function handleExtensionMessage(event) {
 			pendingToolCall = null;
 			lastPendingContentHtml = "";
 			isProcessingResponse = false;
+			if (activeSessionId) {
+				sessionComposerState[activeSessionId] = { inputValue: "" };
+			}
+			if (chatInput) {
+				chatInput.value = "";
+				chatInput.style.height = "auto";
+				updateInputHighlighter();
+				updateSendButtonState();
+			}
 			renderCurrentSession();
 			if (pendingMessage) {
 				if (
@@ -3105,6 +3191,18 @@ function handleExtensionMessage(event) {
 				}
 			}
 			updateWelcomeSectionVisibility();
+			break;
+		case "clearPendingState":
+			pendingToolCall = null;
+			lastPendingContentHtml = "";
+			isProcessingResponse = false;
+			if (pendingMessage) {
+				pendingMessage.classList.add("hidden");
+				pendingMessage.innerHTML = "";
+			}
+			hideApprovalModal();
+			hideChoicesBar();
+			renderCurrentSession();
 			break;
 		case "updateSessionTimer":
 			updateRemoteSessionTimerState(
@@ -3142,6 +3240,16 @@ function updateRemoteSessionTimerState(startTime, frozenElapsed) {
 function renderRemoteSessionTimer() {
 	if (!remoteSessionTimerEl) return;
 
+	if (remoteSessionStartTime === null && remoteSessionFrozenElapsed === null) {
+		remoteSessionTimerEl.textContent = "";
+		remoteSessionTimerEl.classList.add("hidden");
+		remoteSessionTimerEl.classList.remove("inactive", "active", "frozen");
+		remoteSessionTimerEl.title = "Session timer (idle)";
+		return;
+	}
+
+	remoteSessionTimerEl.classList.remove("hidden");
+
 	var timerText = "0s";
 	var timerStateClass = "inactive";
 
@@ -3170,8 +3278,8 @@ function formatRemoteElapsed(ms) {
 	return s + "s";
 }
 
-function showPendingToolCall(id, prompt, isApproval, choices) {
-	pendingToolCall = { id: id, prompt: prompt };
+function showPendingToolCall(id, sessionId, prompt, isApproval, choices) {
+	pendingToolCall = { id: id, sessionId: sessionId, prompt: prompt };
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];
@@ -3431,6 +3539,12 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 
 function renderCurrentSession() {
 	if (!toolHistoryArea) return;
+
+	// Clear old chat stream bubbles when switching/re-rendering session
+	if (chatStreamArea) {
+		chatStreamArea.innerHTML = "";
+		chatStreamArea.classList.add("hidden");
+	}
 
 	let completedCalls = currentSessionCalls.filter(function (tc) {
 		return tc.status === "completed";
@@ -3894,19 +4008,30 @@ function renderMermaidDiagrams() {
 }
 
 /**
- * Update welcome section visibility based on current session state
- * Hide welcome when there are completed tool calls or a pending call
+ * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {
-	if (!welcomeSection) return;
-	let hasCompletedCalls = currentSessionCalls.some(function (tc) {
-		return tc.status === "completed";
-	});
-	let hasPendingMessage =
-		pendingMessage && !pendingMessage.classList.contains("hidden");
-	let shouldHide =
-		hasCompletedCalls || pendingToolCall !== null || hasPendingMessage;
-	welcomeSection.classList.toggle("hidden", shouldHide);
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+
+	// If there's an active session, show the thread shell, hide the hub
+	if (activeSessionId) {
+		if (hubEl) hubEl.classList.add("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		// Update thread head title
+		var activeSession = (sessions || []).find(function (s) {
+			return s.id === activeSessionId;
+		});
+		var stageTitle = document.getElementById("stage-title");
+		if (activeSession) {
+			if (stageTitle) stageTitle.textContent = activeSession.title;
+		}
+	} else {
+		// No active session: show the hub, hide the thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.add("hidden");
+	}
 }
 
 /**
@@ -3917,6 +4042,127 @@ function scrollToBottom() {
 	requestAnimationFrame(function () {
 		chatContainer.scrollTop = chatContainer.scrollHeight;
 	});
+}
+
+// ==================== Multi-Session Rendering ====================
+
+/**
+ * Render the sessions list in the workspace-hub.
+ * Displays each session as a clickable row.
+ */
+function renderSessionsList() {
+	var sessionsListEl = document.getElementById("sessions-list");
+	if (!sessionsListEl) return;
+
+	if (!sessions || sessions.length === 0) {
+		sessionsListEl.innerHTML =
+			'<div class="sessions-empty" style="padding: 20px; text-align: center; color: var(--vscode-descriptionForeground);">No sessions yet. Click + to start.</div>';
+		return;
+	}
+
+	// Sort: active sessions first (newest first), then archived
+	var sorted = sessions.slice().sort(function (a, b) {
+		if (a.status !== b.status) {
+			return a.status === "active" ? -1 : 1;
+		}
+		return b.createdAt - a.createdAt;
+	});
+
+	var html = sorted
+		.map(function (session) {
+			var isActive = session.id === activeSessionId;
+			var isWaiting = session.waitingOnUser;
+			var isArchived = session.status === "archived";
+
+			var rowClass =
+				"chat-row" +
+				(isActive ? " active" : "") +
+				(isWaiting ? " waiting" : "") +
+				(isArchived ? " archived" : "");
+
+			// Default preview snippet
+			var promptPreview = "Tap to view thread...";
+			if (session.history && session.history.length > 0) {
+				var lastHistory = session.history[0]; // Assuming reversed (newest first)? Or last?
+				// Let's grab the last prompt block string:
+				var lastH = session.history[session.history.length - 1]; // standard order
+				if (
+					session.history[0] &&
+					session.history[0].timestamp > (lastH ? lastH.timestamp : 0)
+				) {
+					lastH = session.history[0]; // Wait, if history is [newest, ...oldest] then 0 is latest
+				}
+				promptPreview = lastH.prompt || promptPreview;
+			}
+			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
+
+			var historyCount = session.history
+				? session.history.filter(function (h) {
+						return h.status === "completed";
+					}).length
+				: 0;
+
+			var formatTime = function (ts) {
+				if (!ts) return "";
+				var d = new Date(ts);
+				return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+			};
+			var timeStr = formatTime(session.createdAt);
+
+			return (
+				'<div class="' +
+				rowClass +
+				'" data-session-id="' +
+				escapeHtml(session.id) +
+				'">' +
+				'<div class="chat-row-main">' +
+				'<div class="chat-row-top">' +
+				"<strong>" +
+				escapeHtml(session.title) +
+				"</strong>" +
+				"<span>" +
+				escapeHtml(timeStr) +
+				"</span>" +
+				"</div>" +
+				'<div class="chat-row-preview">' +
+				escapeHtml(promptPreview).substring(0, 100) +
+				"</div>" +
+				"</div>" +
+				'<div class="session-thread-actions">' +
+				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
+				escapeHtml(session.id) +
+				'" title="Delete session" aria-label="Delete session ' +
+				escapeHtml(session.title) +
+				'"><span class="codicon codicon-trash"></span></button>' +
+				"</div>" +
+				"</div>"
+			);
+		})
+		.join("");
+
+	sessionsListEl.innerHTML = html;
+
+	// Bind click handlers for session switching
+	sessionsListEl.querySelectorAll(".chat-row").forEach(function (item) {
+		item.addEventListener("click", function () {
+			var sessionId = item.getAttribute("data-session-id");
+			if (sessionId) {
+				vscode.postMessage({ type: "switchSession", sessionId: sessionId });
+			}
+		});
+	});
+
+	sessionsListEl
+		.querySelectorAll(".session-delete-btn")
+		.forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				var sessionId = btn.getAttribute("data-delete-session-id");
+				if (sessionId) {
+					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
+				}
+			});
+		});
 }
 // ==================== Queue Management ====================
 
@@ -4170,7 +4416,13 @@ function handleApprovalContinue() {
 	hideApprovalModal();
 
 	// Send affirmative response
-	vscode.postMessage({ type: "submit", value: "yes", attachments: [] });
+	vscode.postMessage({
+		type: "submit",
+		sessionId: activeSessionId,
+		toolCallId: pendingToolCall ? pendingToolCall.id : null,
+		value: "yes",
+		attachments: [],
+	});
 	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;
@@ -4387,7 +4639,13 @@ function handleChoicesSend() {
 	hideChoicesBar();
 
 	// Send the response
-	vscode.postMessage({ type: "submit", value: responseValue, attachments: [] });
+	vscode.postMessage({
+		type: "submit",
+		sessionId: activeSessionId,
+		toolCallId: pendingToolCall ? pendingToolCall.id : null,
+		value: responseValue,
+		attachments: [],
+	});
 	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;

@@ -504,6 +504,8 @@ function handleSend() {
 	} else {
 		vscode.postMessage({
 			type: "submit",
+			sessionId: activeSessionId,
+			toolCallId: pendingToolCall ? pendingToolCall.id : null,
 			value: text,
 			attachments: currentAttachments,
 		});

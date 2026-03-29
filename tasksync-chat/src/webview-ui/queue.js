@@ -250,7 +250,13 @@ function handleApprovalContinue() {
 	hideApprovalModal();
 
 	// Send affirmative response
-	vscode.postMessage({ type: "submit", value: "yes", attachments: [] });
+	vscode.postMessage({
+		type: "submit",
+		sessionId: activeSessionId,
+		toolCallId: pendingToolCall ? pendingToolCall.id : null,
+		value: "yes",
+		attachments: [],
+	});
 	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;

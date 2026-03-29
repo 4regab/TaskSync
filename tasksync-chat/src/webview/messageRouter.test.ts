@@ -111,11 +111,16 @@ describe("handleWebviewReady", () => {
 			_pendingToolCallMessage: null,
 			_currentToolCallId: null,
 			_pendingRequests: new Map(),
+			_toolCallSessionMap: new Map(),
 			_currentSessionCallsMap: new Map(),
 			_updateSettingsUI: vi.fn(),
 			_updateQueueUI: vi.fn(),
 			_updateCurrentSessionUI: vi.fn(),
 			_updatePersistedHistoryUI: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+			},
 			...overrides,
 		} as any;
 	}
@@ -135,7 +140,11 @@ describe("handleWebviewReady", () => {
 	it("sends deferred toolCallPending when pendingToolCallMessage exists", () => {
 		const postMessage = vi.fn();
 		const p = createReadyMockP({
-			_pendingToolCallMessage: { id: "tc-1", prompt: "What next?" },
+			_pendingToolCallMessage: {
+				id: "tc-1",
+				sessionId: "1",
+				prompt: "What next?",
+			},
 			_view: { webview: { postMessage } },
 		});
 
@@ -153,7 +162,7 @@ describe("handleWebviewReady", () => {
 			["tc-2", { resolve: vi.fn(), reject: vi.fn() }],
 		]);
 		const sessionMap = new Map([
-			["tc-2", { status: "pending", prompt: "Continue?" }],
+			["tc-2", { status: "pending", sessionId: "1", prompt: "Continue?" }],
 		]);
 		const p = createReadyMockP({
 			_currentToolCallId: "tc-2",

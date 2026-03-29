@@ -313,7 +313,7 @@ describe("askUser cancellation handling", () => {
 		};
 
 		const result = await askUser(
-			{ question: "Reset?" },
+			{ question: "Reset?", session_id: "1" },
 			provider as any,
 			createToken() as any,
 		);
@@ -347,7 +347,7 @@ describe("askUser cancellation handling", () => {
 		expect(toolDefinition).toBeTruthy();
 
 		const result = await toolDefinition.invoke(
-			{ input: { question: "Reset?" } },
+			{ input: { question: "Reset?", session_id: "1" } },
 			createToken() as any,
 		);
 		// Should return a result, not throw
@@ -378,7 +378,11 @@ describe("askUser cancellation handling", () => {
 		};
 
 		await expect(
-			askUser({ question: "Test?" }, provider as any, cancelledToken as any),
+			askUser(
+				{ question: "Test?", session_id: "1" },
+				provider as any,
+				cancelledToken as any,
+			),
 		).rejects.toBeInstanceOf(MockCancellationError);
 	});
 
@@ -405,7 +409,7 @@ describe("askUser cancellation handling", () => {
 		};
 
 		const promise = askUser(
-			{ question: "Pending?" },
+			{ question: "Pending?", session_id: "1" },
 			provider as any,
 			token as any,
 		);

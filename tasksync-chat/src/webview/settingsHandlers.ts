@@ -138,6 +138,7 @@ export function normalizeRemoteMaxDevices(value: unknown): number {
 
 export function loadSettings(p: P): void {
 	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+	const activeSession = p._sessionManager?.getActiveSession?.();
 	p._soundEnabled = config.get<boolean>("notificationSound", true);
 	p._interactiveApprovalEnabled = config.get<boolean>(
 		"interactiveApproval",
@@ -160,7 +161,10 @@ export function loadSettings(p: P): void {
 		"alwaysAppendAskUserReminder",
 		false,
 	);
-	p._autopilotEnabled = config.get<boolean>("autopilot", false);
+	const configuredAutopilotEnabled = config.get<boolean>("autopilot", false);
+	p._autopilotEnabled = activeSession
+		? activeSession.autopilotEnabled
+		: configuredAutopilotEnabled;
 
 	const defaultAutopilotText = getAutopilotDefaultText(p, config);
 	const configuredAutopilotText = config.get<string>(
@@ -394,6 +398,12 @@ export async function handleUpdateAutopilotSetting(
 ): Promise<void> {
 	p._autopilotEnabled = enabled;
 	p._consecutiveAutoResponses = 0;
+	const activeSession = p._sessionManager?.getActiveSession?.();
+	if (activeSession) {
+		activeSession.autopilotEnabled = enabled;
+		activeSession.consecutiveAutoResponses = 0;
+		p._saveSessionsToDisk?.();
+	}
 	await withConfigGuard(p, async () => {
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		await config.update(

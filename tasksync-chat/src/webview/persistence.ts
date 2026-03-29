@@ -207,3 +207,61 @@ export function savePersistedHistoryToDiskSync(p: P): void {
 		console.error("[TaskSync] Failed to save persisted history:", error);
 	}
 }
+
+/**
+ * Load persisted sessions from disk (async).
+ */
+export async function loadSessionsFromDiskAsync(p: P): Promise<void> {
+	try {
+		const storagePath = getStorageUri(p).fsPath;
+		const sessionsPath = path.join(storagePath, "sessions.json");
+
+		try {
+			await fs.promises.access(sessionsPath, fs.constants.F_OK);
+		} catch {
+			// No persisted sessions file — start fresh
+			return;
+		}
+
+		const data = await fs.promises.readFile(sessionsPath, "utf8");
+		const parsed = JSON.parse(data);
+		if (parsed && Array.isArray(parsed.sessions)) {
+			p._sessionManager.fromJSON(parsed);
+		}
+	} catch (error) {
+		console.error("[TaskSync] Failed to load sessions:", error);
+	}
+}
+
+/**
+ * Save sessions to disk (async).
+ */
+export function saveSessionsToDisk(p: P): void {
+	saveSessionsToDiskAsync(p).catch((error) => {
+		console.error("[TaskSync] Failed to save sessions:", error);
+	});
+}
+
+/**
+ * Actually persist sessions to disk.
+ */
+export async function saveSessionsToDiskAsync(p: P): Promise<void> {
+	try {
+		const storagePath = getStorageUri(p).fsPath;
+		const sessionsPath = path.join(storagePath, "sessions.json");
+
+		await fs.promises.mkdir(storagePath, { recursive: true });
+
+		const data = JSON.stringify(
+			{
+				version: 2,
+				...p._sessionManager.toJSON(),
+			},
+			null,
+			2,
+		);
+		await fs.promises.writeFile(sessionsPath, data, "utf8");
+	} catch (error) {
+		console.error("[TaskSync] Failed to save sessions:", error);
+	}
+}

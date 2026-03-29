@@ -14,16 +14,36 @@ import {
 // ─── Mock P factory ─────────────────────────────────────────
 
 function createMockP(overrides: Partial<any> = {}) {
-	return {
-		_promptQueue: [] as any[],
-		_queueEnabled: true,
+	const promptQueue = overrides._promptQueue
+		? [...(overrides._promptQueue as any[])]
+		: ([] as any[]);
+	const currentSessionCalls = overrides._currentSessionCalls
+		? [...(overrides._currentSessionCalls as any[])]
+		: ([] as any[]);
+	const attachments = overrides._attachments
+		? [...(overrides._attachments as any[])]
+		: ([] as any[]);
+	const activeSession = {
+		id: "1",
+		queue: promptQueue,
+		queueEnabled: overrides._queueEnabled ?? true,
+		attachments,
+		history: currentSessionCalls,
+		pendingToolCallId: overrides._currentToolCallId ?? null,
+		waitingOnUser: Boolean(overrides._currentToolCallId),
+		aiTurnActive: overrides._aiTurnActive ?? false,
+	};
+	const provider = {
+		_promptQueue: promptQueue,
+		_queueEnabled: overrides._queueEnabled ?? true,
 		_queueVersion: 0,
-		_currentToolCallId: null as string | null,
+		_currentToolCallId: (overrides._currentToolCallId ?? null) as string | null,
 		_pendingRequests: new Map<string, (value: any) => void>(),
-		_currentSessionCalls: [] as any[],
+		_toolCallSessionMap: new Map<string, string>(),
+		_currentSessionCalls: currentSessionCalls,
 		_currentSessionCallsMap: new Map<string, any>(),
-		_attachments: [] as any[],
-		_responseTimeoutTimer: null as any,
+		_attachments: attachments,
+		_responseTimeoutTimers: new Map<string, any>(),
 		_view: {
 			webview: {
 				postMessage: vi.fn(),
@@ -32,13 +52,40 @@ function createMockP(overrides: Partial<any> = {}) {
 		_remoteServer: null as any,
 		_persistedHistory: [] as any[],
 		_saveQueueToDisk: vi.fn(),
+		_saveSessionsToDisk: vi.fn(),
 		_updateQueueUI: vi.fn(),
+		_updateSessionsUI: vi.fn(),
+		_syncActiveSessionState: vi.fn(() => {
+			provider._promptQueue = activeSession.queue;
+			provider._queueEnabled = activeSession.queueEnabled;
+			provider._currentToolCallId = activeSession.pendingToolCallId;
+			provider._currentSessionCalls = activeSession.history;
+			provider._attachments = activeSession.attachments;
+			provider._aiTurnActive = activeSession.aiTurnActive;
+		}),
 		_updateCurrentSessionUI: vi.fn(),
 		_updateAttachmentsUI: vi.fn(),
 		_updatePersistedHistoryUI: vi.fn(),
 		_savePersistedHistoryToDisk: vi.fn(),
+		_clearResponseTimeoutTimer: vi.fn(),
+		_sessionManager: {
+			getActiveSession: () => activeSession,
+			getActiveSessionId: () => activeSession.id,
+		},
 		...overrides,
 	} as any;
+	provider._promptQueue = promptQueue;
+	provider._queueEnabled = activeSession.queueEnabled;
+	provider._currentToolCallId = activeSession.pendingToolCallId;
+	provider._currentSessionCalls = currentSessionCalls;
+	provider._attachments = attachments;
+	provider._sessionManager =
+		overrides._sessionManager ??
+		({
+			getActiveSession: () => activeSession,
+			getActiveSessionId: () => activeSession.id,
+		} as any);
+	return provider;
 }
 
 // ─── handleAddQueuePrompt ───────────────────────────────────
@@ -191,7 +238,7 @@ describe("handleAddQueuePrompt", () => {
 
 		handleAddQueuePrompt(p, "Answer", "q_1_abc", []);
 
-		expect(p._responseTimeoutTimer).toBeNull();
+		expect(p._clearResponseTimeoutTimer).toHaveBeenCalledWith("tc_1");
 		clearTimeout(timer);
 	});
 
@@ -246,7 +293,7 @@ describe("handleToggleQueue", () => {
 		const p = createMockP({ _queueEnabled: false });
 		handleToggleQueue(p, true);
 		expect(p._queueEnabled).toBe(true);
-		expect(p._saveQueueToDisk).toHaveBeenCalled();
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
 		expect(p._updateQueueUI).toHaveBeenCalled();
 	});
 
@@ -268,6 +315,21 @@ describe("handleToggleQueue", () => {
 			"settingsChanged",
 			expect.objectContaining({ queueEnabled: true }),
 		);
+	});
+
+	it("updates the default queue mode when no session is active", () => {
+		const p = createMockP({
+			_queueEnabled: true,
+			_sessionManager: {
+				getActiveSession: () => undefined,
+				getActiveSessionId: () => null,
+			},
+		});
+		handleToggleQueue(p, false);
+		expect(p._queueEnabled).toBe(false);
+		expect(p._saveQueueToDisk).toHaveBeenCalled();
+		expect(p._saveSessionsToDisk).not.toHaveBeenCalled();
+		expect(p._updateQueueUI).toHaveBeenCalled();
 	});
 });
 

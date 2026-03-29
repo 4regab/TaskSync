@@ -131,6 +131,8 @@ function mapToRemoteMessage(msg) {
 			if (pendingToolCall) {
 				return {
 					type: "respond",
+					sessionId:
+						msg.sessionId || pendingToolCall.sessionId || activeSessionId || "",
 					id: pendingToolCall.id,
 					value: msg.value,
 					attachments: msg.attachments || [],
@@ -425,6 +427,7 @@ function handleRemoteMessage(msg) {
 			clearTimeout(processingCheckTimer);
 			showPendingToolCall(
 				msg.data.id,
+				msg.data.sessionId,
 				msg.data.prompt,
 				msg.data.isApproval,
 				msg.data.choices,
@@ -704,7 +707,13 @@ function handlePendingToolCall(data) {
 		data.prompt ? data.prompt.length : 0,
 	);
 	if (typeof showPendingToolCall === "function") {
-		showPendingToolCall(data.id, data.prompt, data.isApproval, data.choices);
+		showPendingToolCall(
+			data.id,
+			data.sessionId,
+			data.prompt,
+			data.isApproval,
+			data.choices,
+		);
 	} else {
 		pendingToolCall = data;
 		isApprovalQuestion = data.isApproval || false;

@@ -54,6 +54,11 @@ import {
 // ─── Mock P factory ─────────────────────────────────────────
 
 function createMockP(overrides: Partial<any> = {}) {
+	const activeSession = {
+		id: "1",
+		autopilotEnabled: overrides._autopilotEnabled ?? false,
+		consecutiveAutoResponses: overrides._consecutiveAutoResponses ?? 0,
+	};
 	return {
 		_soundEnabled: true,
 		_interactiveApprovalEnabled: true,
@@ -79,6 +84,10 @@ function createMockP(overrides: Partial<any> = {}) {
 			},
 		},
 		_remoteServer: null as any,
+		_saveSessionsToDisk: vi.fn(),
+		_sessionManager: {
+			getActiveSession: () => activeSession,
+		},
 		...overrides,
 	} as any;
 }
@@ -266,7 +275,7 @@ describe("loadSettings", () => {
 			config as any,
 		);
 
-		const p = createMockP();
+		const p = createMockP({ _sessionManager: undefined });
 		loadSettings(p);
 		expect(p._autopilotEnabled).toBe(true);
 	});

@@ -226,7 +226,10 @@ function mapToRemoteMessage(msg) {
 		case "chatFollowUp":
 			return { type: "chatFollowUp", content: msg.content };
 		case "chatCancel":
-			return { type: "chatCancel" };
+			return {
+				type: "chatCancel",
+				sessionId: pendingToolCall ? pendingToolCall.sessionId : "",
+			};
 		case "startSession":
 			return { type: "startSession", prompt: msg.prompt || "" };
 		case "webviewReady":
@@ -413,7 +416,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-					(msg.reason || "The remote server has been stopped."),
+				(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -424,9 +427,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-						msg.protocolVersion +
-						" client=" +
-						TASKSYNC_PROTOCOL_VERSION,
+					msg.protocolVersion +
+					" client=" +
+					TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",

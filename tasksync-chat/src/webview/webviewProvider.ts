@@ -389,6 +389,8 @@ export class TaskSyncWebviewProvider
 		const switched = this._sessionManager.setActiveSession(sessionId);
 		if (switched) {
 			this._syncActiveSessionState();
+			// Keep remote clients in sync with the newly active session
+			this._remoteServer?.broadcast("state", this.getRemoteState());
 		}
 		return switched;
 	}

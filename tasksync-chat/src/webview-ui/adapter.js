@@ -181,7 +181,10 @@ function mapToRemoteMessage(msg) {
 		case "chatFollowUp":
 			return { type: "chatFollowUp", content: msg.content };
 		case "chatCancel":
-			return { type: "chatCancel" };
+			return {
+				type: "chatCancel",
+				sessionId: pendingToolCall ? pendingToolCall.sessionId : "",
+			};
 		case "startSession":
 			return { type: "startSession", prompt: msg.prompt || "" };
 		case "webviewReady":

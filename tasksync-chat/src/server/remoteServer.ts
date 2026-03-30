@@ -623,9 +623,15 @@ export class RemoteServer {
 					.then(undefined, (e: unknown) => console.error("[TaskSync Chat]", e));
 				break;
 			}
-			case "chatCancel":
-				this.provider.cancelPendingToolCall("[Cancelled by user]");
+			case "chatCancel": {
+				const cancelSessionId =
+					typeof msg.sessionId === "string" ? msg.sessionId : undefined;
+				this.provider.cancelPendingToolCall(
+					"[Cancelled by user]",
+					cancelSessionId || undefined,
+				);
 				break;
+			}
 			case "newSession": {
 				debugLog("newSession: starting fresh remote chat");
 				void this.provider

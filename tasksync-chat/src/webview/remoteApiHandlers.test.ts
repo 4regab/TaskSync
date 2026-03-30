@@ -91,4 +91,49 @@ describe("cancelPendingToolCall", () => {
 		});
 		expect(broadcastToolCallCompletedMock).toHaveBeenCalledTimes(1);
 	});
+
+	it("targets the specified session when sessionId is provided", async () => {
+		const { cancelPendingToolCall } = await import("./remoteApiHandlers");
+		const targetSession = {
+			id: "sess_2",
+			pendingToolCallId: "tc_2",
+			waitingOnUser: true,
+			aiTurnActive: true,
+			consecutiveAutoResponses: 0,
+			queue: [],
+		};
+		const provider = createProvider({
+			_getSession: vi.fn((id: string) =>
+				id === "sess_2" ? targetSession : undefined,
+			),
+			_currentToolCallId: "tc_1",
+			_pendingRequests: new Map([["tc_2", vi.fn()]]),
+			_toolCallSessionMap: new Map([["tc_2", "sess_2"]]),
+			_responseTimeoutTimers: new Map(),
+			_currentSessionCallsMap: new Map([
+				[
+					"tc_2",
+					{
+						id: "tc_2",
+						sessionId: "sess_2",
+						prompt: "Q2",
+						response: "",
+						status: "pending",
+						timestamp: 1,
+						attachments: [],
+					},
+				],
+			]),
+		});
+		const result = cancelPendingToolCall(
+			provider,
+			"[Cancelled by user]",
+			"sess_2",
+		);
+		expect(result).toBe(true);
+		expect(targetSession.pendingToolCallId).toBeNull();
+		expect(targetSession.aiTurnActive).toBe(false);
+		// Active session (tc_1) should NOT have been touched
+		expect(provider._currentToolCallId).toBe("tc_1");
+	});
 });

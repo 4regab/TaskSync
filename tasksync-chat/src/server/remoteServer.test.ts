@@ -42,6 +42,7 @@ function createProvider() {
 	return {
 		startNewSession: vi.fn(),
 		startNewSessionAndResetCopilotChat: vi.fn().mockResolvedValue(undefined),
+		cancelPendingToolCall: vi.fn().mockReturnValue(true),
 	} as any;
 }
 
@@ -94,5 +95,32 @@ describe("RemoteServer session actions", () => {
 			false,
 		);
 		expect(provider.startNewSession).not.toHaveBeenCalled();
+	});
+
+	it("routes chatCancel with sessionId to cancelPendingToolCall", async () => {
+		const { server, provider } = await createServer();
+
+		await server["handleMessage"]({} as any, "127.0.0.1", {
+			type: "chatCancel",
+			sessionId: "sess_42",
+		});
+
+		expect(provider.cancelPendingToolCall).toHaveBeenCalledWith(
+			"[Cancelled by user]",
+			"sess_42",
+		);
+	});
+
+	it("routes chatCancel without sessionId using undefined", async () => {
+		const { server, provider } = await createServer();
+
+		await server["handleMessage"]({} as any, "127.0.0.1", {
+			type: "chatCancel",
+		});
+
+		expect(provider.cancelPendingToolCall).toHaveBeenCalledWith(
+			"[Cancelled by user]",
+			undefined,
+		);
 	});
 });

@@ -348,6 +348,7 @@ export class TaskSyncWebviewProvider
 			autopilotPrompts: [...this._autopilotPrompts],
 			autoAppendEnabled: this._autoAppendEnabled,
 			autoAppendText: this._autoAppendText,
+			alwaysAppendReminder: this._alwaysAppendReminder,
 		};
 	}
 

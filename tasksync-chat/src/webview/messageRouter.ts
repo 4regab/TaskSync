@@ -142,6 +142,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 				message.toIndex,
 			);
 			break;
+		case "saveAutopilotPrompts":
+			settingsH.handleSaveAutopilotPrompts(p, message.prompts);
+			break;
 		case "addReusablePrompt":
 			settingsH.handleAddReusablePrompt(p, message.name, message.prompt);
 			break;
@@ -235,6 +238,12 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 			break;
 		case "archiveSession": {
 			const sessionToArchive = p._getSession(message.sessionId);
+			if (sessionToArchive?.pendingToolCallId) {
+				p.cancelPendingToolCall(
+					"[Session archived by user]",
+					message.sessionId,
+				);
+			}
 			if (sessionToArchive) {
 				for (const entry of sessionToArchive.history) {
 					p._currentSessionCallsMap.delete(entry.id);

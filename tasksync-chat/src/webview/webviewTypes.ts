@@ -233,6 +233,7 @@ export type FromWebviewMessage =
 	| { type: "editAutopilotPrompt"; index: number; prompt: string }
 	| { type: "removeAutopilotPrompt"; index: number }
 	| { type: "reorderAutopilotPrompts"; fromIndex: number; toIndex: number }
+	| { type: "saveAutopilotPrompts"; prompts: string[] }
 	| { type: "addReusablePrompt"; name: string; prompt: string }
 	| { type: "editReusablePrompt"; id: string; name: string; prompt: string }
 	| { type: "removeReusablePrompt"; id: string }

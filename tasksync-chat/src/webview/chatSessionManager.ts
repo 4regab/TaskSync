@@ -350,11 +350,29 @@ export class ChatSessionManager {
 		sessions: ChatSession[];
 		activeSessionId: string | null;
 	}): void {
+		// Preserve in-flight sessions (with pending tool calls) that were created
+		// before disk load finished — avoids race where async loadSessionsFromDisk
+		// wipes sessions created by concurrent ask_user tool calls.
+		const inFlight = new Map<string, ChatSession>();
+		for (const [id, session] of this.sessions) {
+			if (session.pendingToolCallId) {
+				inFlight.set(id, session);
+			}
+		}
+
 		this.sessions.clear();
 		for (const session of data.sessions) {
 			if (!session?.id) continue;
+			// Don't overwrite in-flight sessions with stale disk data
+			if (inFlight.has(session.id)) continue;
 			this.sessions.set(session.id, this.hydrateSession(session));
 		}
+
+		// Restore in-flight sessions
+		for (const [id, session] of inFlight) {
+			this.sessions.set(id, session);
+		}
+
 		this.activeSessionId = data.activeSessionId;
 		// Validate active session still exists
 		if (this.activeSessionId && !this.sessions.has(this.activeSessionId)) {

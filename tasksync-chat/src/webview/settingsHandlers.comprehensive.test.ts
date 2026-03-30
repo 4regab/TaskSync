@@ -1633,7 +1633,7 @@ describe("per-session settings sync", () => {
 		expect(p._autoAppendText).toBe("Config auto-append");
 	});
 
-	it("syncAutopilotToSession marks session fields as explicitly set", async () => {
+	it("syncSettingsToSession marks session fields as explicitly set", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,

@@ -200,20 +200,7 @@ function bindEventListeners() {
 			hideAddAutopilotPromptForm,
 		);
 	}
-	if (autopilotPromptsList) {
-		autopilotPromptsList.addEventListener(
-			"click",
-			handleAutopilotPromptsListClick,
-		);
-		// Drag and drop for reordering
-		autopilotPromptsList.addEventListener(
-			"dragstart",
-			handleAutopilotDragStart,
-		);
-		autopilotPromptsList.addEventListener("dragover", handleAutopilotDragOver);
-		autopilotPromptsList.addEventListener("dragend", handleAutopilotDragEnd);
-		autopilotPromptsList.addEventListener("drop", handleAutopilotDrop);
-	}
+	// List-level events (click, drag) are bound via initWorkspacePromptListUI()
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.addEventListener(
 			"change",
@@ -286,26 +273,41 @@ function bindSessionSettingsEvents() {
 	if (ssCloseBtn)
 		ssCloseBtn.addEventListener("click", closeSessionSettingsModal);
 	if (ssResetBtn) ssResetBtn.addEventListener("click", resetSessionSettings);
-	if (ssAutopilotToggle)
+	if (ssAutopilotToggle) {
 		ssAutopilotToggle.addEventListener("click", ssToggleAutopilot);
-	if (ssAutoAppendToggle)
+		ssAutopilotToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAutopilot();
+			}
+		});
+	}
+	if (ssAutoAppendToggle) {
 		ssAutoAppendToggle.addEventListener("click", ssToggleAutoAppend);
-	if (ssAlwaysAppendReminderToggle)
+		ssAutoAppendToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAutoAppend();
+			}
+		});
+	}
+	if (ssAlwaysAppendReminderToggle) {
 		ssAlwaysAppendReminderToggle.addEventListener(
 			"click",
 			ssToggleAlwaysAppendReminder,
 		);
+		ssAlwaysAppendReminderToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAlwaysAppendReminder();
+			}
+		});
+	}
 	if (ssAddAutopilotPromptBtn)
 		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
 	if (ssSaveAutopilotPromptBtn)
 		ssSaveAutopilotPromptBtn.addEventListener("click", ssSavePrompt);
 	if (ssCancelAutopilotPromptBtn)
 		ssCancelAutopilotPromptBtn.addEventListener("click", ssHideAddPromptForm);
-	if (ssAutopilotPromptsList) {
-		ssAutopilotPromptsList.addEventListener("click", ssHandlePromptsListClick);
-		ssAutopilotPromptsList.addEventListener("dragstart", ssHandleDragStart);
-		ssAutopilotPromptsList.addEventListener("dragover", ssHandleDragOver);
-		ssAutopilotPromptsList.addEventListener("dragend", ssHandleDragEnd);
-		ssAutopilotPromptsList.addEventListener("drop", ssHandleDrop);
-	}
+	// List-level events (click, drag) are bound via initSessionPromptListUI()
 }

@@ -106,7 +106,7 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let autoAppendEnabled = true;
+let autoAppendEnabled = false;
 let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
 let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
 let sendWithCtrlEnter = false;

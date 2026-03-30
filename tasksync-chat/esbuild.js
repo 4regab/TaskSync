@@ -137,6 +137,7 @@ const WEBVIEW_FILES = [
     "rendering.js",
     "queue.js",
     "approval.js",
+    "promptListUI.js",
     "settings.js",
     "sessionSettings.js",
     "slashCommands.js",

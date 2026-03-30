@@ -5,7 +5,9 @@ function init() {
 		createEditModeUI();
 		createApprovalModal();
 		createSettingsModal();
+		initWorkspacePromptListUI();
 		createSessionSettingsModal();
+		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();

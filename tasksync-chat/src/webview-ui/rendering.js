@@ -541,6 +541,7 @@ function toggleSplitView() {
  * Apply the split ratio to the hub panel width
  */
 function applySplitRatio(ratio) {
+	ratio = Math.min(60, Math.max(20, ratio));
 	var hubEl = document.getElementById("workspace-hub");
 	if (hubEl) {
 		hubEl.style.flex = "0 0 " + ratio + "%";

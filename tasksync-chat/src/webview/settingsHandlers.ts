@@ -327,11 +327,11 @@ export async function saveAutopilotPrompts(p: P): Promise<void> {
 			vscode.ConfigurationTarget.Global,
 		);
 	});
-	syncAutopilotToSession(p);
+	syncSettingsToSession(p);
 }
 
 /** Write provider-level autopilot/autoAppend fields to the active session. */
-function syncAutopilotToSession(p: P): void {
+function syncSettingsToSession(p: P): void {
 	const session = p._sessionManager?.getActiveSession?.();
 	if (!session) return;
 	session.autopilotText = p._autopilotText;
@@ -377,7 +377,7 @@ export async function handleUpdateAutoAppendSetting(
 	enabled: boolean,
 ): Promise<void> {
 	p._autoAppendEnabled = enabled;
-	syncAutopilotToSession(p);
+	syncSettingsToSession(p);
 	await withConfigGuard(p, async () => {
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		await config.update(
@@ -394,7 +394,7 @@ export async function handleUpdateAutoAppendText(
 ): Promise<void> {
 	const normalizedText = normalizeAutoAppendText(text);
 	p._autoAppendText = normalizedText;
-	syncAutopilotToSession(p);
+	syncSettingsToSession(p);
 	await withConfigGuard(p, async () => {
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		await config.update(
@@ -442,7 +442,7 @@ export async function handleUpdateAutopilotText(
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		const normalizedText = normalizeAutopilotText(p, text, config);
 		p._autopilotText = normalizedText;
-		syncAutopilotToSession(p);
+		syncSettingsToSession(p);
 		await config.update(
 			"autopilotText",
 			normalizedText,
@@ -515,6 +515,22 @@ export async function handleReorderAutopilotPrompts(
 
 	const [removed] = p._autopilotPrompts.splice(fromIndex, 1);
 	p._autopilotPrompts.splice(toIndex, 0, removed);
+	await saveAutopilotPrompts(p);
+	updateSettingsUI(p);
+}
+
+/** Replace the entire autopilot prompts array (bulk save from shared UI). */
+export async function handleSaveAutopilotPrompts(
+	p: P,
+	prompts: string[],
+): Promise<void> {
+	p._autopilotPrompts = prompts.filter(
+		(s) => typeof s === "string" && s.trim().length > 0,
+	);
+	// Reset index if out of bounds
+	if (p._autopilotIndex >= p._autopilotPrompts.length) {
+		p._autopilotIndex = 0;
+	}
 	await saveAutopilotPrompts(p);
 	updateSettingsUI(p);
 }
@@ -790,6 +806,7 @@ export function buildSessionSettingsPayload(p: P): {
 	const isDefault =
 		!session ||
 		(session.autopilotEnabled === configAutopilot &&
+			session.autopilotText === undefined &&
 			session.autopilotPrompts === undefined &&
 			session.autoAppendEnabled === undefined &&
 			session.autoAppendText === undefined &&

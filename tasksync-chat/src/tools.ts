@@ -1,9 +1,12 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { AUTO_APPEND_DEFAULT_TEXT } from "./constants/remoteConstants";
 import { getImageMimeType } from "./utils/imageUtils";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
-import { appendAutoAppendText, debugLog } from "./webview/webviewUtils";
+import {
+	appendAutoAppendText,
+	buildFinalResponseText,
+	debugLog,
+} from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
@@ -20,19 +23,12 @@ export function buildFinalResponse(
 	autoAppendText: string,
 	alwaysAppendReminder: boolean,
 ): string {
-	let finalResponse = response;
-	if (autoAppendEnabled) {
-		finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
-		// alwaysAppendReminder only applies when autoAppendEnabled is true
-		// (UI hides this toggle when autoAppendEnabled is off)
-		if (alwaysAppendReminder) {
-			finalResponse = appendAutoAppendText(
-				finalResponse,
-				AUTO_APPEND_DEFAULT_TEXT,
-			);
-		}
-	}
-	return finalResponse;
+	return buildFinalResponseText(
+		response,
+		autoAppendEnabled,
+		autoAppendText,
+		alwaysAppendReminder,
+	);
 }
 
 export interface AskUserToolResult {

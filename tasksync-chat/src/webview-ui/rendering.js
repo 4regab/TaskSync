@@ -30,7 +30,7 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 			let newSessionBtn = document.getElementById("new-session-btn");
 			if (newSessionBtn) {
 				newSessionBtn.addEventListener("click", function () {
-					vscode.postMessage({ type: "newSession" });
+					openNewSessionModal();
 				});
 			}
 		} else {

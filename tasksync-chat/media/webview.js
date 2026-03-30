@@ -983,8 +983,8 @@ let lastPendingContentHtml = "";
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
 let autoAppendEnabled = false;
-let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
-let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
+let autoAppendText = ""; // Custom text appended to responses for the active session
+let alwaysAppendReminder = false; // Global AskUser reminder toggle
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -1109,7 +1109,6 @@ let sessionSettingsOverlay,
 	ssAutopilotToggle,
 	ssAutoAppendToggle,
 	ssAutoAppendTextInput,
-	ssAlwaysAppendReminderToggle,
 	ssAutopilotPromptsList,
 	ssAddAutopilotPromptBtn,
 	ssAddAutopilotPromptForm,
@@ -1557,29 +1556,19 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(sendShortcutSection);
 
-	// Auto Append section - appends configured guidance to every ask_user response.
-	let autoAppendSection = document.createElement("div");
-	autoAppendSection.className = "settings-section";
-	autoAppendSection.innerHTML =
+	// AskUser reminder section - global reminder appended to every response.
+	let reminderSection = document.createElement("div");
+	reminderSection.className = "settings-section";
+	reminderSection.innerHTML =
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
-		'<span class="settings-info-icon" title="When enabled, TaskSync appends this text directly to every ask_user response (manual, queue, autopilot, timeout).\n\nThis increases context usage, so keep it concise.">' +
+		'<span class="codicon codicon-comment-discussion"></span> AskUser Reminder' +
+		'<span class="settings-info-icon" title="Always append the built-in askUser reminder to every response. Useful when the model tends to stop without calling askUser, especially with GPT 5.4.">' +
 		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
-		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
-		"</div>" +
-		'<div class="form-row hidden" id="auto-append-text-row">' +
-		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
-		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
-		'<div class="auto-append-reminder-row">' +
-		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder' +
-		'<span class="settings-info-icon-inline" title="Auto Append = YOUR custom rules (e.g. &quot;follow SOLID principles&quot;). If empty, nothing is appended.\n\nAuto Reminder = predefined instruction that tells the AI to call askUser. Enable this if your AI keeps ending without asking for feedback (common with GPT 5.4).\n\nBoth can be ON together.">' +
-		'<span class="codicon codicon-question"></span></span></label>' +
-		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
-		"</div>" +
+		'<div class="toggle-switch" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Enable AskUser reminder" tabindex="0"></div>' +
 		"</div>";
-	modalContent.appendChild(autoAppendSection);
+	modalContent.appendChild(reminderSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
 	let humanDelaySection = document.createElement("div");
@@ -1632,30 +1621,6 @@ function createSettingsModal() {
 		'" />' +
 		"</div>";
 	modalContent.appendChild(remoteMaxDevicesSection);
-
-	// Autopilot section with cycling prompts list
-	let autopilotSection = document.createElement("div");
-	autopilotSection.className = "settings-section";
-	autopilotSection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-rocket"></span> Autopilot Prompts' +
-		'<span class="settings-info-icon" title="Prompts cycle in order (1→2→3→1...) with human-like delay.\n\nHow it works:\n• The agent calls ask_user → Autopilot sends the next prompt in sequence\n• Add multiple prompts to alternate between different instructions\n• Drag to reorder, edit or delete individual prompts\n\nQueue Priority:\n• Queued prompts ALWAYS take priority over Autopilot\n• Autopilot only activates when the queue is empty">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		'<button class="add-prompt-btn-inline" id="autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
-		"</div>" +
-		'<div class="autopilot-prompts-list" id="autopilot-prompts-list"></div>' +
-		'<div class="add-autopilot-prompt-form hidden" id="add-autopilot-prompt-form">' +
-		'<div class="form-row">' +
-		'<textarea class="form-input form-textarea" id="autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
-		"</div>" +
-		'<div class="form-actions">' +
-		'<button class="form-btn form-btn-cancel" id="cancel-autopilot-prompt-btn">Cancel</button>' +
-		'<button class="form-btn form-btn-save" id="save-autopilot-prompt-btn">Save</button>' +
-		"</div>" +
-		"</div>";
-	modalContent.appendChild(autopilotSection);
 
 	// Response Timeout section - dropdown for 10-120 minutes
 	let timeoutSection = document.createElement("div");
@@ -1768,21 +1733,10 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
-	autoAppendToggle = document.getElementById("auto-append-toggle");
-	autoAppendTextRow = document.getElementById("auto-append-text-row");
-	autoAppendTextInput = document.getElementById("auto-append-text-input");
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
-	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
-	autopilotAddBtn = document.getElementById("autopilot-add-btn");
-	addAutopilotPromptForm = document.getElementById("add-autopilot-prompt-form");
-	autopilotPromptInput = document.getElementById("autopilot-prompt-input");
-	saveAutopilotPromptBtn = document.getElementById("save-autopilot-prompt-btn");
-	cancelAutopilotPromptBtn = document.getElementById(
-		"cancel-autopilot-prompt-btn",
-	);
 	responseTimeoutSelect = document.getElementById("response-timeout-select");
 	sessionWarningHoursSelect = document.getElementById(
 		"session-warning-hours-select",
@@ -1830,11 +1784,8 @@ function createSessionSettingsModal() {
 	var ssResetBtn = document.createElement("button");
 	ssResetBtn.className = "settings-modal-header-btn";
 	ssResetBtn.innerHTML = '<span class="codicon codicon-discard"></span>';
-	ssResetBtn.title = "Reset to workspace defaults";
-	ssResetBtn.setAttribute(
-		"aria-label",
-		"Reset session settings to workspace defaults",
-	);
+	ssResetBtn.title = "Reset this session's settings";
+	ssResetBtn.setAttribute("aria-label", "Reset this session's settings");
 	ssResetBtn.id = "ss-reset-btn";
 	ssHeaderBtns.appendChild(ssResetBtn);
 
@@ -1855,7 +1806,8 @@ function createSessionSettingsModal() {
 	// Description
 	var ssDesc = document.createElement("div");
 	ssDesc.className = "session-settings-desc";
-	ssDesc.textContent = "Override workspace settings for this session only.";
+	ssDesc.textContent =
+		"Configure Autopilot and Auto Append for this session only.";
 	ssContent.appendChild(ssDesc);
 
 	// Autopilot toggle section
@@ -1895,15 +1847,13 @@ function createSessionSettingsModal() {
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
 		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
+		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. Leave it blank to append nothing. The AskUser reminder is configured globally in Settings.">' +
+		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
 		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
 		"</div>" +
 		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
-		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
-		'<div class="auto-append-reminder-row">' +
-		'<label class="form-label-inline" for="ss-always-append-reminder-toggle">Always append askUser reminder</label>' +
-		'<div class="toggle-switch-small" id="ss-always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder for this session" tabindex="0"></div>' +
-		"</div>" +
+		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response in this session" maxlength="2000"></textarea>' +
 		"</div>";
 	ssContent.appendChild(ssAutoAppendSection);
 
@@ -1917,9 +1867,6 @@ function createSessionSettingsModal() {
 	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
 	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
 	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
-	ssAlwaysAppendReminderToggle = document.getElementById(
-		"ss-always-append-reminder-toggle",
-	);
 	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
 	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
 	ssAddAutopilotPromptForm = document.getElementById(
@@ -1999,18 +1946,30 @@ function createSessionActionModal(config) {
 	});
 	btnRow.appendChild(cancelBtn);
 
-	var confirmBtn = document.createElement("button");
-	confirmBtn.className = "form-btn form-btn-save";
-	confirmBtn.textContent = config.confirmLabel;
-	confirmBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-		if (config.onConfirm) {
-			config.onConfirm();
-		} else {
-			vscode.postMessage({ type: config.messageType });
-		}
+	var actions = Array.isArray(config.actions)
+		? config.actions
+		: [
+				{
+					label: config.confirmLabel,
+					className: "form-btn form-btn-save",
+					onClick: config.onConfirm,
+					messageType: config.messageType,
+				},
+			];
+	actions.forEach(function (action) {
+		var actionBtn = document.createElement("button");
+		actionBtn.className = action.className || "form-btn form-btn-save";
+		actionBtn.textContent = action.label;
+		actionBtn.addEventListener("click", function () {
+			closeSessionActionModal(overlay);
+			if (typeof action.onClick === "function") {
+				action.onClick();
+			} else if (action.messageType) {
+				vscode.postMessage({ type: action.messageType });
+			}
+		});
+		btnRow.appendChild(actionBtn);
 	});
-	btnRow.appendChild(confirmBtn);
 	content.appendChild(btnRow);
 
 	modal.appendChild(header);
@@ -2070,26 +2029,44 @@ function createNewSessionModal() {
 		noteHtml:
 			'<span class="codicon codicon-info"></span> Please check the model and agent preselected in VS Code Chat before starting.',
 		warningText:
-			"This will clear the current session history and start a fresh Copilot chat session.",
-		confirmLabel: "New Session",
+			"Start a fresh Copilot chat, or stop the current TaskSync session and start a fresh one.",
 		extraContent: extra,
-		onConfirm: function () {
-			var promptInput = document.getElementById("new-session-prompt");
-			var queueCheckbox = document.getElementById("new-session-use-queue");
-			var initialPrompt = promptInput ? promptInput.value.trim() : "";
-			var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
-			var msg = { type: "newSession" };
-			if (initialPrompt) {
-				msg.initialPrompt = initialPrompt;
-			}
-			if (promptQueue.length > 0) {
-				msg.useQueuedPrompt = useQueuedPrompt;
-			}
-			vscode.postMessage(msg);
-			// Clear textarea for next open
-			if (promptInput) promptInput.value = "";
-		},
+		actions: [
+			{
+				label: "Start New Session",
+				className: "form-btn form-btn-save",
+				onClick: function () {
+					submitNewSessionAction(false);
+				},
+			},
+			{
+				label: "Stop and Start New Session",
+				className: "form-btn form-btn-save",
+				onClick: function () {
+					submitNewSessionAction(true);
+				},
+			},
+		],
 	});
+}
+
+function submitNewSessionAction(stopCurrentSession) {
+	var promptInput = document.getElementById("new-session-prompt");
+	var queueCheckbox = document.getElementById("new-session-use-queue");
+	var initialPrompt = promptInput ? promptInput.value.trim() : "";
+	var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
+	var msg = { type: "newSession" };
+	if (initialPrompt) {
+		msg.initialPrompt = initialPrompt;
+	}
+	if (promptQueue.length > 0) {
+		msg.useQueuedPrompt = useQueuedPrompt;
+	}
+	if (stopCurrentSession) {
+		msg.stopCurrentSession = true;
+	}
+	vscode.postMessage(msg);
+	if (promptInput) promptInput.value = "";
 }
 
 function openNewSessionModal() {
@@ -2754,18 +2731,6 @@ function bindSessionSettingsEvents() {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
 				ssToggleAutoAppend();
-			}
-		});
-	}
-	if (ssAlwaysAppendReminderToggle) {
-		ssAlwaysAppendReminderToggle.addEventListener(
-			"click",
-			ssToggleAlwaysAppendReminder,
-		);
-		ssAlwaysAppendReminderToggle.addEventListener("keydown", function (e) {
-			if (e.key === "Enter" || e.key === " ") {
-				e.preventDefault();
-				ssToggleAlwaysAppendReminder();
 			}
 		});
 	}
@@ -3525,7 +3490,7 @@ function handleExtensionMessage(event) {
 			autoAppendText =
 				typeof message.autoAppendText === "string"
 					? message.autoAppendText
-					: DEFAULT_AUTO_APPEND_TEXT;
+					: "";
 			alwaysAppendReminder = message.alwaysAppendReminder === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
@@ -3968,7 +3933,7 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 			let newSessionBtn = document.getElementById("new-session-btn");
 			if (newSessionBtn) {
 				newSessionBtn.addEventListener("click", function () {
-					vscode.postMessage({ type: "newSession" });
+					openNewSessionModal();
 				});
 			}
 		} else {
@@ -6042,7 +6007,8 @@ var sessionPromptListUI = createPromptListUI({
 	listEl: null,
 	formEl: null,
 	inputEl: null,
-	emptyHint: "No session prompts. Inherits workspace prompts.",
+	emptyHint:
+		"No session prompts yet. Autopilot will use the default fallback text.",
 });
 
 /** Bind the shared UI to DOM elements (called after DOM is ready). */
@@ -6057,7 +6023,8 @@ function initSessionPromptListUI() {
 		listEl: ssAutopilotPromptsList,
 		formEl: ssAddAutopilotPromptForm,
 		inputEl: ssAutopilotPromptInput,
-		emptyHint: "No session prompts. Inherits workspace prompts.",
+		emptyHint:
+			"No session prompts yet. Autopilot will use the default fallback text.",
 	});
 	sessionPromptListUI.bindEvents();
 }
@@ -6113,9 +6080,6 @@ function saveSessionSettings() {
 		? ssAutoAppendToggle.classList.contains("active")
 		: false;
 	var autoAppendText = ssAutoAppendTextInput ? ssAutoAppendTextInput.value : "";
-	var isReminderEnabled = ssAlwaysAppendReminderToggle
-		? ssAlwaysAppendReminderToggle.classList.contains("active")
-		: false;
 
 	vscode.postMessage({
 		type: "updateSessionSettings",
@@ -6125,13 +6089,12 @@ function saveSessionSettings() {
 		}),
 		autoAppendEnabled: isAutoAppendEnabled,
 		autoAppendText: autoAppendText,
-		alwaysAppendReminder: isReminderEnabled,
 	});
 }
 
 function resetSessionSettings() {
 	vscode.postMessage({ type: "resetSessionSettings" });
-	// The backend will send back a sessionSettingsState with workspace defaults
+	// The backend will send back a sessionSettingsState with TaskSync defaults
 }
 
 function populateSessionSettings(msg) {
@@ -6161,9 +6124,6 @@ function populateSessionSettings(msg) {
 		ssAutoAppendTextInput.value =
 			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
 	}
-
-	// Always Append Reminder toggle
-	setToggle(ssAlwaysAppendReminderToggle, msg.alwaysAppendReminder === true);
 }
 
 // --- Session toggle functions ---
@@ -6182,14 +6142,6 @@ function ssToggleAutoAppend() {
 	if (ssAutoAppendTextRow) {
 		ssAutoAppendTextRow.classList.toggle("hidden", !active);
 	}
-}
-
-function ssToggleAlwaysAppendReminder() {
-	if (!ssAlwaysAppendReminderToggle) return;
-	setToggle(
-		ssAlwaysAppendReminderToggle,
-		!ssAlwaysAppendReminderToggle.classList.contains("active"),
-	);
 }
 // ===== SLASH COMMAND FUNCTIONS =====
 

@@ -14,7 +14,8 @@ var sessionPromptListUI = createPromptListUI({
 	listEl: null,
 	formEl: null,
 	inputEl: null,
-	emptyHint: "No session prompts. Inherits workspace prompts.",
+	emptyHint:
+		"No session prompts yet. Autopilot will use the default fallback text.",
 });
 
 /** Bind the shared UI to DOM elements (called after DOM is ready). */
@@ -29,7 +30,8 @@ function initSessionPromptListUI() {
 		listEl: ssAutopilotPromptsList,
 		formEl: ssAddAutopilotPromptForm,
 		inputEl: ssAutopilotPromptInput,
-		emptyHint: "No session prompts. Inherits workspace prompts.",
+		emptyHint:
+			"No session prompts yet. Autopilot will use the default fallback text.",
 	});
 	sessionPromptListUI.bindEvents();
 }
@@ -85,9 +87,6 @@ function saveSessionSettings() {
 		? ssAutoAppendToggle.classList.contains("active")
 		: false;
 	var autoAppendText = ssAutoAppendTextInput ? ssAutoAppendTextInput.value : "";
-	var isReminderEnabled = ssAlwaysAppendReminderToggle
-		? ssAlwaysAppendReminderToggle.classList.contains("active")
-		: false;
 
 	vscode.postMessage({
 		type: "updateSessionSettings",
@@ -97,13 +96,12 @@ function saveSessionSettings() {
 		}),
 		autoAppendEnabled: isAutoAppendEnabled,
 		autoAppendText: autoAppendText,
-		alwaysAppendReminder: isReminderEnabled,
 	});
 }
 
 function resetSessionSettings() {
 	vscode.postMessage({ type: "resetSessionSettings" });
-	// The backend will send back a sessionSettingsState with workspace defaults
+	// The backend will send back a sessionSettingsState with TaskSync defaults
 }
 
 function populateSessionSettings(msg) {
@@ -133,9 +131,6 @@ function populateSessionSettings(msg) {
 		ssAutoAppendTextInput.value =
 			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
 	}
-
-	// Always Append Reminder toggle
-	setToggle(ssAlwaysAppendReminderToggle, msg.alwaysAppendReminder === true);
 }
 
 // --- Session toggle functions ---
@@ -154,12 +149,4 @@ function ssToggleAutoAppend() {
 	if (ssAutoAppendTextRow) {
 		ssAutoAppendTextRow.classList.toggle("hidden", !active);
 	}
-}
-
-function ssToggleAlwaysAppendReminder() {
-	if (!ssAlwaysAppendReminderToggle) return;
-	setToggle(
-		ssAlwaysAppendReminderToggle,
-		!ssAlwaysAppendReminderToggle.classList.contains("active"),
-	);
 }

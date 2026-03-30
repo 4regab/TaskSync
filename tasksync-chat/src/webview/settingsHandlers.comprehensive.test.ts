@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "../__mocks__/vscode";
 import {
-	AUTO_APPEND_DEFAULT_TEXT,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
 	DEFAULT_REMOTE_MAX_DEVICES,
@@ -63,7 +62,7 @@ function createMockP(overrides: Partial<any> = {}) {
 		_soundEnabled: true,
 		_interactiveApprovalEnabled: true,
 		_autoAppendEnabled: false,
-		_autoAppendText: AUTO_APPEND_DEFAULT_TEXT,
+		_autoAppendText: "",
 		_sendWithCtrlEnter: false,
 		_autopilotEnabled: false,
 		_autopilotText: "Continue",
@@ -226,8 +225,6 @@ describe("loadSettings", () => {
 		const config = createMockConfig({
 			notificationSound: false,
 			interactiveApproval: false,
-			autoAppendEnabled: true,
-			autoAppendText: "Use the askUser loop.",
 			sendWithCtrlEnter: true,
 			humanLikeDelay: false,
 			humanLikeDelayMin: 5,
@@ -244,15 +241,17 @@ describe("loadSettings", () => {
 
 		expect(p._soundEnabled).toBe(false);
 		expect(p._interactiveApprovalEnabled).toBe(false);
-		expect(p._autoAppendEnabled).toBe(true);
-		expect(p._autoAppendText).toBe("Use the askUser loop.");
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
 		expect(p._sendWithCtrlEnter).toBe(true);
 		expect(p._humanLikeDelayEnabled).toBe(false);
 	});
 
-	it("falls back to legacy askUserVerbosePayload when autoAppendEnabled is not set", () => {
+	it("ignores deprecated workspace autoAppend settings", () => {
 		const config = createMockConfig({
 			askUserVerbosePayload: true,
+			autoAppendEnabled: true,
+			autoAppendText: "Legacy append text",
 		});
 		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
@@ -261,23 +260,20 @@ describe("loadSettings", () => {
 
 		const p = createMockP();
 		loadSettings(p);
-		expect(p._autoAppendEnabled).toBe(true);
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
 	});
 
-	it("uses new autopilot key when set", () => {
+	it("ignores deprecated workspace autopilot toggle", () => {
 		const config = createMockConfig({ autopilot: true });
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: true };
-			if (key === "autopilotText") return undefined;
-			return undefined;
-		});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
 		const p = createMockP({ _sessionManager: undefined });
 		loadSettings(p);
-		expect(p._autopilotEnabled).toBe(true);
+		expect(p._autopilotEnabled).toBe(false);
 	});
 
 	it("defaults autopilotEnabled to false when no keys are set", () => {
@@ -292,34 +288,23 @@ describe("loadSettings", () => {
 		expect(p._autopilotEnabled).toBe(false);
 	});
 
-	it("loads autopilotPrompts from config", () => {
+	it("does not load autopilot prompts from workspace config", () => {
 		const config = createMockConfig({
 			autopilotPrompts: ["prompt1", "prompt2", ""],
 		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: false };
-			if (key === "autopilotText") return { workspaceValue: "text" };
-			return undefined;
-		});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
 		const p = createMockP();
 		loadSettings(p);
-		// Empty strings should be filtered out
-		expect(p._autopilotPrompts).toEqual(["prompt1", "prompt2"]);
+		expect(p._autopilotPrompts).toEqual([]);
 	});
 
 	it("clamps autopilotIndex when prompts array shrinks", () => {
-		const config = createMockConfig({
-			autopilotPrompts: ["only-one"],
-		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: false };
-			if (key === "autopilotText") return { workspaceValue: "text" };
-			return undefined;
-		});
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
@@ -391,23 +376,20 @@ describe("loadSettings", () => {
 		expect(p._sessionWarningHours).toBe(DEFAULT_SESSION_WARNING_HOURS);
 	});
 
-	it("falls back autopilotPrompts to autopilotText when no saved prompts", () => {
+	it("keeps autopilot prompts empty when a session has none configured", () => {
 		const config = createMockConfig({
 			autopilotPrompts: [],
 			autopilotText: "Custom text",
 		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: false };
-			if (key === "autopilotText") return { workspaceValue: "Custom text" };
-			return undefined;
-		});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
 		const p = createMockP({ _AUTOPILOT_DEFAULT_TEXT: "Continue" });
 		loadSettings(p);
-		expect(p._autopilotPrompts).toEqual(["Custom text"]);
+		expect(p._autopilotPrompts).toEqual([]);
+		expect(p._autopilotText).toBe("Continue");
 	});
 });
 
@@ -440,7 +422,7 @@ describe("buildSettingsPayload", () => {
 		const payload = buildSettingsPayload(p);
 		expect(payload.soundEnabled).toBe(false);
 		expect(payload.autoAppendEnabled).toBe(false);
-		expect(payload.autoAppendText).toBe(AUTO_APPEND_DEFAULT_TEXT);
+		expect(payload.autoAppendText).toBe("");
 		expect(payload.autopilotEnabled).toBe(true);
 		expect(payload.autopilotText).toBe("Go ahead");
 		expect(payload.autopilotPrompts).toEqual(["p1"]);
@@ -559,11 +541,7 @@ describe("handleUpdateAutoAppendSetting", () => {
 		const p = createMockP();
 		await handleUpdateAutoAppendSetting(p, true);
 		expect(p._autoAppendEnabled).toBe(true);
-		expect(config.update).toHaveBeenCalledWith(
-			"autoAppendEnabled",
-			true,
-			vscode.ConfigurationTarget.Workspace,
-		);
+		expect(config.update).not.toHaveBeenCalled();
 	});
 });
 
@@ -581,14 +559,10 @@ describe("handleUpdateAutoAppendText", () => {
 		const p = createMockP();
 		await handleUpdateAutoAppendText(p, "Always call askUser at the end.");
 		expect(p._autoAppendText).toBe("Always call askUser at the end.");
-		expect(config.update).toHaveBeenCalledWith(
-			"autoAppendText",
-			"Always call askUser at the end.",
-			vscode.ConfigurationTarget.Workspace,
-		);
+		expect(config.update).not.toHaveBeenCalled();
 	});
 
-	it("normalizes empty text to default", async () => {
+	it("normalizes empty text to blank", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
@@ -596,7 +570,7 @@ describe("handleUpdateAutoAppendText", () => {
 
 		const p = createMockP();
 		await handleUpdateAutoAppendText(p, "   ");
-		expect(p._autoAppendText).toBe(AUTO_APPEND_DEFAULT_TEXT);
+		expect(p._autoAppendText).toBe("");
 	});
 });
 
@@ -633,11 +607,7 @@ describe("handleUpdateAutopilotText", () => {
 		const p = createMockP();
 		await handleUpdateAutopilotText(p, "New text");
 		expect(p._autopilotText).toBe("New text");
-		expect(config.update).toHaveBeenCalledWith(
-			"autopilotText",
-			"New text",
-			vscode.ConfigurationTarget.Workspace,
-		);
+		expect(config.update).not.toHaveBeenCalled();
 	});
 });
 
@@ -1416,13 +1386,15 @@ describe("saveAutopilotPrompts", () => {
 			config as any,
 		);
 
-		const p = createMockP({ _autopilotPrompts: ["a", "b"] });
+		const session: Record<string, unknown> = { id: "s1" };
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b"],
+			_sessionManager: { getActiveSession: () => session },
+		});
 		await saveAutopilotPrompts(p);
-		expect(config.update).toHaveBeenCalledWith(
-			"autopilotPrompts",
-			["a", "b"],
-			vscode.ConfigurationTarget.Global,
-		);
+		expect(config.update).not.toHaveBeenCalled();
+		expect(session.autopilotPrompts).toEqual(["a", "b"]);
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
 	});
 });
 
@@ -1577,7 +1549,7 @@ describe("per-session settings sync", () => {
 		expect(p._autoAppendText).toBe("Session auto-append");
 	});
 
-	it("loadSettings falls back to config when session fields are empty", () => {
+	it("loadSettings uses TaskSync defaults when session fields are empty", () => {
 		const config = createMockConfig({
 			autopilotText: "Config text",
 			autoAppendEnabled: true,
@@ -1600,13 +1572,12 @@ describe("per-session settings sync", () => {
 			_sessionManager: { getActiveSession: () => session },
 		});
 		loadSettings(p);
-		// Empty session autopilotText → falls back to config
-		expect(p._autopilotText).toBe("Config text");
-		expect(p._autoAppendEnabled).toBe(true);
-		expect(p._autoAppendText).toBe("Config auto-append");
+		expect(p._autopilotText).toBe("Continue");
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
 	});
 
-	it("loadSettings falls back to config when session fields are undefined (old sessions)", () => {
+	it("loadSettings uses TaskSync defaults when session fields are undefined", () => {
 		const config = createMockConfig({
 			autopilotText: "Config text",
 			autoAppendEnabled: true,
@@ -1627,13 +1598,13 @@ describe("per-session settings sync", () => {
 			_sessionManager: { getActiveSession: () => session },
 		});
 		loadSettings(p);
-		expect(p._autopilotText).toBe("Config text");
-		expect(p._autopilotPrompts).toEqual(["Config prompt"]);
-		expect(p._autoAppendEnabled).toBe(true);
-		expect(p._autoAppendText).toBe("Config auto-append");
+		expect(p._autopilotText).toBe("Continue");
+		expect(p._autopilotPrompts).toEqual([]);
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
 	});
 
-	it("syncSettingsToSession marks session fields as explicitly set", async () => {
+	it("auto append updates only the active session fields it owns", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
@@ -1653,10 +1624,9 @@ describe("per-session settings sync", () => {
 			_sessionManager: { getActiveSession: () => session },
 		});
 		await handleUpdateAutoAppendSetting(p, true);
-		// After sync, session should have all 4 fields set
-		expect(session.autopilotText).toBe("Custom text");
-		expect(session.autopilotPrompts).toEqual(["A", "B"]);
 		expect(session.autoAppendEnabled).toBe(true);
-		expect(session.autoAppendText).toBe("Custom append");
+		expect(session.autoAppendText).toBeUndefined();
+		expect(session.autopilotText).toBeUndefined();
+		expect(session.autopilotPrompts).toBeUndefined();
 	});
 });

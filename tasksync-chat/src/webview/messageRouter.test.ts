@@ -30,10 +30,11 @@ describe("handleWebviewMessage session actions", () => {
 		handleWebviewMessage(p, { type: "newSession" });
 
 		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledTimes(1);
-		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
-			undefined,
-			undefined,
-		);
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
+			initialPrompt: undefined,
+			useQueuedPrompt: undefined,
+			stopCurrentSession: undefined,
+		});
 		expect(p.startNewSession).not.toHaveBeenCalled();
 	});
 
@@ -45,10 +46,11 @@ describe("handleWebviewMessage session actions", () => {
 			initialPrompt: "Build the login page",
 		});
 
-		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
-			"Build the login page",
-			undefined,
-		);
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
+			initialPrompt: "Build the login page",
+			useQueuedPrompt: undefined,
+			stopCurrentSession: undefined,
+		});
 	});
 
 	it("passes useQueuedPrompt true to startNewSessionAndResetCopilotChat", () => {
@@ -59,10 +61,11 @@ describe("handleWebviewMessage session actions", () => {
 			useQueuedPrompt: true,
 		});
 
-		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
-			undefined,
-			true,
-		);
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
+			initialPrompt: undefined,
+			useQueuedPrompt: true,
+			stopCurrentSession: undefined,
+		});
 	});
 
 	it("passes useQueuedPrompt false to opt out of dequeuing", () => {
@@ -73,10 +76,11 @@ describe("handleWebviewMessage session actions", () => {
 			useQueuedPrompt: false,
 		});
 
-		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
-			undefined,
-			false,
-		);
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
+			initialPrompt: undefined,
+			useQueuedPrompt: false,
+			stopCurrentSession: undefined,
+		});
 	});
 
 	it("passes both initialPrompt and useQueuedPrompt", () => {
@@ -88,10 +92,26 @@ describe("handleWebviewMessage session actions", () => {
 			useQueuedPrompt: true,
 		});
 
-		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith(
-			"Fix tests",
-			true,
-		);
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
+			initialPrompt: "Fix tests",
+			useQueuedPrompt: true,
+			stopCurrentSession: undefined,
+		});
+	});
+
+	it("passes stopCurrentSession to startNewSessionAndResetCopilotChat", () => {
+		const p = createMockP();
+
+		handleWebviewMessage(p, {
+			type: "newSession",
+			stopCurrentSession: true,
+		});
+
+		expect(p.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
+			initialPrompt: undefined,
+			useQueuedPrompt: undefined,
+			stopCurrentSession: true,
+		});
 	});
 
 	it("routes resetSession to startNewSession without opening a fresh chat", () => {

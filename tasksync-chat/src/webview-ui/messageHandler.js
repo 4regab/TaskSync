@@ -72,7 +72,7 @@ function handleExtensionMessage(event) {
 			autoAppendText =
 				typeof message.autoAppendText === "string"
 					? message.autoAppendText
-					: DEFAULT_AUTO_APPEND_TEXT;
+					: "";
 			alwaysAppendReminder = message.alwaysAppendReminder === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;

@@ -337,18 +337,6 @@ function bindSessionSettingsEvents() {
 			}
 		});
 	}
-	if (ssAlwaysAppendReminderToggle) {
-		ssAlwaysAppendReminderToggle.addEventListener(
-			"click",
-			ssToggleAlwaysAppendReminder,
-		);
-		ssAlwaysAppendReminderToggle.addEventListener("keydown", function (e) {
-			if (e.key === "Enter" || e.key === " ") {
-				e.preventDefault();
-				ssToggleAlwaysAppendReminder();
-			}
-		});
-	}
 	if (ssAddAutopilotPromptBtn)
 		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
 	if (ssSaveAutopilotPromptBtn)

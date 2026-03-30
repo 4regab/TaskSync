@@ -113,9 +113,6 @@ export class ChatSessionManager {
 			...(typeof raw.autoAppendText === "string"
 				? { autoAppendText: raw.autoAppendText }
 				: {}),
-			...(typeof raw.alwaysAppendReminder === "boolean"
-				? { alwaysAppendReminder: raw.alwaysAppendReminder }
-				: {}),
 			waitingOnUser: raw.waitingOnUser === true,
 			createdAt:
 				typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt)

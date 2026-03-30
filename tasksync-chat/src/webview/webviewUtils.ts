@@ -2,7 +2,10 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type * as vscodeTypes from "vscode";
-import { CONFIG_SECTION } from "../constants/remoteConstants";
+import {
+	AUTO_APPEND_DEFAULT_TEXT,
+	CONFIG_SECTION,
+} from "../constants/remoteConstants";
 import { generateId } from "../utils/generateId";
 import type { ChatSession, P, ToolCallEntry } from "./webviewTypes";
 
@@ -75,6 +78,29 @@ export function applyAutoAppendText(
 	appendText: string,
 ): string {
 	return enabled ? appendAutoAppendText(response, appendText) : response;
+}
+
+/**
+ * Build the final ask_user response with session auto-append text and the
+ * global askUser reminder toggle applied in one shared place.
+ */
+export function buildFinalResponseText(
+	response: string,
+	autoAppendEnabled: boolean,
+	autoAppendText: string,
+	alwaysAppendReminder: boolean,
+): string {
+	let finalResponse = response;
+	if (autoAppendEnabled) {
+		finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
+	}
+	if (alwaysAppendReminder) {
+		finalResponse = appendAutoAppendText(
+			finalResponse,
+			AUTO_APPEND_DEFAULT_TEXT,
+		);
+	}
+	return finalResponse;
 }
 
 /**

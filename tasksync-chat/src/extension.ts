@@ -67,12 +67,17 @@ export function activate(context: vscode.ExtensionContext): void {
 				return;
 			}
 			const answer = await vscode.window.showWarningMessage(
-				"Are you sure you want to start a new session? This will clear the current session history.",
+				"Choose how to start the next TaskSync session.",
 				{ modal: true },
 				"Start New Session",
+				"Stop and Start New Session",
 			);
 			if (answer === "Start New Session") {
 				await provider.startNewSessionAndResetCopilotChat();
+			} else if (answer === "Stop and Start New Session") {
+				await provider.startNewSessionAndResetCopilotChat({
+					stopCurrentSession: true,
+				});
 			}
 		},
 	);

@@ -108,8 +108,8 @@ let lastPendingContentHtml = "";
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
 let autoAppendEnabled = false;
-let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
-let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
+let autoAppendText = ""; // Custom text appended to responses for the active session
+let alwaysAppendReminder = false; // Global AskUser reminder toggle
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -234,7 +234,6 @@ let sessionSettingsOverlay,
 	ssAutopilotToggle,
 	ssAutoAppendToggle,
 	ssAutoAppendTextInput,
-	ssAlwaysAppendReminderToggle,
 	ssAutopilotPromptsList,
 	ssAddAutopilotPromptBtn,
 	ssAddAutopilotPromptForm,

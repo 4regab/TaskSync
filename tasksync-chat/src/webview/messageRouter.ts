@@ -79,10 +79,11 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 			break;
 		case "newSession":
 			void p
-				.startNewSessionAndResetCopilotChat(
-					message.initialPrompt,
-					message.useQueuedPrompt,
-				)
+				.startNewSessionAndResetCopilotChat({
+					initialPrompt: message.initialPrompt,
+					useQueuedPrompt: message.useQueuedPrompt,
+					stopCurrentSession: message.stopCurrentSession,
+				})
 				.catch((err: unknown) => {
 					console.error("[TaskSync] Failed to start fresh Copilot chat:", err);
 				});

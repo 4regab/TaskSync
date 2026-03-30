@@ -82,16 +82,14 @@ export interface ChatSession {
 	history: ToolCallEntry[];
 	attachments: AttachmentInfo[];
 	autopilotEnabled: boolean;
-	/** Per-session override; undefined = inherit from workspace config */
+	/** Per-session fallback text when Autopilot is enabled without prompts. */
 	autopilotText?: string;
-	/** Per-session override; undefined = inherit from workspace config */
+	/** Per-session Autopilot prompt cycle. */
 	autopilotPrompts?: string[];
-	/** Per-session override; undefined = inherit from workspace config */
+	/** Per-session Auto Append toggle. */
 	autoAppendEnabled?: boolean;
-	/** Per-session override; undefined = inherit from workspace config */
+	/** Per-session Auto Append text. */
 	autoAppendText?: string;
-	/** Per-session override; undefined = inherit from workspace config */
-	alwaysAppendReminder?: boolean;
 	waitingOnUser: boolean;
 	createdAt: number;
 	/** The toolCallId currently pending for THIS session (null if not waiting) */
@@ -185,8 +183,7 @@ export type ToWebviewMessage =
 			autopilotPrompts: string[];
 			autoAppendEnabled: boolean;
 			autoAppendText: string;
-			alwaysAppendReminder: boolean;
-			/** True when all values equal workspace defaults (no per-session overrides) */
+			/** True when all values match TaskSync's per-session defaults. */
 			isDefault: boolean;
 	  };
 
@@ -215,7 +212,12 @@ export type FromWebviewMessage =
 	| { type: "removeHistoryItem"; callId: string }
 	| { type: "clearPersistedHistory" }
 	| { type: "openHistoryModal" }
-	| { type: "newSession"; initialPrompt?: string; useQueuedPrompt?: boolean }
+	| {
+			type: "newSession";
+			initialPrompt?: string;
+			useQueuedPrompt?: boolean;
+			stopCurrentSession?: boolean;
+	  }
 	| { type: "resetSession" }
 	| { type: "searchFiles"; query: string }
 	| { type: "saveImage"; data: string; mimeType: string }
@@ -265,7 +267,6 @@ export type FromWebviewMessage =
 			autopilotPrompts?: string[];
 			autoAppendEnabled?: boolean;
 			autoAppendText?: string;
-			alwaysAppendReminder?: boolean;
 	  }
 	| { type: "resetSessionSettings" }
 	| { type: "requestSessionSettings" };

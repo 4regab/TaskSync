@@ -577,7 +577,10 @@ export class RemoteServer {
 				// Reuse the same session-aware path as the local New Session flow so
 				// Copilot receives the exact TaskSync session_id for subsequent ask_user calls.
 				void this.provider
-					.startNewSessionAndResetCopilotChat(rawPrompt || undefined, false)
+					.startNewSessionAndResetCopilotChat({
+						initialPrompt: rawPrompt || undefined,
+						useQueuedPrompt: false,
+					})
 					.catch((e) => console.error("[TaskSync Remote] startSession:", e));
 				break;
 			}
@@ -635,7 +638,9 @@ export class RemoteServer {
 			case "newSession": {
 				debugLog("newSession: starting fresh remote chat");
 				void this.provider
-					.startNewSessionAndResetCopilotChat()
+					.startNewSessionAndResetCopilotChat({
+						stopCurrentSession: msg.stopCurrentSession === true,
+					})
 					.catch((e) =>
 						console.error("[TaskSync Remote] newSession error:", e),
 					);

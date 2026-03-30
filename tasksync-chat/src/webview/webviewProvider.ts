@@ -33,7 +33,12 @@ import {
 	type UserResponseResult,
 	VIEW_TYPE,
 } from "./webviewTypes";
-import { debugLog, mergeAndDedup, notifyQueueChanged } from "./webviewUtils";
+import {
+	debugLog,
+	markSessionTerminated,
+	mergeAndDedup,
+	notifyQueueChanged,
+} from "./webviewUtils";
 
 const NEW_SESSION_STATUS_MESSAGE = "New session started — waiting for AI";
 
@@ -148,10 +153,10 @@ export class TaskSyncWebviewProvider
 
 	// Interactive approval buttons enabled (loaded from VS Code settings)
 	_interactiveApprovalEnabled: boolean = true;
-	// Auto Append setting controls whether shared guidance is appended to ask_user responses.
+	// Mirrors the ACTIVE session's Auto Append state.
 	_autoAppendEnabled: boolean = false;
 	_autoAppendText: string = "";
-	// Force askUser reminder even with custom autoAppendText (for GPT 5.4)
+	// Global AskUser reminder toggle.
 	_alwaysAppendReminder: boolean = false;
 
 	readonly _AUTOPILOT_DEFAULT_TEXT =
@@ -159,13 +164,13 @@ export class TaskSyncWebviewProvider
 	readonly _SESSION_TERMINATION_TEXT =
 		"Session terminated. Do not use askUser tool again.";
 
-	// Autopilot enabled (loaded from VS Code settings)
+	// Mirrors the ACTIVE session's Autopilot enabled state.
 	_autopilotEnabled: boolean = false;
 
-	// Autopilot fallback text used when no autopilot prompts are configured.
+	// Autopilot fallback text used when no session prompts are configured.
 	_autopilotText: string = "";
 
-	// Autopilot prompts array (cycles through in order)
+	// Mirrors the ACTIVE session's Autopilot prompt cycle.
 	_autopilotPrompts: string[] = [];
 
 	// Current index in autopilot prompts cycle (resets on new session)
@@ -255,15 +260,9 @@ export class TaskSyncWebviewProvider
 				if (
 					e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendEnabled`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendText`) ||
 					e.affectsConfiguration(
 						`${CONFIG_SECTION}.alwaysAppendAskUserReminder`,
 					) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.askUserVerbosePayload`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autopilot`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotText`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotPrompts`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
@@ -343,12 +342,10 @@ export class TaskSyncWebviewProvider
 	private _sessionDefaults(): Partial<ChatSession> {
 		return {
 			queueEnabled: this._queueEnabled,
-			autopilotEnabled: this._autopilotEnabled,
-			autopilotText: this._autopilotText,
-			autopilotPrompts: [...this._autopilotPrompts],
-			autoAppendEnabled: this._autoAppendEnabled,
-			autoAppendText: this._autoAppendText,
-			alwaysAppendReminder: this._alwaysAppendReminder,
+			autopilotEnabled: false,
+			autopilotPrompts: [],
+			autoAppendEnabled: false,
+			autoAppendText: "",
 		};
 	}
 
@@ -481,12 +478,14 @@ export class TaskSyncWebviewProvider
 		lifecycle.startNewSession(this);
 	}
 
-	public async startNewSessionAndResetCopilotChat(
-		initialPrompt?: string,
-		useQueuedPrompt?: boolean,
-	): Promise<void> {
+	public async startNewSessionAndResetCopilotChat(options?: {
+		initialPrompt?: string;
+		useQueuedPrompt?: boolean;
+		stopCurrentSession?: boolean;
+	}): Promise<void> {
 		const previousActiveSession = this._sessionManager.getActiveSession();
 		let queuedPromptFromPrevious: QueuedPrompt | undefined;
+		const useQueuedPrompt = options?.useQueuedPrompt;
 
 		if (useQueuedPrompt !== false && previousActiveSession?.queue.length) {
 			queuedPromptFromPrevious = previousActiveSession.queue.shift();
@@ -495,6 +494,17 @@ export class TaskSyncWebviewProvider
 			) {
 				notifyQueueChanged(this);
 			}
+		}
+
+		if (options?.stopCurrentSession && previousActiveSession) {
+			if (previousActiveSession.pendingToolCallId) {
+				this.cancelPendingToolCall(
+					"[Session stopped by user]",
+					previousActiveSession.id,
+				);
+			}
+			markSessionTerminated(this, previousActiveSession);
+			this._saveSessionsToDisk();
 		}
 
 		const chatSession = this._sessionManager.createSession(
@@ -514,7 +524,7 @@ export class TaskSyncWebviewProvider
 		});
 
 		let chatQuery: string;
-		const trimmedPrompt = initialPrompt?.trim();
+		const trimmedPrompt = options?.initialPrompt?.trim();
 
 		if (trimmedPrompt) {
 			// User typed a prompt in the modal — use it directly (clamped to max length)

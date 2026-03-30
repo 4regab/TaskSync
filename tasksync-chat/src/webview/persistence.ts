@@ -234,9 +234,6 @@ export async function loadSessionsFromDiskAsync(p: P): Promise<void> {
 }
 
 /**
- * Save sessions to disk (async).
- */
-/**
  * Save sessions to disk (debounced).
  */
 export function saveSessionsToDisk(p: P): void {

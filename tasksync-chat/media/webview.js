@@ -833,9 +833,9 @@ const RESPONSE_TIMEOUT_ALLOWED_VALUES =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_ALLOWED !== "undefined"
 		? new Set(TASKSYNC_RESPONSE_TIMEOUT_ALLOWED)
 		: new Set([
-			0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
-			240, 300, 360, 420, 480,
-		]);
+				0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 150, 180, 210,
+				240, 300, 360, 420, 480,
+			]);
 const RESPONSE_TIMEOUT_DEFAULT =
 	typeof TASKSYNC_RESPONSE_TIMEOUT_DEFAULT !== "undefined"
 		? TASKSYNC_RESPONSE_TIMEOUT_DEFAULT
@@ -4415,19 +4415,10 @@ function renderSessionsList() {
 				(isWaiting ? " waiting" : "") +
 				(isArchived ? " archived" : "");
 
-			// Default preview snippet
+			// Preview snippet from latest history entry (history is newest-first via unshift)
 			var promptPreview = "Tap to view thread...";
 			if (session.history && session.history.length > 0) {
-				var lastHistory = session.history[0]; // Assuming reversed (newest first)? Or last?
-				// Let's grab the last prompt block string:
-				var lastH = session.history[session.history.length - 1]; // standard order
-				if (
-					session.history[0] &&
-					session.history[0].timestamp > (lastH ? lastH.timestamp : 0)
-				) {
-					lastH = session.history[0]; // Wait, if history is [newest, ...oldest] then 0 is latest
-				}
-				promptPreview = lastH.prompt || promptPreview;
+				promptPreview = session.history[0].prompt || promptPreview;
 			}
 			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
 
@@ -5099,226 +5090,226 @@ function updateChoicesSendButton() {
  * @param {function(): void} [opts.onListChange]       - Called after any mutation (render already done).
  */
 function createPromptListUI(opts) {
-    var getPrompts = opts.getPrompts;
-    var setPrompts = opts.setPrompts;
-    var listEl = opts.listEl;
-    var formEl = opts.formEl;
-    var inputEl = opts.inputEl;
-    var emptyHint = opts.emptyHint;
-    var onListChange = opts.onListChange || function () { };
+	var getPrompts = opts.getPrompts;
+	var setPrompts = opts.setPrompts;
+	var listEl = opts.listEl;
+	var formEl = opts.formEl;
+	var inputEl = opts.inputEl;
+	var emptyHint = opts.emptyHint;
+	var onListChange = opts.onListChange || function () {};
 
-    var editingIndex = -1;
-    var draggedIndex = -1;
+	var editingIndex = -1;
+	var draggedIndex = -1;
 
-    function render() {
-        if (!listEl) return;
-        var prompts = getPrompts();
+	function render() {
+		if (!listEl) return;
+		var prompts = getPrompts();
 
-        if (prompts.length === 0) {
-            listEl.innerHTML =
-                '<div class="empty-prompts-hint">' + emptyHint + "</div>";
-            return;
-        }
+		if (prompts.length === 0) {
+			listEl.innerHTML =
+				'<div class="empty-prompts-hint">' + emptyHint + "</div>";
+			return;
+		}
 
-        listEl.innerHTML = prompts
-            .map(function (prompt, index) {
-                var truncated =
-                    prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt;
-                var tooltipText =
-                    prompt.length > 300 ? prompt.substring(0, 300) + "..." : prompt;
-                tooltipText = escapeHtml(tooltipText);
-                return (
-                    '<div class="autopilot-prompt-item" draggable="true" data-index="' +
-                    index +
-                    '" title="' +
-                    tooltipText +
-                    '">' +
-                    '<span class="autopilot-prompt-drag-handle codicon codicon-grabber"></span>' +
-                    '<span class="autopilot-prompt-number">' +
-                    (index + 1) +
-                    ".</span>" +
-                    '<span class="autopilot-prompt-text">' +
-                    escapeHtml(truncated) +
-                    "</span>" +
-                    '<div class="autopilot-prompt-actions">' +
-                    '<button class="prompt-item-btn edit" data-index="' +
-                    index +
-                    '" title="Edit"><span class="codicon codicon-edit"></span></button>' +
-                    '<button class="prompt-item-btn delete" data-index="' +
-                    index +
-                    '" title="Delete"><span class="codicon codicon-trash"></span></button>' +
-                    "</div></div>"
-                );
-            })
-            .join("");
-    }
+		listEl.innerHTML = prompts
+			.map(function (prompt, index) {
+				var truncated =
+					prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt;
+				var tooltipText =
+					prompt.length > 300 ? prompt.substring(0, 300) + "..." : prompt;
+				tooltipText = escapeHtml(tooltipText);
+				return (
+					'<div class="autopilot-prompt-item" draggable="true" data-index="' +
+					index +
+					'" title="' +
+					tooltipText +
+					'">' +
+					'<span class="autopilot-prompt-drag-handle codicon codicon-grabber"></span>' +
+					'<span class="autopilot-prompt-number">' +
+					(index + 1) +
+					".</span>" +
+					'<span class="autopilot-prompt-text">' +
+					escapeHtml(truncated) +
+					"</span>" +
+					'<div class="autopilot-prompt-actions">' +
+					'<button class="prompt-item-btn edit" data-index="' +
+					index +
+					'" title="Edit"><span class="codicon codicon-edit"></span></button>' +
+					'<button class="prompt-item-btn delete" data-index="' +
+					index +
+					'" title="Delete"><span class="codicon codicon-trash"></span></button>' +
+					"</div></div>"
+				);
+			})
+			.join("");
+	}
 
-    function showAddForm() {
-        if (!formEl || !inputEl) return;
-        editingIndex = -1;
-        inputEl.value = "";
-        formEl.classList.remove("hidden");
-        formEl.removeAttribute("data-editing-index");
-        inputEl.focus();
-    }
+	function showAddForm() {
+		if (!formEl || !inputEl) return;
+		editingIndex = -1;
+		inputEl.value = "";
+		formEl.classList.remove("hidden");
+		formEl.removeAttribute("data-editing-index");
+		inputEl.focus();
+	}
 
-    function hideAddForm() {
-        if (!formEl || !inputEl) return;
-        formEl.classList.add("hidden");
-        inputEl.value = "";
-        editingIndex = -1;
-        formEl.removeAttribute("data-editing-index");
-    }
+	function hideAddForm() {
+		if (!formEl || !inputEl) return;
+		formEl.classList.add("hidden");
+		inputEl.value = "";
+		editingIndex = -1;
+		formEl.removeAttribute("data-editing-index");
+	}
 
-    function save() {
-        if (!inputEl) return;
-        var prompt = inputEl.value.trim();
-        if (!prompt) return;
+	function save() {
+		if (!inputEl) return;
+		var prompt = inputEl.value.trim();
+		if (!prompt) return;
 
-        var prompts = getPrompts().slice();
-        var editAttr = formEl ? formEl.getAttribute("data-editing-index") : null;
-        if (editAttr !== null) {
-            var idx = parseInt(editAttr, 10);
-            if (idx >= 0 && idx < prompts.length) {
-                prompts[idx] = prompt;
-            }
-        } else {
-            prompts.push(prompt);
-        }
-        setPrompts(prompts);
-        hideAddForm();
-        render();
-        onListChange();
-    }
+		var prompts = getPrompts().slice();
+		var editAttr = formEl ? formEl.getAttribute("data-editing-index") : null;
+		if (editAttr !== null) {
+			var idx = parseInt(editAttr, 10);
+			if (idx >= 0 && idx < prompts.length) {
+				prompts[idx] = prompt;
+			}
+		} else {
+			prompts.push(prompt);
+		}
+		setPrompts(prompts);
+		hideAddForm();
+		render();
+		onListChange();
+	}
 
-    function handleListClick(e) {
-        var target = e.target.closest(".prompt-item-btn");
-        if (!target) return;
+	function handleListClick(e) {
+		var target = e.target.closest(".prompt-item-btn");
+		if (!target) return;
 
-        var index = parseInt(target.getAttribute("data-index"), 10);
-        if (isNaN(index)) return;
+		var index = parseInt(target.getAttribute("data-index"), 10);
+		if (isNaN(index)) return;
 
-        if (target.classList.contains("edit")) {
-            editPrompt(index);
-        } else if (target.classList.contains("delete")) {
-            deletePrompt(index);
-        }
-    }
+		if (target.classList.contains("edit")) {
+			editPrompt(index);
+		} else if (target.classList.contains("delete")) {
+			deletePrompt(index);
+		}
+	}
 
-    function editPrompt(index) {
-        var prompts = getPrompts();
-        if (index < 0 || index >= prompts.length) return;
-        if (!formEl || !inputEl) return;
+	function editPrompt(index) {
+		var prompts = getPrompts();
+		if (index < 0 || index >= prompts.length) return;
+		if (!formEl || !inputEl) return;
 
-        editingIndex = index;
-        inputEl.value = prompts[index];
-        formEl.setAttribute("data-editing-index", index);
-        formEl.classList.remove("hidden");
-        inputEl.focus();
-    }
+		editingIndex = index;
+		inputEl.value = prompts[index];
+		formEl.setAttribute("data-editing-index", index);
+		formEl.classList.remove("hidden");
+		inputEl.focus();
+	}
 
-    function deletePrompt(index) {
-        var prompts = getPrompts().slice();
-        if (index < 0 || index >= prompts.length) return;
-        prompts.splice(index, 1);
-        setPrompts(prompts);
-        render();
-        onListChange();
-    }
+	function deletePrompt(index) {
+		var prompts = getPrompts().slice();
+		if (index < 0 || index >= prompts.length) return;
+		prompts.splice(index, 1);
+		setPrompts(prompts);
+		render();
+		onListChange();
+	}
 
-    function handleDragStart(e) {
-        var item = e.target.closest(".autopilot-prompt-item");
-        if (!item) return;
-        draggedIndex = parseInt(item.getAttribute("data-index"), 10);
-        item.classList.add("dragging");
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", draggedIndex);
-    }
+	function handleDragStart(e) {
+		var item = e.target.closest(".autopilot-prompt-item");
+		if (!item) return;
+		draggedIndex = parseInt(item.getAttribute("data-index"), 10);
+		item.classList.add("dragging");
+		e.dataTransfer.effectAllowed = "move";
+		e.dataTransfer.setData("text/plain", draggedIndex);
+	}
 
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        var item = e.target.closest(".autopilot-prompt-item");
-        if (!item || !listEl) return;
+	function handleDragOver(e) {
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		var item = e.target.closest(".autopilot-prompt-item");
+		if (!item || !listEl) return;
 
-        listEl.querySelectorAll(".autopilot-prompt-item").forEach(function (el) {
-            el.classList.remove("drag-over-top", "drag-over-bottom");
-        });
+		listEl.querySelectorAll(".autopilot-prompt-item").forEach(function (el) {
+			el.classList.remove("drag-over-top", "drag-over-bottom");
+		});
 
-        var rect = item.getBoundingClientRect();
-        var midY = rect.top + rect.height / 2;
-        if (e.clientY < midY) {
-            item.classList.add("drag-over-top");
-        } else {
-            item.classList.add("drag-over-bottom");
-        }
-    }
+		var rect = item.getBoundingClientRect();
+		var midY = rect.top + rect.height / 2;
+		if (e.clientY < midY) {
+			item.classList.add("drag-over-top");
+		} else {
+			item.classList.add("drag-over-bottom");
+		}
+	}
 
-    function handleDragEnd() {
-        draggedIndex = -1;
-        if (!listEl) return;
-        listEl.querySelectorAll(".autopilot-prompt-item").forEach(function (el) {
-            el.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
-        });
-    }
+	function handleDragEnd() {
+		draggedIndex = -1;
+		if (!listEl) return;
+		listEl.querySelectorAll(".autopilot-prompt-item").forEach(function (el) {
+			el.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
+		});
+	}
 
-    function handleDrop(e) {
-        e.preventDefault();
-        var item = e.target.closest(".autopilot-prompt-item");
-        if (!item || draggedIndex < 0) return;
+	function handleDrop(e) {
+		e.preventDefault();
+		var item = e.target.closest(".autopilot-prompt-item");
+		if (!item || draggedIndex < 0) return;
 
-        var toIndex = parseInt(item.getAttribute("data-index"), 10);
-        if (isNaN(toIndex) || draggedIndex === toIndex) {
-            handleDragEnd();
-            return;
-        }
+		var toIndex = parseInt(item.getAttribute("data-index"), 10);
+		if (isNaN(toIndex) || draggedIndex === toIndex) {
+			handleDragEnd();
+			return;
+		}
 
-        var prompts = getPrompts().slice();
-        var rect = item.getBoundingClientRect();
-        var midY = rect.top + rect.height / 2;
-        var insertBelow = e.clientY >= midY;
+		var prompts = getPrompts().slice();
+		var rect = item.getBoundingClientRect();
+		var midY = rect.top + rect.height / 2;
+		var insertBelow = e.clientY >= midY;
 
-        var targetIndex = toIndex;
-        if (insertBelow && toIndex < prompts.length - 1) {
-            targetIndex = toIndex + 1;
-        }
-        if (draggedIndex < targetIndex) {
-            targetIndex--;
-        }
-        targetIndex = Math.max(0, Math.min(targetIndex, prompts.length - 1));
+		var targetIndex = toIndex;
+		if (insertBelow && toIndex < prompts.length - 1) {
+			targetIndex = toIndex + 1;
+		}
+		if (draggedIndex < targetIndex) {
+			targetIndex--;
+		}
+		targetIndex = Math.max(0, Math.min(targetIndex, prompts.length - 1));
 
-        if (draggedIndex !== targetIndex) {
-            var moved = prompts.splice(draggedIndex, 1)[0];
-            prompts.splice(targetIndex, 0, moved);
-            setPrompts(prompts);
-            render();
-            onListChange();
-        }
-        handleDragEnd();
-    }
+		if (draggedIndex !== targetIndex) {
+			var moved = prompts.splice(draggedIndex, 1)[0];
+			prompts.splice(targetIndex, 0, moved);
+			setPrompts(prompts);
+			render();
+			onListChange();
+		}
+		handleDragEnd();
+	}
 
-    // Bind drag events to the list element
-    function bindEvents() {
-        if (!listEl) return;
-        listEl.addEventListener("click", handleListClick);
-        listEl.addEventListener("dragstart", handleDragStart);
-        listEl.addEventListener("dragover", handleDragOver);
-        listEl.addEventListener("dragend", handleDragEnd);
-        listEl.addEventListener("drop", handleDrop);
-    }
+	// Bind drag events to the list element
+	function bindEvents() {
+		if (!listEl) return;
+		listEl.addEventListener("click", handleListClick);
+		listEl.addEventListener("dragstart", handleDragStart);
+		listEl.addEventListener("dragover", handleDragOver);
+		listEl.addEventListener("dragend", handleDragEnd);
+		listEl.addEventListener("drop", handleDrop);
+	}
 
-    return {
-        render: render,
-        showAddForm: showAddForm,
-        hideAddForm: hideAddForm,
-        save: save,
-        handleListClick: handleListClick,
-        handleDragStart: handleDragStart,
-        handleDragOver: handleDragOver,
-        handleDragEnd: handleDragEnd,
-        handleDrop: handleDrop,
-        bindEvents: bindEvents,
-    };
+	return {
+		render: render,
+		showAddForm: showAddForm,
+		hideAddForm: hideAddForm,
+		save: save,
+		handleListClick: handleListClick,
+		handleDragStart: handleDragStart,
+		handleDragOver: handleDragOver,
+		handleDragEnd: handleDragEnd,
+		handleDrop: handleDrop,
+		bindEvents: bindEvents,
+	};
 }
 // ===== SETTINGS MODAL FUNCTIONS =====
 
@@ -5837,203 +5828,203 @@ var ssAutopilotPromptsLocal = [];
 
 // Shared prompt-list UI for session settings (delegates rendering/CRUD to promptListUI.js)
 var sessionPromptListUI = createPromptListUI({
-    getPrompts: function () {
-        return ssAutopilotPromptsLocal;
-    },
-    setPrompts: function (arr) {
-        ssAutopilotPromptsLocal = arr;
-    },
-    listEl: null,
-    formEl: null,
-    inputEl: null,
-    emptyHint: "No session prompts. Inherits workspace prompts.",
+	getPrompts: function () {
+		return ssAutopilotPromptsLocal;
+	},
+	setPrompts: function (arr) {
+		ssAutopilotPromptsLocal = arr;
+	},
+	listEl: null,
+	formEl: null,
+	inputEl: null,
+	emptyHint: "No session prompts. Inherits workspace prompts.",
 });
 
 /** Bind the shared UI to DOM elements (called after DOM is ready). */
 function initSessionPromptListUI() {
-    sessionPromptListUI = createPromptListUI({
-        getPrompts: function () {
-            return ssAutopilotPromptsLocal;
-        },
-        setPrompts: function (arr) {
-            ssAutopilotPromptsLocal = arr;
-        },
-        listEl: ssAutopilotPromptsList,
-        formEl: ssAddAutopilotPromptForm,
-        inputEl: ssAutopilotPromptInput,
-        emptyHint: "No session prompts. Inherits workspace prompts.",
-    });
-    sessionPromptListUI.bindEvents();
+	sessionPromptListUI = createPromptListUI({
+		getPrompts: function () {
+			return ssAutopilotPromptsLocal;
+		},
+		setPrompts: function (arr) {
+			ssAutopilotPromptsLocal = arr;
+		},
+		listEl: ssAutopilotPromptsList,
+		formEl: ssAddAutopilotPromptForm,
+		inputEl: ssAutopilotPromptInput,
+		emptyHint: "No session prompts. Inherits workspace prompts.",
+	});
+	sessionPromptListUI.bindEvents();
 }
 
 // Delegate to shared UI
 function ssRenderPromptsList() {
-    sessionPromptListUI.render();
+	sessionPromptListUI.render();
 }
 function ssShowAddPromptForm() {
-    sessionPromptListUI.showAddForm();
+	sessionPromptListUI.showAddForm();
 }
 function ssHideAddPromptForm() {
-    sessionPromptListUI.hideAddForm();
+	sessionPromptListUI.hideAddForm();
 }
 function ssSavePrompt() {
-    sessionPromptListUI.save();
+	sessionPromptListUI.save();
 }
 function ssHandlePromptsListClick(e) {
-    sessionPromptListUI.handleListClick(e);
+	sessionPromptListUI.handleListClick(e);
 }
 function ssHandleDragStart(e) {
-    sessionPromptListUI.handleDragStart(e);
+	sessionPromptListUI.handleDragStart(e);
 }
 function ssHandleDragOver(e) {
-    sessionPromptListUI.handleDragOver(e);
+	sessionPromptListUI.handleDragOver(e);
 }
 function ssHandleDragEnd() {
-    sessionPromptListUI.handleDragEnd();
+	sessionPromptListUI.handleDragEnd();
 }
 function ssHandleDrop(e) {
-    sessionPromptListUI.handleDrop(e);
+	sessionPromptListUI.handleDrop(e);
 }
 
 function openSessionSettingsModal() {
-    if (!sessionSettingsOverlay) return;
-    vscode.postMessage({ type: "requestSessionSettings" });
-    sessionSettingsOverlay.classList.remove("hidden");
+	if (!sessionSettingsOverlay) return;
+	vscode.postMessage({ type: "requestSessionSettings" });
+	sessionSettingsOverlay.classList.remove("hidden");
 }
 
 function closeSessionSettingsModal() {
-    if (!sessionSettingsOverlay) return;
-    // Auto-save on close
-    saveSessionSettings();
-    sessionSettingsOverlay.classList.add("hidden");
-    ssHideAddPromptForm();
+	if (!sessionSettingsOverlay) return;
+	// Auto-save on close
+	saveSessionSettings();
+	sessionSettingsOverlay.classList.add("hidden");
+	ssHideAddPromptForm();
 }
 
 function saveSessionSettings() {
-    var isAutopilotEnabled = ssAutopilotToggle
-        ? ssAutopilotToggle.classList.contains("active")
-        : false;
-    var isAutoAppendEnabled = ssAutoAppendToggle
-        ? ssAutoAppendToggle.classList.contains("active")
-        : false;
-    var autoAppendText = ssAutoAppendTextInput ? ssAutoAppendTextInput.value : "";
-    var isReminderEnabled = ssAlwaysAppendReminderToggle
-        ? ssAlwaysAppendReminderToggle.classList.contains("active")
-        : false;
+	var isAutopilotEnabled = ssAutopilotToggle
+		? ssAutopilotToggle.classList.contains("active")
+		: false;
+	var isAutoAppendEnabled = ssAutoAppendToggle
+		? ssAutoAppendToggle.classList.contains("active")
+		: false;
+	var autoAppendText = ssAutoAppendTextInput ? ssAutoAppendTextInput.value : "";
+	var isReminderEnabled = ssAlwaysAppendReminderToggle
+		? ssAlwaysAppendReminderToggle.classList.contains("active")
+		: false;
 
-    vscode.postMessage({
-        type: "updateSessionSettings",
-        autopilotEnabled: isAutopilotEnabled,
-        autopilotPrompts: ssAutopilotPromptsLocal.filter(function (p) {
-            return p.trim().length > 0;
-        }),
-        autoAppendEnabled: isAutoAppendEnabled,
-        autoAppendText: autoAppendText,
-        alwaysAppendReminder: isReminderEnabled,
-    });
+	vscode.postMessage({
+		type: "updateSessionSettings",
+		autopilotEnabled: isAutopilotEnabled,
+		autopilotPrompts: ssAutopilotPromptsLocal.filter(function (p) {
+			return p.trim().length > 0;
+		}),
+		autoAppendEnabled: isAutoAppendEnabled,
+		autoAppendText: autoAppendText,
+		alwaysAppendReminder: isReminderEnabled,
+	});
 }
 
 function resetSessionSettings() {
-    vscode.postMessage({ type: "resetSessionSettings" });
-    // The backend will send back a sessionSettingsState with workspace defaults
+	vscode.postMessage({ type: "resetSessionSettings" });
+	// The backend will send back a sessionSettingsState with workspace defaults
 }
 
 function populateSessionSettings(msg) {
-    sessionSettingsHasOverrides = msg.isDefault === false;
-    updateSessionSettingsGearIndicator();
+	sessionSettingsHasOverrides = msg.isDefault === false;
+	updateSessionSettingsGearIndicator();
 
-    // Autopilot toggle
-    if (ssAutopilotToggle) {
-        ssAutopilotToggle.classList.toggle("active", msg.autopilotEnabled === true);
-        ssAutopilotToggle.setAttribute(
-            "aria-checked",
-            msg.autopilotEnabled ? "true" : "false",
-        );
-    }
+	// Autopilot toggle
+	if (ssAutopilotToggle) {
+		ssAutopilotToggle.classList.toggle("active", msg.autopilotEnabled === true);
+		ssAutopilotToggle.setAttribute(
+			"aria-checked",
+			msg.autopilotEnabled ? "true" : "false",
+		);
+	}
 
-    // Autopilot prompts
-    ssAutopilotPromptsLocal = Array.isArray(msg.autopilotPrompts)
-        ? msg.autopilotPrompts.slice()
-        : [];
-    ssRenderPromptsList();
+	// Autopilot prompts
+	ssAutopilotPromptsLocal = Array.isArray(msg.autopilotPrompts)
+		? msg.autopilotPrompts.slice()
+		: [];
+	ssRenderPromptsList();
 
-    // Auto Append toggle
-    if (ssAutoAppendToggle) {
-        ssAutoAppendToggle.classList.toggle(
-            "active",
-            msg.autoAppendEnabled === true,
-        );
-        ssAutoAppendToggle.setAttribute(
-            "aria-checked",
-            msg.autoAppendEnabled ? "true" : "false",
-        );
-    }
+	// Auto Append toggle
+	if (ssAutoAppendToggle) {
+		ssAutoAppendToggle.classList.toggle(
+			"active",
+			msg.autoAppendEnabled === true,
+		);
+		ssAutoAppendToggle.setAttribute(
+			"aria-checked",
+			msg.autoAppendEnabled ? "true" : "false",
+		);
+	}
 
-    // Auto Append text row visibility
-    var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
-    if (ssAutoAppendTextRow) {
-        ssAutoAppendTextRow.classList.toggle(
-            "hidden",
-            msg.autoAppendEnabled !== true,
-        );
-    }
+	// Auto Append text row visibility
+	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
+	if (ssAutoAppendTextRow) {
+		ssAutoAppendTextRow.classList.toggle(
+			"hidden",
+			msg.autoAppendEnabled !== true,
+		);
+	}
 
-    // Auto Append text
-    if (ssAutoAppendTextInput) {
-        ssAutoAppendTextInput.value =
-            typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
-    }
+	// Auto Append text
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.value =
+			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
+	}
 
-    // Always Append Reminder toggle
-    if (ssAlwaysAppendReminderToggle) {
-        ssAlwaysAppendReminderToggle.classList.toggle(
-            "active",
-            msg.alwaysAppendReminder === true,
-        );
-        ssAlwaysAppendReminderToggle.setAttribute(
-            "aria-checked",
-            msg.alwaysAppendReminder ? "true" : "false",
-        );
-    }
+	// Always Append Reminder toggle
+	if (ssAlwaysAppendReminderToggle) {
+		ssAlwaysAppendReminderToggle.classList.toggle(
+			"active",
+			msg.alwaysAppendReminder === true,
+		);
+		ssAlwaysAppendReminderToggle.setAttribute(
+			"aria-checked",
+			msg.alwaysAppendReminder ? "true" : "false",
+		);
+	}
 }
 
 function updateSessionSettingsGearIndicator() {
-    if (!threadSettingsBtn) return;
-    threadSettingsBtn.classList.toggle(
-        "has-overrides",
-        sessionSettingsHasOverrides,
-    );
+	if (!threadSettingsBtn) return;
+	threadSettingsBtn.classList.toggle(
+		"has-overrides",
+		sessionSettingsHasOverrides,
+	);
 }
 
 // --- Session toggle functions ---
 
 function ssToggleAutopilot() {
-    if (!ssAutopilotToggle) return;
-    var active = !ssAutopilotToggle.classList.contains("active");
-    ssAutopilotToggle.classList.toggle("active", active);
-    ssAutopilotToggle.setAttribute("aria-checked", active ? "true" : "false");
+	if (!ssAutopilotToggle) return;
+	var active = !ssAutopilotToggle.classList.contains("active");
+	ssAutopilotToggle.classList.toggle("active", active);
+	ssAutopilotToggle.setAttribute("aria-checked", active ? "true" : "false");
 }
 
 function ssToggleAutoAppend() {
-    if (!ssAutoAppendToggle) return;
-    var active = !ssAutoAppendToggle.classList.contains("active");
-    ssAutoAppendToggle.classList.toggle("active", active);
-    ssAutoAppendToggle.setAttribute("aria-checked", active ? "true" : "false");
+	if (!ssAutoAppendToggle) return;
+	var active = !ssAutoAppendToggle.classList.contains("active");
+	ssAutoAppendToggle.classList.toggle("active", active);
+	ssAutoAppendToggle.setAttribute("aria-checked", active ? "true" : "false");
 
-    var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
-    if (ssAutoAppendTextRow) {
-        ssAutoAppendTextRow.classList.toggle("hidden", !active);
-    }
+	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
+	if (ssAutoAppendTextRow) {
+		ssAutoAppendTextRow.classList.toggle("hidden", !active);
+	}
 }
 
 function ssToggleAlwaysAppendReminder() {
-    if (!ssAlwaysAppendReminderToggle) return;
-    var active = !ssAlwaysAppendReminderToggle.classList.contains("active");
-    ssAlwaysAppendReminderToggle.classList.toggle("active", active);
-    ssAlwaysAppendReminderToggle.setAttribute(
-        "aria-checked",
-        active ? "true" : "false",
-    );
+	if (!ssAlwaysAppendReminderToggle) return;
+	var active = !ssAlwaysAppendReminderToggle.classList.contains("active");
+	ssAlwaysAppendReminderToggle.classList.toggle("active", active);
+	ssAlwaysAppendReminderToggle.setAttribute(
+		"aria-checked",
+		active ? "true" : "false",
+	);
 }
 // ===== SLASH COMMAND FUNCTIONS =====
 

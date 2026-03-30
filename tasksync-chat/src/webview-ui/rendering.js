@@ -709,19 +709,10 @@ function renderSessionsList() {
 				(isWaiting ? " waiting" : "") +
 				(isArchived ? " archived" : "");
 
-			// Default preview snippet
+			// Preview snippet from latest history entry (history is newest-first via unshift)
 			var promptPreview = "Tap to view thread...";
 			if (session.history && session.history.length > 0) {
-				var lastHistory = session.history[0]; // Assuming reversed (newest first)? Or last?
-				// Let's grab the last prompt block string:
-				var lastH = session.history[session.history.length - 1]; // standard order
-				if (
-					session.history[0] &&
-					session.history[0].timestamp > (lastH ? lastH.timestamp : 0)
-				) {
-					lastH = session.history[0]; // Wait, if history is [newest, ...oldest] then 0 is latest
-				}
-				promptPreview = lastH.prompt || promptPreview;
+				promptPreview = session.history[0].prompt || promptPreview;
 			}
 			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
 

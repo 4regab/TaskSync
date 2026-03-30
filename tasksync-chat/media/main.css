@@ -443,7 +443,13 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 16px 12px 8px;
+    align-self: center;
+    width: 100%;
+    max-width: 560px;
+    margin-top: auto;
+    margin-bottom: auto;
+    padding: 24px 8px;
+    gap: 10px;
     text-align: center;
     border: none;
     border-radius: 0;
@@ -461,12 +467,12 @@ body {
     font-size: 20px;
     font-weight: 600;
     color: var(--vscode-foreground);
-    margin: 10px 0 4px 0;
+    margin: 0;
     letter-spacing: -0.5px;
 }
 
 .welcome-subtitle {
-    margin: 0 0 14px 0;
+    margin: 0 0 4px 0;
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
 }
@@ -474,10 +480,10 @@ body {
 .welcome-cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
-    max-width: 500px;
-    margin-bottom: 12px;
+    max-width: 100%;
+    margin: 2px 0 8px 0;
 }
 
 .welcome-card {
@@ -537,10 +543,11 @@ body {
 .welcome-autopilot-info {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
-    margin: 8px 0 0 0;
+    width: 100%;
+    max-width: 520px;
+    margin: 0;
     line-height: 1.5;
-    text-align: justify;
-    max-width: 500px;
+    text-align: center;
 }
 
 .welcome-autopilot-info strong {

@@ -97,6 +97,10 @@ function bindEventListeners() {
 	}
 	if (threadSettingsBtn)
 		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
+	if (threadResetBtn)
+		threadResetBtn.addEventListener("click", function () {
+			openResetSessionModal();
+		});
 
 	var threadEditBtn = document.getElementById("thread-edit-btn");
 	if (threadEditBtn) {

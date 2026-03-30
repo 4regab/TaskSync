@@ -29,12 +29,6 @@ function init() {
 					e.stopPropagation();
 					openNewSessionModal();
 				});
-			var resetSessionBtn = document.getElementById("remote-reset-session-btn");
-			if (resetSessionBtn)
-				resetSessionBtn.addEventListener("click", function (e) {
-					e.stopPropagation();
-					openResetSessionModal();
-				});
 			var settingsBtn = document.getElementById("remote-settings-btn");
 			if (settingsBtn)
 				settingsBtn.addEventListener("click", function () {
@@ -187,6 +181,7 @@ function cacheDOMElements() {
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
 	threadBackBtn = document.getElementById("thread-back-btn");
+	threadResetBtn = document.getElementById("thread-reset-btn");
 	threadSettingsBtn = document.getElementById("thread-settings-btn");
 	remoteSessionTimerEl = document.getElementById("thread-sub");
 	autopilotToggle = document.getElementById("autopilot-toggle");

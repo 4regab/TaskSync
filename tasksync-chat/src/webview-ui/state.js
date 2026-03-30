@@ -170,7 +170,7 @@ let chatContainer,
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
 let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
-let threadBackBtn, threadHistoryBtn, threadSettingsBtn;
+let threadBackBtn, threadHistoryBtn, threadResetBtn, threadSettingsBtn;
 let changesModalOverlay,
 	changesSection,
 	changesRefreshBtn,

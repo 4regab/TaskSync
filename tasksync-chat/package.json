@@ -357,14 +357,9 @@
           "group": "navigation@1"
         },
         {
-          "command": "tasksync.resetSession",
-          "when": "view == taskSyncView",
-          "group": "navigation@1.1"
-        },
-        {
           "command": "tasksync.toggleSplitView",
           "when": "view == taskSyncView",
-          "group": "navigation@1.2"
+          "group": "navigation@1.1"
         },
         {
           "command": "tasksync.openHistory",

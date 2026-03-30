@@ -1074,7 +1074,7 @@ let chatContainer,
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
 let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
-let threadBackBtn, threadHistoryBtn, threadSettingsBtn;
+let threadBackBtn, threadHistoryBtn, threadResetBtn, threadSettingsBtn;
 let changesModalOverlay,
 	changesSection,
 	changesRefreshBtn,
@@ -1224,12 +1224,6 @@ function init() {
 				newSessionBtn.addEventListener("click", function (e) {
 					e.stopPropagation();
 					openNewSessionModal();
-				});
-			var resetSessionBtn = document.getElementById("remote-reset-session-btn");
-			if (resetSessionBtn)
-				resetSessionBtn.addEventListener("click", function (e) {
-					e.stopPropagation();
-					openResetSessionModal();
 				});
 			var settingsBtn = document.getElementById("remote-settings-btn");
 			if (settingsBtn)
@@ -1383,6 +1377,7 @@ function cacheDOMElements() {
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
 	threadBackBtn = document.getElementById("thread-back-btn");
+	threadResetBtn = document.getElementById("thread-reset-btn");
 	threadSettingsBtn = document.getElementById("thread-settings-btn");
 	remoteSessionTimerEl = document.getElementById("thread-sub");
 	autopilotToggle = document.getElementById("autopilot-toggle");
@@ -2567,6 +2562,10 @@ function bindEventListeners() {
 	}
 	if (threadSettingsBtn)
 		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
+	if (threadResetBtn)
+		threadResetBtn.addEventListener("click", function () {
+			openResetSessionModal();
+		});
 
 	var threadEditBtn = document.getElementById("thread-edit-btn");
 	if (threadEditBtn) {

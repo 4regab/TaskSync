@@ -58,9 +58,9 @@ export class TaskSyncWebviewProvider
 	//
 	// MIRROR FIELD CONVENTION:
 	// Fields marked "Mirrors the ACTIVE session's ..." are copies of the active
-	// ChatSession's state. They exist for backward compatibility with the webview
-	// and handler modules. The canonical source of truth is always the ChatSession
-	// object in _sessionManager. When a handler writes to both the session field
+	// ChatSession's state. They are kept in sync so the webview and handler
+	// modules can read them without reaching into _sessionManager. The canonical
+	// source of truth is always the ChatSession object in _sessionManager. When a handler writes to both the session field
 	// AND the mirror field, call _syncActiveSessionState() afterward to ensure
 	// consistency. If only the session was updated, _syncActiveSessionState()
 	// will copy the new value into the mirror field automatically.
@@ -522,8 +522,8 @@ export class TaskSyncWebviewProvider
 				trimmedPrompt.slice(0, MAX_QUEUE_PROMPT_LENGTH),
 			);
 		} else if (useQueuedPrompt !== false) {
-			// Preserve legacy behavior by optionally bootstrapping the new conversation
-			// from the previously active conversation's next queued prompt.
+			// Optionally bootstrap the new session from the previously active
+			// session's next queued prompt.
 			const queuedPrompt = queuedPromptFromPrevious?.prompt.slice(
 				0,
 				MAX_QUEUE_PROMPT_LENGTH,

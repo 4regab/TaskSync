@@ -117,7 +117,7 @@ function handleExtensionMessage(event) {
 			updateAlwaysAppendReminderToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
-			renderAutopilotPromptsList();
+			workspacePromptListUI.render();
 			updateResponseTimeoutUI();
 			updateSessionWarningHoursUI();
 			updateMaxAutoResponsesUI();

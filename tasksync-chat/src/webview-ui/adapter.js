@@ -804,7 +804,7 @@ function applySettingsToUI() {
 	updateMaxAutoResponsesUI();
 	updateRemoteMaxDevicesUI();
 	updateHumanDelayUI();
-	renderAutopilotPromptsList();
+	workspacePromptListUI.render();
 	renderPromptsList();
 	updateQueueVisibility();
 }

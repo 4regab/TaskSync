@@ -58,6 +58,14 @@ function init() {
 		}
 		initSplitResizer();
 
+		// Bind collapse bar for narrow split-view sessions panel
+		var collapseBar = document.getElementById("sessions-collapse-bar");
+		if (collapseBar) {
+			collapseBar.addEventListener("click", function () {
+				toggleHubCollapse();
+			});
+		}
+
 		// Restore attachments display
 		if (currentAttachments.length > 0) {
 			updateChipsDisplay();
@@ -149,15 +157,11 @@ function cacheDOMElements() {
 	changesDiffTitle = document.getElementById("changes-diff-title");
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
-	hubNewSessionBtn = document.getElementById("hub-new-session-btn");
-	hubHistoryBtn = document.getElementById("hub-history-btn");
-	hubSettingsBtn = document.getElementById("hub-settings-btn");
 	threadBackBtn = document.getElementById("thread-back-btn");
-	threadHistoryBtn = document.getElementById("thread-history-btn");
 	threadSettingsBtn = document.getElementById("thread-settings-btn");
 	remoteSessionTimerEl =
 		document.getElementById("remote-session-timer") ||
-		document.getElementById("stage-sub");
+		document.getElementById("thread-sub");
 	if (!remoteSessionTimerEl && isRemoteMode) {
 		var remoteHeaderLeft = document.querySelector(".remote-header-left");
 		if (remoteHeaderLeft) {

@@ -1,6 +1,14 @@
 <div class="main-container orch">
-    <!-- Mobile Shell: Workspace Hub (Sessions List) -->
-    <div class="mobile-shell hub-shell" id="workspace-hub">
+    <!-- Hub Panel: Sessions List -->
+    <div class="panel hub-shell" id="workspace-hub">
+        <!-- Collapse bar: visible only in split-view, lets user collapse/expand the sessions panel -->
+        <div class="sessions-collapse-bar hidden" id="sessions-collapse-bar">
+            <div class="sessions-collapse-left">
+                <span class="codicon codicon-chevron-down" id="sessions-collapse-chevron"></span>
+                <span class="sessions-collapse-label">Sessions</span>
+                <span class="sessions-collapse-count" id="sessions-collapse-count"></span>
+            </div>
+        </div>
         <div class="hub-scroll list" id="workspace-hub-scroll">
             <div class="welcome-section" id="welcome-section">
                 <div class="welcome-icon">
@@ -52,15 +60,15 @@
     <!-- Split view drag resizer -->
     <div class="split-resizer hidden" id="split-resizer"></div>
 
-    <!-- Mobile Shell: Thread View (Active Chat) -->
-    <div class="mobile-shell thread-shell hidden" id="thread-shell">
-        <div class="thread-head" id="stage-head">
+    <!-- Thread Panel: Active Chat -->
+    <div class="panel thread-shell hidden" id="thread-shell">
+        <div class="thread-head" id="thread-head">
             <div class="thread-title">
                 <span class="back icon-btn" id="thread-back-btn" title="Back to Sessions" role="button" tabindex="0">
                     <span class="codicon codicon-arrow-left"></span>
                 </span>
-                <strong id="stage-title">No session yet</strong>
-                <span id="stage-sub" class="hidden"></span>
+                <strong id="thread-title">No session yet</strong>
+                <span id="thread-sub" class="hidden"></span>
                 <span class="icon-btn" id="thread-settings-btn" title="Session Settings" role="button" tabindex="0">
                     <span class="codicon codicon-gear"></span>
                 </span>

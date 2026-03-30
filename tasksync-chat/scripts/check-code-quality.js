@@ -8,6 +8,8 @@
  * Current checks:
  *   1. Duplicate blocks — catches tool corruption (3+ identical consecutive lines/blocks)
  *   2. Sync I/O        — catches blocking fs calls (must use fs.promises.*)
+ *   3. HTML-JS ID sync — ensures getElementById() calls reference IDs that exist in HTML templates
+ *   4. Constants sync  — ensures webview-ui fallback values match remoteConstants.ts SSOT
  *
  * Usage: node scripts/check-code-quality.js
  * Exit code 0 = clean, 1 = violations found
@@ -167,12 +169,236 @@ function checkSyncIO(filePath, content) {
     return issues;
 }
 
+// ── Check 3: HTML-JS ID sync ──
+// Ensures every getElementById("x") in webview-ui JS references an ID that
+// actually exists in an HTML template (webview-body.html, remoteHtmlService.ts,
+// or dynamically-created HTML in JS files).
+
+const HTML_TEMPLATE = path.join(__dirname, "..", "media", "webview-body.html");
+const REMOTE_HTML_SERVICE = path.join(
+    __dirname,
+    "..",
+    "src",
+    "server",
+    "remoteHtmlService.ts",
+);
+const WEBVIEW_UI_DIR = path.join(__dirname, "..", "src", "webview-ui");
+const ID_SYNC_ALLOW_COMMENT = "ssot-id-allowed";
+
+function extractHtmlIds(content) {
+    const regex = /(?<!-)id="([^"]+)"/g;
+    const ids = new Set();
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+        // Skip dynamic expressions (e.g. ' + variable + ')
+        if (match[1].includes("'") || match[1].includes("+")) continue;
+        ids.add(match[1]);
+    }
+    return ids;
+}
+
+function collectValidHtmlIds() {
+    const ids = new Set();
+
+    // 1. Static HTML template
+    if (fs.existsSync(HTML_TEMPLATE)) {
+        for (const id of extractHtmlIds(fs.readFileSync(HTML_TEMPLATE, "utf8"))) {
+            ids.add(id);
+        }
+    }
+
+    // 2. Remote-only wrapper elements
+    if (fs.existsSync(REMOTE_HTML_SERVICE)) {
+        for (const id of extractHtmlIds(
+            fs.readFileSync(REMOTE_HTML_SERVICE, "utf8"),
+        )) {
+            ids.add(id);
+        }
+    }
+
+    // 3. Dynamically created HTML in webview-ui JS files
+    //    Covers both inline HTML strings (id="x") and property assignments (.id = "x")
+    if (fs.existsSync(WEBVIEW_UI_DIR)) {
+        for (const file of fs.readdirSync(WEBVIEW_UI_DIR)) {
+            if (!file.endsWith(".js")) continue;
+            const content = fs.readFileSync(
+                path.join(WEBVIEW_UI_DIR, file),
+                "utf8",
+            );
+            for (const id of extractHtmlIds(content)) {
+                ids.add(id);
+            }
+            // Also capture .id = "x" property assignments (e.g. el.id = "choices-bar")
+            const idAssignRegex = /\.id\s*=\s*"([^"]+)"/g;
+            let m;
+            while ((m = idAssignRegex.exec(content)) !== null) {
+                ids.add(m[1]);
+            }
+        }
+    }
+
+    return ids;
+}
+
+const VALID_HTML_IDS = collectValidHtmlIds();
+
+function checkHtmlJsIdSync(filePath, content) {
+    // Only check webview-ui JS files
+    if (!filePath.includes("webview-ui") || !filePath.endsWith(".js")) return [];
+
+    const issues = [];
+    const lines = content.split("\n");
+    const regex = /getElementById\(\s*"([^"]+)"\s*\)/g;
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+        const id = match[1];
+        if (VALID_HTML_IDS.has(id)) continue;
+
+        // Find line number
+        const lineNum = content.slice(0, match.index).split("\n").length;
+
+        // Check for suppression comment
+        if (lines[lineNum - 1].includes(ID_SYNC_ALLOW_COMMENT)) continue;
+
+        issues.push({
+            line: lineNum,
+            text: `getElementById("${id}") references an ID not found in any HTML template`,
+        });
+    }
+
+    return issues;
+}
+
+// ── Check 4: Constants sync ──
+// Ensures webview-ui fallback values (typeof TASKSYNC_* guards) match the SSOT
+// in web/shared-constants.js (generated from remoteConstants.ts by esbuild).
+
+const SHARED_CONSTANTS_PATH = path.join(
+    __dirname,
+    "..",
+    "web",
+    "shared-constants.js",
+);
+
+function collectSsotConstants() {
+    if (!fs.existsSync(SHARED_CONSTANTS_PATH)) return null;
+    const content = fs.readFileSync(SHARED_CONSTANTS_PATH, "utf8");
+
+    const numerics = new Map();
+    const numRegex = /var\s+(TASKSYNC_\w+)\s*=\s*(\d+)\s*;/g;
+    let m;
+    while ((m = numRegex.exec(content)) !== null) {
+        numerics.set(m[1], parseInt(m[2], 10));
+    }
+
+    const arrays = new Map();
+    const arrRegex = /var\s+(TASKSYNC_\w+)\s*=\s*\[([^\]]+)\]\s*;/g;
+    while ((m = arrRegex.exec(content)) !== null) {
+        const values = m[2]
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .join(", ");
+        arrays.set(m[1], values);
+    }
+
+    const strings = new Map();
+    const strRegex = /var\s+(TASKSYNC_\w+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*;/g;
+    while ((m = strRegex.exec(content)) !== null) {
+        strings.set(m[1], m[2]);
+    }
+
+    return { numerics, arrays, strings };
+}
+
+const SSOT_CONSTANTS = collectSsotConstants();
+
+function checkConstantsSync(filePath, content) {
+    if (!SSOT_CONSTANTS) return [];
+    if (!filePath.includes("webview-ui") || !filePath.endsWith(".js")) return [];
+
+    const issues = [];
+    const lines = content.split("\n");
+
+    for (let i = 0; i < lines.length; i++) {
+        const typeofMatch = lines[i].match(
+            /typeof\s+(TASKSYNC_\w+)\s*!==\s*"undefined"/,
+        );
+        if (!typeofMatch) continue;
+
+        const name = typeofMatch[1];
+
+        // Scan forward (up to 10 lines) for the fallback value after ":"
+        for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+            // Numeric fallback: `: NUMBER;` or `: NUMBER,`
+            const numMatch = lines[j].match(/^\s*:\s*(\d+)\s*[;,]/);
+            if (numMatch) {
+                const fallback = parseInt(numMatch[1], 10);
+                const ssot = SSOT_CONSTANTS.numerics.get(name);
+                if (ssot !== undefined && ssot !== fallback) {
+                    issues.push({
+                        line: j + 1,
+                        text: `${name} fallback (${fallback}) differs from SSOT (${ssot})`,
+                    });
+                }
+                break;
+            }
+
+            // Array fallback: `: new Set([values])`
+            if (/:\s*new Set\(\[/.test(lines[j])) {
+                let arrContent = "";
+                for (let k = j; k < lines.length; k++) {
+                    arrContent += lines[k];
+                    if (/\]\)\s*[;,]/.test(lines[k])) break;
+                }
+                const inner = arrContent.match(/new Set\(\[\s*([\d,\s]+)\s*\]\)/);
+                if (inner) {
+                    const fallbackValues = inner[1]
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .join(", ");
+                    const ssot = SSOT_CONSTANTS.arrays.get(name);
+                    if (ssot && ssot !== fallbackValues) {
+                        issues.push({
+                            line: j + 1,
+                            text: `${name} fallback array differs from SSOT`,
+                        });
+                    }
+                }
+                break;
+            }
+
+            // String fallback: `: "value";`
+            const strMatch = lines[j].match(
+                /^\s*:\s*"((?:[^"\\]|\\.)*)"\s*[;,]/,
+            );
+            if (strMatch) {
+                const fallback = strMatch[1];
+                const ssot = SSOT_CONSTANTS.strings.get(name);
+                if (ssot && ssot !== fallback) {
+                    issues.push({
+                        line: j + 1,
+                        text: `${name} fallback string differs from SSOT`,
+                    });
+                }
+                break;
+            }
+        }
+    }
+
+    return issues;
+}
+
 // ── Checker registry ──
 // To add a new check: add { name, check(filePath, content) => Issue[] } here.
 
 const CHECKERS = [
     { name: "duplicate-blocks", check: checkDuplicates },
     { name: "sync-io", check: checkSyncIO },
+    { name: "html-js-id-sync", check: checkHtmlJsIdSync },
+    { name: "constants-sync", check: checkConstantsSync },
 ];
 
 // ── Main ──

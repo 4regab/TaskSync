@@ -43,6 +43,13 @@ const AUTO_APPEND_DEFAULT_TEXT =
 		: "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
 
 const PROCESSING_POLL_INTERVAL_MS = 5000; // Delay before polling server for state after tool call
+
+// Shared toggle helper — single source of truth for toggle + aria-checked updates
+function setToggle(el, active) {
+	if (!el) return;
+	el.classList.toggle("active", active);
+	el.setAttribute("aria-checked", active ? "true" : "false");
+}
 // ==================== Communication Adapter ====================
 // Provides unified API for VS Code postMessage or WebSocket communication
 const isRemoteMode = typeof acquireVsCodeApi === "undefined";
@@ -849,7 +856,7 @@ function applySettingsToUI() {
 	updateMaxAutoResponsesUI();
 	updateRemoteMaxDevicesUI();
 	updateHumanDelayUI();
-	renderAutopilotPromptsList();
+	workspacePromptListUI.render();
 	renderPromptsList();
 	updateQueueVisibility();
 }
@@ -1155,6 +1162,14 @@ function init() {
 		}
 		initSplitResizer();
 
+		// Bind collapse bar for narrow split-view sessions panel
+		var collapseBar = document.getElementById("sessions-collapse-bar");
+		if (collapseBar) {
+			collapseBar.addEventListener("click", function () {
+				toggleHubCollapse();
+			});
+		}
+
 		// Restore attachments display
 		if (currentAttachments.length > 0) {
 			updateChipsDisplay();
@@ -1246,15 +1261,11 @@ function cacheDOMElements() {
 	changesDiffTitle = document.getElementById("changes-diff-title");
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
-	hubNewSessionBtn = document.getElementById("hub-new-session-btn");
-	hubHistoryBtn = document.getElementById("hub-history-btn");
-	hubSettingsBtn = document.getElementById("hub-settings-btn");
 	threadBackBtn = document.getElementById("thread-back-btn");
-	threadHistoryBtn = document.getElementById("thread-history-btn");
 	threadSettingsBtn = document.getElementById("thread-settings-btn");
 	remoteSessionTimerEl =
 		document.getElementById("remote-session-timer") ||
-		document.getElementById("stage-sub");
+		document.getElementById("thread-sub");
 	if (!remoteSessionTimerEl && isRemoteMode) {
 		var remoteHeaderLeft = document.querySelector(".remote-header-left");
 		if (remoteHeaderLeft) {
@@ -2357,18 +2368,11 @@ function bindEventListeners() {
 	}
 
 	// Hub & Thread Shell events
-	if (hubNewSessionBtn)
-		hubNewSessionBtn.addEventListener("click", openNewSessionModal);
-	if (hubHistoryBtn) hubHistoryBtn.addEventListener("click", openHistoryModal);
-	if (hubSettingsBtn)
-		hubSettingsBtn.addEventListener("click", openSettingsModal);
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
 			vscode.postMessage({ type: "switchSession", sessionId: null });
 		});
 	}
-	if (threadHistoryBtn)
-		threadHistoryBtn.addEventListener("click", openHistoryModal);
 	if (threadSettingsBtn)
 		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
 
@@ -2461,16 +2465,19 @@ function bindEventListeners() {
 	}
 	// Autopilot prompts list event listeners
 	if (autopilotAddBtn) {
-		autopilotAddBtn.addEventListener("click", showAddAutopilotPromptForm);
+		autopilotAddBtn.addEventListener("click", function () {
+			workspacePromptListUI.showAddForm();
+		});
 	}
 	if (saveAutopilotPromptBtn) {
-		saveAutopilotPromptBtn.addEventListener("click", saveAutopilotPrompt);
+		saveAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.save();
+		});
 	}
 	if (cancelAutopilotPromptBtn) {
-		cancelAutopilotPromptBtn.addEventListener(
-			"click",
-			hideAddAutopilotPromptForm,
-		);
+		cancelAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.hideAddForm();
+		});
 	}
 	// List-level events (click, drag) are bound via initWorkspacePromptListUI()
 	if (responseTimeoutSelect) {
@@ -3367,7 +3374,7 @@ function handleExtensionMessage(event) {
 			updateAlwaysAppendReminderToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
-			renderAutopilotPromptsList();
+			workspacePromptListUI.render();
 			updateResponseTimeoutUI();
 			updateSessionWarningHoursUI();
 			updateMaxAutoResponsesUI();
@@ -4251,7 +4258,8 @@ function renderMermaidDiagrams() {
 }
 
 /**
- * Toggle split view mode (sessions list + thread side by side)
+ * Toggle split view mode (sessions list + thread side by side).
+ * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
  */
 function toggleSplitView() {
 	splitViewEnabled = !splitViewEnabled;
@@ -4341,7 +4349,7 @@ function updateWelcomeSectionVisibility() {
 	var hubEl = document.getElementById("workspace-hub");
 	var threadEl = document.getElementById("thread-shell");
 	var placeholderEl = document.getElementById("split-placeholder");
-	var threadHeadEl = document.getElementById("stage-head");
+	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
 
 	if (splitViewEnabled) {
@@ -4357,9 +4365,9 @@ function updateWelcomeSectionVisibility() {
 			var activeSession = (sessions || []).find(function (s) {
 				return s.id === activeSessionId;
 			});
-			var stageTitle = document.getElementById("stage-title");
-			if (activeSession && stageTitle) {
-				stageTitle.textContent = activeSession.title;
+			var threadTitle = document.getElementById("thread-title");
+			if (activeSession && threadTitle) {
+				threadTitle.textContent = activeSession.title;
 			}
 		} else {
 			// No session: show placeholder, hide thread head + composer
@@ -4384,9 +4392,9 @@ function updateWelcomeSectionVisibility() {
 		var activeSession = (sessions || []).find(function (s) {
 			return s.id === activeSessionId;
 		});
-		var stageTitle = document.getElementById("stage-title");
+		var threadTitle = document.getElementById("thread-title");
 		if (activeSession) {
-			if (stageTitle) stageTitle.textContent = activeSession.title;
+			if (threadTitle) threadTitle.textContent = activeSession.title;
 		}
 	} else {
 		// No active session: show the hub, hide the thread shell
@@ -4415,6 +4423,13 @@ function renderSessionsList() {
 	var sessionsListEl = document.getElementById("sessions-list");
 	var sessionsPanelEl = document.getElementById("sessions-panel");
 	if (!sessionsListEl) return;
+
+	// Update collapse bar session count
+	var countEl = document.getElementById("sessions-collapse-count");
+	if (countEl) {
+		countEl.textContent =
+			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+	}
 
 	if (!sessions || sessions.length === 0) {
 		sessionsListEl.innerHTML = "";
@@ -4577,6 +4592,15 @@ function renderSessionsList() {
 				input.addEventListener("blur", commit);
 			});
 		});
+}
+
+/**
+ * Toggle the sessions hub panel between expanded and collapsed in split view.
+ */
+function toggleHubCollapse() {
+	var hub = document.getElementById("workspace-hub");
+	if (!hub) return;
+	hub.classList.toggle("collapsed");
 }
 // ==================== Queue Management ====================
 
@@ -5363,9 +5387,7 @@ function toggleSoundSetting() {
 }
 
 function updateSoundToggleUI() {
-	if (!soundToggle) return;
-	soundToggle.classList.toggle("active", soundEnabled);
-	soundToggle.setAttribute("aria-checked", soundEnabled ? "true" : "false");
+	setToggle(soundToggle, soundEnabled);
 }
 
 function toggleInteractiveApprovalSetting() {
@@ -5378,15 +5400,7 @@ function toggleInteractiveApprovalSetting() {
 }
 
 function updateInteractiveApprovalToggleUI() {
-	if (!interactiveApprovalToggle) return;
-	interactiveApprovalToggle.classList.toggle(
-		"active",
-		interactiveApprovalEnabled,
-	);
-	interactiveApprovalToggle.setAttribute(
-		"aria-checked",
-		interactiveApprovalEnabled ? "true" : "false",
-	);
+	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
 }
 
 function toggleAutoAppendSetting() {
@@ -5400,11 +5414,7 @@ function toggleAutoAppendSetting() {
 
 function updateAutoAppendToggleUI() {
 	if (!autoAppendToggle) return;
-	autoAppendToggle.classList.toggle("active", autoAppendEnabled);
-	autoAppendToggle.setAttribute(
-		"aria-checked",
-		autoAppendEnabled ? "true" : "false",
-	);
+	setToggle(autoAppendToggle, autoAppendEnabled);
 	updateAutoAppendTextVisibility();
 }
 
@@ -5441,12 +5451,7 @@ function toggleAlwaysAppendReminderSetting() {
 }
 
 function updateAlwaysAppendReminderToggleUI() {
-	if (!alwaysAppendReminderToggle) return;
-	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
-	alwaysAppendReminderToggle.setAttribute(
-		"aria-checked",
-		alwaysAppendReminder ? "true" : "false",
-	);
+	setToggle(alwaysAppendReminderToggle, alwaysAppendReminder);
 }
 
 function toggleSendWithCtrlEnterSetting() {
@@ -5459,12 +5464,7 @@ function toggleSendWithCtrlEnterSetting() {
 }
 
 function updateSendWithCtrlEnterToggleUI() {
-	if (!sendShortcutToggle) return;
-	sendShortcutToggle.classList.toggle("active", sendWithCtrlEnter);
-	sendShortcutToggle.setAttribute(
-		"aria-checked",
-		sendWithCtrlEnter ? "true" : "false",
-	);
+	setToggle(sendShortcutToggle, sendWithCtrlEnter);
 }
 
 function toggleAutopilotSetting() {
@@ -5477,13 +5477,7 @@ function toggleAutopilotSetting() {
 }
 
 function updateAutopilotToggleUI() {
-	if (autopilotToggle) {
-		autopilotToggle.classList.toggle("active", autopilotEnabled);
-		autopilotToggle.setAttribute(
-			"aria-checked",
-			autopilotEnabled ? "true" : "false",
-		);
-	}
+	setToggle(autopilotToggle, autopilotEnabled);
 }
 
 function handleResponseTimeoutChange() {
@@ -5620,13 +5614,7 @@ function handleHumanDelayMaxChange() {
 }
 
 function updateHumanDelayUI() {
-	if (humanDelayToggle) {
-		humanDelayToggle.classList.toggle("active", humanLikeDelayEnabled);
-		humanDelayToggle.setAttribute(
-			"aria-checked",
-			humanLikeDelayEnabled ? "true" : "false",
-		);
-	}
+	setToggle(humanDelayToggle, humanLikeDelayEnabled);
 	if (humanDelayRangeContainer) {
 		humanDelayRangeContainer.style.display = humanLikeDelayEnabled
 			? "flex"
@@ -5739,35 +5727,6 @@ function initWorkspacePromptListUI() {
 		},
 	});
 	workspacePromptListUI.bindEvents();
-}
-
-// Delegate existing function names to the shared UI for backward compatibility
-function renderAutopilotPromptsList() {
-	workspacePromptListUI.render();
-}
-function showAddAutopilotPromptForm() {
-	workspacePromptListUI.showAddForm();
-}
-function hideAddAutopilotPromptForm() {
-	workspacePromptListUI.hideAddForm();
-}
-function saveAutopilotPrompt() {
-	workspacePromptListUI.save();
-}
-function handleAutopilotPromptsListClick(e) {
-	workspacePromptListUI.handleListClick(e);
-}
-function handleAutopilotDragStart(e) {
-	workspacePromptListUI.handleDragStart(e);
-}
-function handleAutopilotDragOver(e) {
-	workspacePromptListUI.handleDragOver(e);
-}
-function handleAutopilotDragEnd(e) {
-	workspacePromptListUI.handleDragEnd(e);
-}
-function handleAutopilotDrop(e) {
-	workspacePromptListUI.handleDrop(e);
 }
 
 // ========== End Autopilot Prompts Functions ==========
@@ -5965,13 +5924,7 @@ function populateSessionSettings(msg) {
 	updateSessionSettingsGearIndicator();
 
 	// Autopilot toggle
-	if (ssAutopilotToggle) {
-		ssAutopilotToggle.classList.toggle("active", msg.autopilotEnabled === true);
-		ssAutopilotToggle.setAttribute(
-			"aria-checked",
-			msg.autopilotEnabled ? "true" : "false",
-		);
-	}
+	setToggle(ssAutopilotToggle, msg.autopilotEnabled === true);
 
 	// Autopilot prompts
 	ssAutopilotPromptsLocal = Array.isArray(msg.autopilotPrompts)
@@ -5980,16 +5933,7 @@ function populateSessionSettings(msg) {
 	ssRenderPromptsList();
 
 	// Auto Append toggle
-	if (ssAutoAppendToggle) {
-		ssAutoAppendToggle.classList.toggle(
-			"active",
-			msg.autoAppendEnabled === true,
-		);
-		ssAutoAppendToggle.setAttribute(
-			"aria-checked",
-			msg.autoAppendEnabled ? "true" : "false",
-		);
-	}
+	setToggle(ssAutoAppendToggle, msg.autoAppendEnabled === true);
 
 	// Auto Append text row visibility
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
@@ -6007,16 +5951,7 @@ function populateSessionSettings(msg) {
 	}
 
 	// Always Append Reminder toggle
-	if (ssAlwaysAppendReminderToggle) {
-		ssAlwaysAppendReminderToggle.classList.toggle(
-			"active",
-			msg.alwaysAppendReminder === true,
-		);
-		ssAlwaysAppendReminderToggle.setAttribute(
-			"aria-checked",
-			msg.alwaysAppendReminder ? "true" : "false",
-		);
-	}
+	setToggle(ssAlwaysAppendReminderToggle, msg.alwaysAppendReminder === true);
 }
 
 function updateSessionSettingsGearIndicator() {
@@ -6031,16 +5966,13 @@ function updateSessionSettingsGearIndicator() {
 
 function ssToggleAutopilot() {
 	if (!ssAutopilotToggle) return;
-	var active = !ssAutopilotToggle.classList.contains("active");
-	ssAutopilotToggle.classList.toggle("active", active);
-	ssAutopilotToggle.setAttribute("aria-checked", active ? "true" : "false");
+	setToggle(ssAutopilotToggle, !ssAutopilotToggle.classList.contains("active"));
 }
 
 function ssToggleAutoAppend() {
 	if (!ssAutoAppendToggle) return;
 	var active = !ssAutoAppendToggle.classList.contains("active");
-	ssAutoAppendToggle.classList.toggle("active", active);
-	ssAutoAppendToggle.setAttribute("aria-checked", active ? "true" : "false");
+	setToggle(ssAutoAppendToggle, active);
 
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
 	if (ssAutoAppendTextRow) {
@@ -6050,11 +5982,9 @@ function ssToggleAutoAppend() {
 
 function ssToggleAlwaysAppendReminder() {
 	if (!ssAlwaysAppendReminderToggle) return;
-	var active = !ssAlwaysAppendReminderToggle.classList.contains("active");
-	ssAlwaysAppendReminderToggle.classList.toggle("active", active);
-	ssAlwaysAppendReminderToggle.setAttribute(
-		"aria-checked",
-		active ? "true" : "false",
+	setToggle(
+		ssAlwaysAppendReminderToggle,
+		!ssAlwaysAppendReminderToggle.classList.contains("active"),
 	);
 }
 // ===== SLASH COMMAND FUNCTIONS =====

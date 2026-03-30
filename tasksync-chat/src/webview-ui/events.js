@@ -85,18 +85,11 @@ function bindEventListeners() {
 	}
 
 	// Hub & Thread Shell events
-	if (hubNewSessionBtn)
-		hubNewSessionBtn.addEventListener("click", openNewSessionModal);
-	if (hubHistoryBtn) hubHistoryBtn.addEventListener("click", openHistoryModal);
-	if (hubSettingsBtn)
-		hubSettingsBtn.addEventListener("click", openSettingsModal);
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
 			vscode.postMessage({ type: "switchSession", sessionId: null });
 		});
 	}
-	if (threadHistoryBtn)
-		threadHistoryBtn.addEventListener("click", openHistoryModal);
 	if (threadSettingsBtn)
 		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
 
@@ -189,16 +182,19 @@ function bindEventListeners() {
 	}
 	// Autopilot prompts list event listeners
 	if (autopilotAddBtn) {
-		autopilotAddBtn.addEventListener("click", showAddAutopilotPromptForm);
+		autopilotAddBtn.addEventListener("click", function () {
+			workspacePromptListUI.showAddForm();
+		});
 	}
 	if (saveAutopilotPromptBtn) {
-		saveAutopilotPromptBtn.addEventListener("click", saveAutopilotPrompt);
+		saveAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.save();
+		});
 	}
 	if (cancelAutopilotPromptBtn) {
-		cancelAutopilotPromptBtn.addEventListener(
-			"click",
-			hideAddAutopilotPromptForm,
-		);
+		cancelAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.hideAddForm();
+		});
 	}
 	// List-level events (click, drag) are bound via initWorkspacePromptListUI()
 	if (responseTimeoutSelect) {

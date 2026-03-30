@@ -111,13 +111,7 @@ function populateSessionSettings(msg) {
 	updateSessionSettingsGearIndicator();
 
 	// Autopilot toggle
-	if (ssAutopilotToggle) {
-		ssAutopilotToggle.classList.toggle("active", msg.autopilotEnabled === true);
-		ssAutopilotToggle.setAttribute(
-			"aria-checked",
-			msg.autopilotEnabled ? "true" : "false",
-		);
-	}
+	setToggle(ssAutopilotToggle, msg.autopilotEnabled === true);
 
 	// Autopilot prompts
 	ssAutopilotPromptsLocal = Array.isArray(msg.autopilotPrompts)
@@ -126,16 +120,7 @@ function populateSessionSettings(msg) {
 	ssRenderPromptsList();
 
 	// Auto Append toggle
-	if (ssAutoAppendToggle) {
-		ssAutoAppendToggle.classList.toggle(
-			"active",
-			msg.autoAppendEnabled === true,
-		);
-		ssAutoAppendToggle.setAttribute(
-			"aria-checked",
-			msg.autoAppendEnabled ? "true" : "false",
-		);
-	}
+	setToggle(ssAutoAppendToggle, msg.autoAppendEnabled === true);
 
 	// Auto Append text row visibility
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
@@ -153,16 +138,7 @@ function populateSessionSettings(msg) {
 	}
 
 	// Always Append Reminder toggle
-	if (ssAlwaysAppendReminderToggle) {
-		ssAlwaysAppendReminderToggle.classList.toggle(
-			"active",
-			msg.alwaysAppendReminder === true,
-		);
-		ssAlwaysAppendReminderToggle.setAttribute(
-			"aria-checked",
-			msg.alwaysAppendReminder ? "true" : "false",
-		);
-	}
+	setToggle(ssAlwaysAppendReminderToggle, msg.alwaysAppendReminder === true);
 }
 
 function updateSessionSettingsGearIndicator() {
@@ -177,16 +153,13 @@ function updateSessionSettingsGearIndicator() {
 
 function ssToggleAutopilot() {
 	if (!ssAutopilotToggle) return;
-	var active = !ssAutopilotToggle.classList.contains("active");
-	ssAutopilotToggle.classList.toggle("active", active);
-	ssAutopilotToggle.setAttribute("aria-checked", active ? "true" : "false");
+	setToggle(ssAutopilotToggle, !ssAutopilotToggle.classList.contains("active"));
 }
 
 function ssToggleAutoAppend() {
 	if (!ssAutoAppendToggle) return;
 	var active = !ssAutoAppendToggle.classList.contains("active");
-	ssAutoAppendToggle.classList.toggle("active", active);
-	ssAutoAppendToggle.setAttribute("aria-checked", active ? "true" : "false");
+	setToggle(ssAutoAppendToggle, active);
 
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
 	if (ssAutoAppendTextRow) {
@@ -196,10 +169,8 @@ function ssToggleAutoAppend() {
 
 function ssToggleAlwaysAppendReminder() {
 	if (!ssAlwaysAppendReminderToggle) return;
-	var active = !ssAlwaysAppendReminderToggle.classList.contains("active");
-	ssAlwaysAppendReminderToggle.classList.toggle("active", active);
-	ssAlwaysAppendReminderToggle.setAttribute(
-		"aria-checked",
-		active ? "true" : "false",
+	setToggle(
+		ssAlwaysAppendReminderToggle,
+		!ssAlwaysAppendReminderToggle.classList.contains("active"),
 	);
 }

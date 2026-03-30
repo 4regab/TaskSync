@@ -19,9 +19,7 @@ function toggleSoundSetting() {
 }
 
 function updateSoundToggleUI() {
-	if (!soundToggle) return;
-	soundToggle.classList.toggle("active", soundEnabled);
-	soundToggle.setAttribute("aria-checked", soundEnabled ? "true" : "false");
+	setToggle(soundToggle, soundEnabled);
 }
 
 function toggleInteractiveApprovalSetting() {
@@ -34,15 +32,7 @@ function toggleInteractiveApprovalSetting() {
 }
 
 function updateInteractiveApprovalToggleUI() {
-	if (!interactiveApprovalToggle) return;
-	interactiveApprovalToggle.classList.toggle(
-		"active",
-		interactiveApprovalEnabled,
-	);
-	interactiveApprovalToggle.setAttribute(
-		"aria-checked",
-		interactiveApprovalEnabled ? "true" : "false",
-	);
+	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
 }
 
 function toggleAutoAppendSetting() {
@@ -56,11 +46,7 @@ function toggleAutoAppendSetting() {
 
 function updateAutoAppendToggleUI() {
 	if (!autoAppendToggle) return;
-	autoAppendToggle.classList.toggle("active", autoAppendEnabled);
-	autoAppendToggle.setAttribute(
-		"aria-checked",
-		autoAppendEnabled ? "true" : "false",
-	);
+	setToggle(autoAppendToggle, autoAppendEnabled);
 	updateAutoAppendTextVisibility();
 }
 
@@ -97,12 +83,7 @@ function toggleAlwaysAppendReminderSetting() {
 }
 
 function updateAlwaysAppendReminderToggleUI() {
-	if (!alwaysAppendReminderToggle) return;
-	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
-	alwaysAppendReminderToggle.setAttribute(
-		"aria-checked",
-		alwaysAppendReminder ? "true" : "false",
-	);
+	setToggle(alwaysAppendReminderToggle, alwaysAppendReminder);
 }
 
 function toggleSendWithCtrlEnterSetting() {
@@ -115,12 +96,7 @@ function toggleSendWithCtrlEnterSetting() {
 }
 
 function updateSendWithCtrlEnterToggleUI() {
-	if (!sendShortcutToggle) return;
-	sendShortcutToggle.classList.toggle("active", sendWithCtrlEnter);
-	sendShortcutToggle.setAttribute(
-		"aria-checked",
-		sendWithCtrlEnter ? "true" : "false",
-	);
+	setToggle(sendShortcutToggle, sendWithCtrlEnter);
 }
 
 function toggleAutopilotSetting() {
@@ -133,13 +109,7 @@ function toggleAutopilotSetting() {
 }
 
 function updateAutopilotToggleUI() {
-	if (autopilotToggle) {
-		autopilotToggle.classList.toggle("active", autopilotEnabled);
-		autopilotToggle.setAttribute(
-			"aria-checked",
-			autopilotEnabled ? "true" : "false",
-		);
-	}
+	setToggle(autopilotToggle, autopilotEnabled);
 }
 
 function handleResponseTimeoutChange() {
@@ -276,13 +246,7 @@ function handleHumanDelayMaxChange() {
 }
 
 function updateHumanDelayUI() {
-	if (humanDelayToggle) {
-		humanDelayToggle.classList.toggle("active", humanLikeDelayEnabled);
-		humanDelayToggle.setAttribute(
-			"aria-checked",
-			humanLikeDelayEnabled ? "true" : "false",
-		);
-	}
+	setToggle(humanDelayToggle, humanLikeDelayEnabled);
 	if (humanDelayRangeContainer) {
 		humanDelayRangeContainer.style.display = humanLikeDelayEnabled
 			? "flex"
@@ -395,35 +359,6 @@ function initWorkspacePromptListUI() {
 		},
 	});
 	workspacePromptListUI.bindEvents();
-}
-
-// Delegate existing function names to the shared UI for backward compatibility
-function renderAutopilotPromptsList() {
-	workspacePromptListUI.render();
-}
-function showAddAutopilotPromptForm() {
-	workspacePromptListUI.showAddForm();
-}
-function hideAddAutopilotPromptForm() {
-	workspacePromptListUI.hideAddForm();
-}
-function saveAutopilotPrompt() {
-	workspacePromptListUI.save();
-}
-function handleAutopilotPromptsListClick(e) {
-	workspacePromptListUI.handleListClick(e);
-}
-function handleAutopilotDragStart(e) {
-	workspacePromptListUI.handleDragStart(e);
-}
-function handleAutopilotDragOver(e) {
-	workspacePromptListUI.handleDragOver(e);
-}
-function handleAutopilotDragEnd(e) {
-	workspacePromptListUI.handleDragEnd(e);
-}
-function handleAutopilotDrop(e) {
-	workspacePromptListUI.handleDrop(e);
 }
 
 // ========== End Autopilot Prompts Functions ==========

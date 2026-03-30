@@ -54,7 +54,7 @@ body {
     margin-bottom: 8px;
 }
 
-/* ==================== Orchestration Mobile Shell Layout ==================== */
+/* ==================== Orchestration Panel Layout ==================== */
 
 .main-container.orch {
     padding: 0;
@@ -62,7 +62,7 @@ body {
     flex-direction: column;
 }
 
-.mobile-shell {
+.panel {
     height: 100%;
     display: grid;
     grid-template-rows: auto 1fr;
@@ -71,15 +71,15 @@ body {
     min-height: 0;
 }
 
-.mobile-shell.thread-shell {
+.panel.thread-shell {
     grid-template-rows: auto 1fr auto;
 }
 
-.mobile-shell.hub-shell {
+.panel.hub-shell {
     grid-template-rows: 1fr;
 }
 
-.mobile-shell.hidden {
+.panel.hidden {
     display: none !important;
 }
 
@@ -89,14 +89,14 @@ body {
     flex-direction: row;
 }
 
-.main-container.orch.split-view>.mobile-shell.hub-shell {
+.main-container.orch.split-view>.panel.hub-shell {
     flex: 0 0 38%;
     max-width: 50%;
     border-right: none;
     overflow-y: auto;
 }
 
-.main-container.orch.split-view>.mobile-shell.thread-shell {
+.main-container.orch.split-view>.panel.thread-shell {
     flex: 1 1 62%;
     min-width: 0;
 }
@@ -119,12 +119,37 @@ body {
     display: block;
 }
 
-/* Hide back button in split view — hub is always visible */
+/* Hide back button in split view -- hub is always visible */
 .main-container.orch.split-view #thread-back-btn {
     display: none;
 }
 
-/* Split view placeholder — shown when no session is selected */
+/* --- Sessions collapse bar (only visible in narrow split view) --- */
+.sessions-collapse-bar {
+    display: none;
+}
+
+.sessions-collapse-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.sessions-collapse-bar .codicon {
+    font-size: 14px;
+    transition: transform 0.2s;
+}
+
+.sessions-collapse-count {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Split view placeholder -- shown when no session is selected */
 .split-placeholder {
     grid-row: 1 / -1;
     display: flex;
@@ -145,8 +170,76 @@ body {
 }
 
 /* In split view, hub is always visible even when a session is active */
-.main-container.orch.split-view>.mobile-shell.hub-shell.hidden {
+.main-container.orch.split-view>.panel.hub-shell.hidden {
     display: grid !important;
+}
+
+/* ==================== Narrow Split View (vertical: sessions top, thread bottom) ==================== */
+/* When the viewport is too narrow for side-by-side, stack vertically */
+@media (max-width: 480px) {
+    .main-container.orch.split-view {
+        flex-direction: column;
+    }
+
+    .main-container.orch.split-view>.panel.hub-shell {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 auto;
+        height: auto;
+        max-width: none;
+        max-height: 40%;
+        overflow: hidden;
+        border-right: none;
+        border-bottom: 1px solid var(--vscode-panel-border);
+    }
+
+    .main-container.orch.split-view>.panel.hub-shell .hub-scroll {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .main-container.orch.split-view>.panel.thread-shell {
+        flex: 1 1 0;
+        min-height: 0;
+        min-width: auto;
+    }
+
+    /* Hide horizontal resizer in narrow mode */
+    .main-container.orch.split-view>.split-resizer {
+        display: none;
+    }
+
+    /* Show collapse bar in narrow mode */
+    .main-container.orch.split-view .sessions-collapse-bar {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        cursor: pointer;
+        flex-shrink: 0;
+        user-select: none;
+    }
+
+    .sessions-collapse-bar:hover {
+        background: var(--vscode-list-hoverBackground);
+    }
+
+    /* Collapsed state: hide hub-scroll, rotate chevron */
+    .main-container.orch.split-view>.panel.hub-shell.collapsed {
+        max-height: none;
+    }
+
+    .main-container.orch.split-view>.panel.hub-shell.collapsed .hub-scroll {
+        display: none;
+    }
+
+    .main-container.orch.split-view>.panel.hub-shell.collapsed .sessions-collapse-bar .codicon {
+        transform: rotate(-90deg);
+    }
+
+    .main-container.orch.split-view>.panel.hub-shell.hidden {
+        display: flex !important;
+    }
 }
 
 /* Hub Topbar & Thread Head */

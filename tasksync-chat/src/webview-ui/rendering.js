@@ -514,7 +514,8 @@ function renderMermaidDiagrams() {
 }
 
 /**
- * Toggle split view mode (sessions list + thread side by side)
+ * Toggle split view mode (sessions list + thread side by side).
+ * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
  */
 function toggleSplitView() {
 	splitViewEnabled = !splitViewEnabled;
@@ -604,7 +605,7 @@ function updateWelcomeSectionVisibility() {
 	var hubEl = document.getElementById("workspace-hub");
 	var threadEl = document.getElementById("thread-shell");
 	var placeholderEl = document.getElementById("split-placeholder");
-	var threadHeadEl = document.getElementById("stage-head");
+	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
 
 	if (splitViewEnabled) {
@@ -620,9 +621,9 @@ function updateWelcomeSectionVisibility() {
 			var activeSession = (sessions || []).find(function (s) {
 				return s.id === activeSessionId;
 			});
-			var stageTitle = document.getElementById("stage-title");
-			if (activeSession && stageTitle) {
-				stageTitle.textContent = activeSession.title;
+			var threadTitle = document.getElementById("thread-title");
+			if (activeSession && threadTitle) {
+				threadTitle.textContent = activeSession.title;
 			}
 		} else {
 			// No session: show placeholder, hide thread head + composer
@@ -647,9 +648,9 @@ function updateWelcomeSectionVisibility() {
 		var activeSession = (sessions || []).find(function (s) {
 			return s.id === activeSessionId;
 		});
-		var stageTitle = document.getElementById("stage-title");
+		var threadTitle = document.getElementById("thread-title");
 		if (activeSession) {
-			if (stageTitle) stageTitle.textContent = activeSession.title;
+			if (threadTitle) threadTitle.textContent = activeSession.title;
 		}
 	} else {
 		// No active session: show the hub, hide the thread shell
@@ -678,6 +679,13 @@ function renderSessionsList() {
 	var sessionsListEl = document.getElementById("sessions-list");
 	var sessionsPanelEl = document.getElementById("sessions-panel");
 	if (!sessionsListEl) return;
+
+	// Update collapse bar session count
+	var countEl = document.getElementById("sessions-collapse-count");
+	if (countEl) {
+		countEl.textContent =
+			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+	}
 
 	if (!sessions || sessions.length === 0) {
 		sessionsListEl.innerHTML = "";
@@ -840,4 +848,13 @@ function renderSessionsList() {
 				input.addEventListener("blur", commit);
 			});
 		});
+}
+
+/**
+ * Toggle the sessions hub panel between expanded and collapsed in split view.
+ */
+function toggleHubCollapse() {
+	var hub = document.getElementById("workspace-hub");
+	if (!hub) return;
+	hub.classList.toggle("collapsed");
 }

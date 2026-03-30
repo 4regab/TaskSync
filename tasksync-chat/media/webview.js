@@ -970,6 +970,7 @@ let sessions = []; // Multi-session orchestration: all sessions
 let activeSessionId = null; // Currently focused session ID
 let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
 let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
+let vertSplitRatio = previousState.vertSplitRatio || 35; // Vertical split: hub height percentage in single-column mode (default 35%)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -1043,10 +1044,12 @@ let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
 let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
 let threadBackBtn, threadHistoryBtn, threadSettingsBtn;
-let changesSection,
+let changesModalOverlay,
+	changesSection,
 	changesRefreshBtn,
 	changesCloseBtn,
 	changesSummary,
+	changesLoadingSpinner,
 	changesStatus,
 	changesUnstagedGroup,
 	changesUnstagedList,
@@ -1074,6 +1077,8 @@ let slashDropdown, slashList, slashEmpty;
 // Timeout warning modal for extended timeouts (>4h)
 let timeoutWarningModalOverlay = null;
 let pendingTimeoutValue = null;
+// Simple alert modal (reusable for info messages)
+let simpleAlertModalOverlay = null;
 // Settings modal elements
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
@@ -1124,6 +1129,7 @@ function init() {
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();
+		createSimpleAlertModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
 
@@ -1184,6 +1190,24 @@ function init() {
 			if (remoteSplitBtn) remoteSplitBtn.classList.add("active");
 		}
 		initSplitResizer();
+		initVertResizer();
+
+		// Re-apply vertical split ratio on resize (e.g., when switching to/from narrow mode)
+		var lastNarrowState = splitViewEnabled && window.innerWidth <= 480;
+		window.addEventListener("resize", function () {
+			var isNarrow = splitViewEnabled && window.innerWidth <= 480;
+			if (isNarrow && vertSplitRatio) {
+				applyVertSplitRatio(vertSplitRatio);
+			} else if (!isNarrow && lastNarrowState) {
+				// Leaving narrow mode: clear inline styles so CSS media query takes over
+				var hubEl = document.getElementById("workspace-hub");
+				if (hubEl) {
+					hubEl.style.maxHeight = "";
+					hubEl.style.flex = "";
+				}
+			}
+			lastNarrowState = isNarrow;
+		});
 
 		// Bind collapse bar for narrow split-view sessions panel
 		var collapseBar = document.getElementById("sessions-collapse-bar");
@@ -1221,6 +1245,7 @@ function saveWebviewState() {
 		sessionComposerState: sessionComposerState,
 		splitViewEnabled: splitViewEnabled,
 		splitRatio: splitRatio,
+		vertSplitRatio: vertSplitRatio,
 	});
 }
 
@@ -1274,10 +1299,12 @@ function cacheDOMElements() {
 	welcomeSection = document.getElementById("welcome-section");
 	cardVibe = document.getElementById("card-vibe");
 	cardSpec = document.getElementById("card-spec");
+	changesModalOverlay = document.getElementById("changes-modal-overlay");
 	changesSection = document.getElementById("changes-section");
 	changesRefreshBtn = document.getElementById("changes-refresh-btn");
 	changesCloseBtn = document.getElementById("changes-close-btn");
 	changesSummary = document.getElementById("changes-summary");
+	changesLoadingSpinner = document.getElementById("changes-loading-spinner");
 	changesStatus = document.getElementById("changes-status");
 	changesUnstagedGroup = document.getElementById("changes-unstaged-group");
 	changesUnstagedList = document.getElementById("changes-unstaged-list");
@@ -2290,6 +2317,107 @@ function confirmTimeoutWarning() {
 		responseTimeoutSelect.focus();
 	}
 }
+
+// ==================== Simple Alert Modal (reusable) ====================
+
+/**
+ * Create a reusable simple alert modal for info messages.
+ * Can be shown with different content via showSimpleAlert().
+ */
+function createSimpleAlertModal() {
+	simpleAlertModalOverlay = document.createElement("div");
+	simpleAlertModalOverlay.className = "settings-modal-overlay hidden";
+	simpleAlertModalOverlay.id = "simple-alert-modal-overlay";
+
+	var modal = document.createElement("div");
+	modal.className = "settings-modal simple-alert-modal";
+	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-modal", "true");
+	modal.setAttribute("aria-labelledby", "simple-alert-modal-title");
+	modal.setAttribute("aria-describedby", "simple-alert-modal-desc");
+	modal.id = "simple-alert-modal";
+
+	// Header with icon
+	var header = document.createElement("div");
+	header.className = "settings-modal-header simple-alert-header";
+	var title = document.createElement("span");
+	title.className = "settings-modal-title simple-alert-title";
+	title.id = "simple-alert-modal-title";
+	title.innerHTML =
+		'<span class="codicon codicon-info" id="simple-alert-icon"></span> <span id="simple-alert-title-text">Info</span>';
+	header.appendChild(title);
+
+	// Content
+	var content = document.createElement("div");
+	content.className = "settings-modal-content simple-alert-content";
+	content.id = "simple-alert-modal-desc";
+
+	var messageText = document.createElement("p");
+	messageText.className = "simple-alert-text";
+	messageText.id = "simple-alert-text";
+	content.appendChild(messageText);
+
+	// Button row
+	var btnRow = document.createElement("div");
+	btnRow.className = "new-session-btn-row";
+
+	var okBtn = document.createElement("button");
+	okBtn.className = "form-btn form-btn-primary";
+	okBtn.id = "simple-alert-ok-btn";
+	okBtn.textContent = "OK";
+	okBtn.addEventListener("click", closeSimpleAlert);
+	btnRow.appendChild(okBtn);
+
+	content.appendChild(btnRow);
+	modal.appendChild(header);
+	modal.appendChild(content);
+	simpleAlertModalOverlay.appendChild(modal);
+	document.body.appendChild(simpleAlertModalOverlay);
+
+	// Close on overlay click
+	simpleAlertModalOverlay.addEventListener("click", function (e) {
+		if (e.target === simpleAlertModalOverlay) closeSimpleAlert();
+	});
+
+	// Keyboard handling: Escape or Enter to close
+	simpleAlertModalOverlay.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" || e.key === "Enter") {
+			closeSimpleAlert();
+		}
+	});
+}
+
+/**
+ * Show the simple alert modal with custom content.
+ * @param {string} title - The title text
+ * @param {string} message - The message to display
+ * @param {string} [iconClass] - Optional codicon class (default: codicon-info)
+ */
+function showSimpleAlert(title, message, iconClass) {
+	if (!simpleAlertModalOverlay) return;
+
+	var titleText = document.getElementById("simple-alert-title-text");
+	var alertText = document.getElementById("simple-alert-text");
+	var alertIcon = document.getElementById("simple-alert-icon");
+
+	if (titleText) titleText.textContent = title;
+	if (alertText) alertText.textContent = message;
+	if (alertIcon) {
+		alertIcon.className = "codicon " + (iconClass || "codicon-info");
+	}
+
+	simpleAlertModalOverlay.classList.remove("hidden");
+
+	// Focus the OK button for keyboard accessibility
+	var okBtn = document.getElementById("simple-alert-ok-btn");
+	if (okBtn) okBtn.focus();
+}
+
+function closeSimpleAlert() {
+	if (simpleAlertModalOverlay) {
+		simpleAlertModalOverlay.classList.add("hidden");
+	}
+}
 // ==================== Event Listeners ====================
 
 function bindEventListeners() {
@@ -2653,8 +2781,17 @@ function bindSessionSettingsEvents() {
 
 function openHistoryModal() {
 	if (!historyModalOverlay) return;
-	// Request persisted history from extension
-	vscode.postMessage({ type: "openHistoryModal" });
+
+	if (isRemoteMode) {
+		// Remote mode: use currentSessionCalls as history source (already available)
+		// Map to persistedHistory format for renderHistoryModal
+		persistedHistory = (currentSessionCalls || []).slice().reverse();
+		renderHistoryModal();
+	} else {
+		// VS Code mode: request persisted history from extension
+		vscode.postMessage({ type: "openHistoryModal" });
+	}
+
 	historyModalOverlay.classList.remove("hidden");
 }
 
@@ -4401,6 +4538,88 @@ function initSplitResizer() {
 		resizer.classList.remove("hidden");
 		applySplitRatio(splitRatio);
 	}
+}
+
+/**
+ * Initialise the vertical resizer for narrow split-view mode.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ * Works when split-view is enabled AND viewport is narrow (<=480px).
+ */
+function initVertResizer() {
+	var vertResizer = document.getElementById("vert-resizer");
+	if (!vertResizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	var hubEl = document.getElementById("workspace-hub");
+	if (!container || !hubEl) return;
+
+	var dragging = false;
+
+	function isNarrowSplitView() {
+		return splitViewEnabled && window.innerWidth <= 480;
+	}
+
+	function startDrag(e) {
+		if (!isNarrowSplitView()) return;
+		e.preventDefault();
+		dragging = true;
+		vertResizer.classList.add("active");
+		document.body.style.cursor = "row-resize";
+		document.body.style.userSelect = "none";
+	}
+
+	function onDrag(e) {
+		if (!dragging) return;
+		var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+		var rect = container.getBoundingClientRect();
+		var offset = clientY - rect.top;
+		var pct = (offset / rect.height) * 100;
+		// Clamp between 15% and 70%
+		pct = Math.min(70, Math.max(15, pct));
+		vertSplitRatio = Math.round(pct);
+		applyVertSplitRatio(vertSplitRatio);
+	}
+
+	function endDrag() {
+		if (!dragging) return;
+		dragging = false;
+		vertResizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	}
+
+	// Mouse events
+	vertResizer.addEventListener("mousedown", startDrag);
+	document.addEventListener("mousemove", onDrag);
+	document.addEventListener("mouseup", endDrag);
+
+	// Touch events for mobile
+	vertResizer.addEventListener("touchstart", startDrag, { passive: false });
+	document.addEventListener("touchmove", onDrag, { passive: false });
+	document.addEventListener("touchend", endDrag);
+
+	// Apply initial ratio if in narrow split-view mode
+	if (isNarrowSplitView() && vertSplitRatio) {
+		applyVertSplitRatio(vertSplitRatio);
+	}
+}
+
+/**
+ * Apply vertical split ratio to panels in narrow split-view mode.
+ * Sets hub max-height percentage to resize the stacked layout.
+ */
+function applyVertSplitRatio(pct) {
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+	if (!hubEl || !threadEl) return;
+
+	// Only apply in narrow split-view mode
+	if (!splitViewEnabled || window.innerWidth > 480) return;
+
+	hubEl.style.maxHeight = pct + "%";
+	hubEl.style.flex = "0 0 auto";
+	threadEl.style.flex = "1 1 0";
 }
 
 /**
@@ -6814,22 +7033,99 @@ function renderAttachmentsHtml(attachments) {
 }
 
 function initChangesPanel() {
-	if (!changesSection) return;
-	changesSection.classList.toggle("hidden", !changesPanelVisible);
+	if (!changesModalOverlay) return;
+	changesModalOverlay.classList.toggle("hidden", !changesPanelVisible);
 	updateChangesHeaderButton();
+
+	// Event delegation for file selection - handles dynamically rendered items
+	// This is set up ONCE at init, not on every render
+	if (changesUnstagedList) {
+		changesUnstagedList.addEventListener("click", function (e) {
+			// Find the button with data-select-change-file (could be target or ancestor)
+			var btn = e.target.closest("[data-select-change-file]");
+			if (btn) {
+				var filePath = btn.getAttribute("data-select-change-file");
+				if (filePath) handleChangeFileSelect(filePath);
+			}
+		});
+	}
+
 	renderChangesPanel();
 }
 
-function toggleChangesPanel(forceVisible) {
-	changesPanelVisible =
+/**
+ * Toggle the changes panel visibility.
+ * When opening, fetches changes first and shows alert if no changes exist.
+ * @param {boolean} [forceVisible] - Force a specific visibility state
+ */
+async function toggleChangesPanel(forceVisible) {
+	var targetVisible =
 		typeof forceVisible === "boolean" ? forceVisible : !changesPanelVisible;
-	if (changesSection) {
-		changesSection.classList.toggle("hidden", !changesPanelVisible);
+
+	// If closing, just close
+	if (!targetVisible) {
+		changesPanelVisible = false;
+		if (changesModalOverlay) {
+			changesModalOverlay.classList.add("hidden");
+		}
+		updateChangesHeaderButton();
+		return;
+	}
+
+	// If opening, fetch changes first to check if any exist
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi("GET", "/api/changes");
+
+			// Validate response format (must have staged/unstaged arrays)
+			if (!Array.isArray(data.staged) || !Array.isArray(data.unstaged)) {
+				console.error("[TaskSync] Invalid response format:", data);
+				showSimpleAlert(
+					"Error",
+					"Invalid response from git API. Please try again.",
+					"codicon-error",
+				);
+				return;
+			}
+
+			var hasChanges = data.staged.length > 0 || data.unstaged.length > 0;
+
+			if (!hasChanges) {
+				// No changes - show alert instead of panel
+				showSimpleAlert(
+					"No Changes",
+					"There are no git changes to review.",
+					"codicon-source-control",
+				);
+				return;
+			}
+
+			// Has changes - open panel and apply state
+			changesPanelVisible = true;
+			if (changesModalOverlay) {
+				changesModalOverlay.classList.remove("hidden");
+			}
+			updateChangesHeaderButton();
+			applyChangesState(data);
+		} catch (err) {
+			// Error fetching - show alert with error
+			console.error("[TaskSync] Error fetching changes:", err);
+			showSimpleAlert(
+				"Error",
+				err && err.message ? err.message : "Failed to load git changes.",
+				"codicon-error",
+			);
+		}
+		return;
+	}
+
+	// VS Code mode - just open panel and request changes (let it load)
+	changesPanelVisible = true;
+	if (changesModalOverlay) {
+		changesModalOverlay.classList.remove("hidden");
 	}
 	updateChangesHeaderButton();
-	if (changesPanelVisible) {
-		requestChangesRefresh();
-	}
+	requestChangesRefresh();
 }
 
 function updateChangesHeaderButton() {
@@ -7004,33 +7300,31 @@ function formatChangeStatusLabel(statusText) {
 function renderChangesPanel() {
 	if (!changesSection) return;
 
-	if (changesSummary) {
-		var summaryText;
-		if (
-			changesLoading &&
-			!changesState.staged.length &&
-			!changesState.unstaged.length
-		) {
-			summaryText = "Loading git changes...";
+	// Show/hide spinner based on loading state
+	if (changesLoadingSpinner) {
+		if (changesLoading) {
+			changesLoadingSpinner.classList.remove("hidden");
 		} else {
-			var totalChanges =
-				changesState.unstaged.length + changesState.staged.length;
-			summaryText =
-				totalChanges +
-				" changes (" +
-				changesState.unstaged.length +
-				" unstaged, " +
-				changesState.staged.length +
-				" staged)";
+			changesLoadingSpinner.classList.add("hidden");
 		}
+	}
+
+	if (changesSummary) {
+		var totalChanges =
+			changesState.unstaged.length + changesState.staged.length;
+		var summaryText =
+			totalChanges +
+			" changes (" +
+			changesState.unstaged.length +
+			" unstaged, " +
+			changesState.staged.length +
+			" staged)";
 		changesSummary.textContent = summaryText;
 	}
 
 	if (changesStatus) {
 		if (changesError) {
 			changesStatus.textContent = changesError;
-		} else if (changesLoading) {
-			changesStatus.textContent = "Loading...";
 		} else {
 			changesStatus.textContent = "";
 		}
@@ -7057,8 +7351,9 @@ function renderChangesPanel() {
 		if (selectedChangeDiff) {
 			changesDiffOutput.innerHTML = formatGitDiffHtml(selectedChangeDiff);
 			changesDiffOutput.classList.remove("empty");
-		} else if (changesLoading && selectedChangeFile) {
-			changesDiffOutput.textContent = "Loading diff...";
+		} else if (selectedChangeFile) {
+			// Empty state while loading or if diff is empty
+			changesDiffOutput.textContent = "";
 			changesDiffOutput.classList.add("empty");
 		} else {
 			changesDiffOutput.textContent =
@@ -7425,6 +7720,15 @@ function findChangeItem(filePath) {
 function bindChangePanelEvents() {
 	if (!changesSection) return;
 
+	// Click overlay backdrop to close (but not the panel itself)
+	if (changesModalOverlay) {
+		changesModalOverlay.onclick = function (e) {
+			if (e.target === changesModalOverlay) {
+				toggleChangesPanel(false);
+			}
+		};
+	}
+
 	if (changesRefreshBtn) {
 		changesRefreshBtn.onclick = function () {
 			void requestChangesRefresh();
@@ -7436,14 +7740,8 @@ function bindChangePanelEvents() {
 		};
 	}
 
-	changesSection
-		.querySelectorAll("[data-select-change-file]")
-		.forEach(function (btn) {
-			btn.onclick = function () {
-				var filePath = btn.getAttribute("data-select-change-file");
-				if (filePath) handleChangeFileSelect(filePath);
-			};
-		});
+	// Event delegation for file selection - handles dynamically rendered items
+	// (individual button handlers removed - using container delegation instead)
 }
 
     if (document.readyState === 'loading') {

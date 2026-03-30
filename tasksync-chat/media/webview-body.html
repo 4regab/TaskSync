@@ -57,7 +57,10 @@
         </div>
     </div>
 
-    <!-- Split view drag resizer -->
+    <!-- Vertical resizer for narrow split-view mode -->
+    <div class="vert-resizer" id="vert-resizer"></div>
+
+    <!-- Split view drag resizer (horizontal, for split-view mode) -->
     <div class="split-resizer hidden" id="split-resizer"></div>
 
     <!-- Thread Panel: Active Chat -->
@@ -166,45 +169,51 @@
         </div>
     </div>
 
-    <!-- Git Changes Section -->
-    <section class="changes-section hidden" id="changes-section" aria-label="Code review and git changes">
-        <div class="changes-header">
-            <div class="changes-header-copy">
-                <div class="changes-title-row">
-                    <span class="codicon codicon-source-control" aria-hidden="true"></span>
-                    <span class="changes-title">Code Review</span>
+    <!-- Git Changes Modal Overlay -->
+    <div class="changes-modal-overlay hidden" id="changes-modal-overlay">
+        <section class="changes-section" id="changes-section" aria-label="Code review and git changes">
+            <div class="changes-header">
+                <div class="changes-header-copy">
+                    <div class="changes-title-row">
+                        <span class="codicon codicon-source-control" aria-hidden="true"></span>
+                        <span class="changes-title">Code Review</span>
+                        <span class="changes-loading-spinner hidden" id="changes-loading-spinner" aria-hidden="true">
+                            <span class="codicon codicon-loading codicon-modifier-spin"></span>
+                        </span>
+                    </div>
+                    <div class="changes-summary" id="changes-summary">Open the panel to load git changes.</div>
                 </div>
-                <div class="changes-summary" id="changes-summary">Open the panel to load git changes.</div>
-            </div>
-            <div class="changes-header-actions">
-                <button type="button" class="changes-header-btn" id="changes-refresh-btn" title="Refresh changes"
-                    aria-label="Refresh changes">
-                    <span class="codicon codicon-refresh"></span>
-                </button>
-                <button type="button" class="changes-header-btn" id="changes-close-btn" title="Close code review"
-                    aria-label="Close code review">
-                    <span class="codicon codicon-close"></span>
-                </button>
-            </div>
-        </div>
-        <div class="changes-toolbar">
-            <div class="changes-status" id="changes-status" aria-live="polite"></div>
-        </div>
-        <div class="changes-content">
-            <div class="changes-list-pane">
-                <div class="changes-group" id="changes-unstaged-group">
-                    <div class="changes-group-title">Changes</div>
-                    <div class="changes-list" id="changes-unstaged-list" role="list"></div>
+                <div class="changes-header-actions">
+                    <button type="button" class="changes-header-btn" id="changes-refresh-btn" title="Refresh changes"
+                        aria-label="Refresh changes">
+                        <span class="codicon codicon-refresh"></span>
+                    </button>
+                    <button type="button" class="changes-header-btn" id="changes-close-btn" title="Close code review"
+                        aria-label="Close code review">
+                        <span class="codicon codicon-close"></span>
+                    </button>
                 </div>
             </div>
-            <div class="changes-diff-pane">
-                <div class="changes-diff-header">
-                    <span class="changes-diff-title" id="changes-diff-title">Select a file to preview its diff</span>
-                    <span class="changes-diff-meta" id="changes-diff-meta"></span>
-                </div>
-                <pre class="changes-diff-output"
-                    id="changes-diff-output">Open the panel, then select a file to inspect the diff.</pre>
+            <div class="changes-toolbar">
+                <div class="changes-status" id="changes-status" aria-live="polite"></div>
             </div>
-        </div>
-    </section>
+            <div class="changes-content">
+                <div class="changes-list-pane">
+                    <div class="changes-group" id="changes-unstaged-group">
+                        <div class="changes-group-title">Changes</div>
+                        <div class="changes-list" id="changes-unstaged-list" role="list"></div>
+                    </div>
+                </div>
+                <div class="changes-diff-pane">
+                    <div class="changes-diff-header">
+                        <span class="changes-diff-title" id="changes-diff-title">Select a file to preview its
+                            diff</span>
+                        <span class="changes-diff-meta" id="changes-diff-meta"></span>
+                    </div>
+                    <pre class="changes-diff-output"
+                        id="changes-diff-output">Open the panel, then select a file to inspect the diff.</pre>
+                </div>
+            </div>
+        </section>
+    </div>
 </div>

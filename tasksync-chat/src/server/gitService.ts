@@ -18,11 +18,14 @@ interface Repository {
 	state: RepositoryState;
 	rootUri?: vscodeTypes.Uri;
 	diffWithHEAD(path: string): Promise<string>;
+	status(): Promise<void>;
 }
 
 interface RepositoryState {
 	indexChanges: Change[];
 	workingTreeChanges: Change[];
+	untrackedChanges?: Change[];
+	mergeChanges?: Change[];
 }
 
 interface Change {
@@ -129,6 +132,10 @@ export class GitService {
 
 	async getChanges(): Promise<GitChanges> {
 		const repo = this.getRepo();
+
+		// Refresh repository state to ensure we have the latest changes
+		await repo.status();
+
 		const statusMap = [
 			"modified", // 0
 			"added", // 1
@@ -146,10 +153,21 @@ export class GitService {
 			status: statusMap[c.status] || "unknown",
 		});
 
-		return {
+		// Combine working tree changes with untracked files (new files not yet added to git)
+		const unstaged = [
+			...repo.state.workingTreeChanges.map(mapChange),
+			...(repo.state.untrackedChanges ?? []).map((c) => ({
+				path: this.toRepoRelativePath(repo, c.uri.fsPath, repoRoot),
+				status: "untracked" as const,
+			})),
+		];
+
+		const result = {
 			staged: repo.state.indexChanges.map(mapChange),
-			unstaged: repo.state.workingTreeChanges.map(mapChange),
+			unstaged,
 		};
+
+		return result;
 	}
 
 	/**
@@ -291,11 +309,64 @@ export class GitService {
 	}
 
 	async getDiff(filePath: string): Promise<string> {
-		const { repo, relativePath } = this.resolveFilePath(filePath);
+		const { repo, relativePath, repoRoot } = this.resolveFilePath(filePath);
+
+		// Refresh repo state to get current changes
+		await repo.status();
+
+		// Check if file is untracked (status 7 in VS Code Git API)
+		// Could be in untrackedChanges OR in workingTreeChanges with status 7
+		const UNTRACKED_STATUS = 7;
+
+		const untrackedFromUntrackedChanges = (
+			repo.state.untrackedChanges ?? []
+		).some((c) => {
+			const path = this.toRepoRelativePath(repo, c.uri.fsPath, repoRoot);
+			return path === relativePath;
+		});
+
+		const untrackedFromWorkingTree = repo.state.workingTreeChanges.some(
+			(c) =>
+				c.status === UNTRACKED_STATUS &&
+				this.toRepoRelativePath(repo, c.uri.fsPath, repoRoot) === relativePath,
+		);
+
+		const isUntracked =
+			untrackedFromUntrackedChanges || untrackedFromWorkingTree;
+
+		if (isUntracked) {
+			// For untracked files, read content and format as all-additions diff
+			try {
+				const fullPath = path.join(repoRoot, relativePath);
+				const fileUri = vscode.Uri.file(fullPath);
+				const contentBytes = await vscode.workspace.fs.readFile(fileUri);
+				const content = Buffer.from(contentBytes).toString("utf8");
+
+				// Format as unified diff with all additions
+				const lines = content.split("\n");
+				const diffLines = [
+					`diff --git a/${relativePath} b/${relativePath}`,
+					"new file mode 100644",
+					"--- /dev/null",
+					`+++ b/${relativePath}`,
+					`@@ -0,0 +1,${lines.length} @@`,
+					...lines.map((line) => `+${line}`),
+				];
+				return diffLines.join("\n");
+			} catch (err) {
+				console.error(
+					"[TaskSync Git] Failed to read untracked file",
+					relativePath,
+					err,
+				);
+				return "";
+			}
+		}
+
 		try {
 			return await repo.diffWithHEAD(relativePath);
 		} catch (err) {
-			// If diff fails, return empty string (might be a new file)
+			// If diff fails, return empty string (might be a binary file or other issue)
 			console.error("[TaskSync Git] Diff failed for", relativePath, err);
 			return "";
 		}

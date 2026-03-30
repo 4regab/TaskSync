@@ -216,6 +216,26 @@ body.remote-mode {
     .input-container {
         padding: 8px;
     }
+
+    /* Prevent horizontal overflow on mobile - constrain chat content */
+    .chat-container {
+        overflow-x: hidden;
+    }
+
+    .chat-stream-area {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    .tool-call-card {
+        max-width: 100%;
+    }
+
+    .tool-call-ai-response,
+    .tool-call-user-response {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
 }
 
 /* Noscript fallback message */

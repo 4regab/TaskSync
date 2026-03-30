@@ -11,6 +11,7 @@ function init() {
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();
+		createSimpleAlertModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
 
@@ -71,6 +72,24 @@ function init() {
 			if (remoteSplitBtn) remoteSplitBtn.classList.add("active");
 		}
 		initSplitResizer();
+		initVertResizer();
+
+		// Re-apply vertical split ratio on resize (e.g., when switching to/from narrow mode)
+		var lastNarrowState = splitViewEnabled && window.innerWidth <= 480;
+		window.addEventListener("resize", function () {
+			var isNarrow = splitViewEnabled && window.innerWidth <= 480;
+			if (isNarrow && vertSplitRatio) {
+				applyVertSplitRatio(vertSplitRatio);
+			} else if (!isNarrow && lastNarrowState) {
+				// Leaving narrow mode: clear inline styles so CSS media query takes over
+				var hubEl = document.getElementById("workspace-hub");
+				if (hubEl) {
+					hubEl.style.maxHeight = "";
+					hubEl.style.flex = "";
+				}
+			}
+			lastNarrowState = isNarrow;
+		});
 
 		// Bind collapse bar for narrow split-view sessions panel
 		var collapseBar = document.getElementById("sessions-collapse-bar");
@@ -108,6 +127,7 @@ function saveWebviewState() {
 		sessionComposerState: sessionComposerState,
 		splitViewEnabled: splitViewEnabled,
 		splitRatio: splitRatio,
+		vertSplitRatio: vertSplitRatio,
 	});
 }
 
@@ -161,10 +181,12 @@ function cacheDOMElements() {
 	welcomeSection = document.getElementById("welcome-section");
 	cardVibe = document.getElementById("card-vibe");
 	cardSpec = document.getElementById("card-spec");
+	changesModalOverlay = document.getElementById("changes-modal-overlay");
 	changesSection = document.getElementById("changes-section");
 	changesRefreshBtn = document.getElementById("changes-refresh-btn");
 	changesCloseBtn = document.getElementById("changes-close-btn");
 	changesSummary = document.getElementById("changes-summary");
+	changesLoadingSpinner = document.getElementById("changes-loading-spinner");
 	changesStatus = document.getElementById("changes-status");
 	changesUnstagedGroup = document.getElementById("changes-unstaged-group");
 	changesUnstagedList = document.getElementById("changes-unstaged-list");
@@ -1175,5 +1197,106 @@ function confirmTimeoutWarning() {
 	// Restore focus to dropdown
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.focus();
+	}
+}
+
+// ==================== Simple Alert Modal (reusable) ====================
+
+/**
+ * Create a reusable simple alert modal for info messages.
+ * Can be shown with different content via showSimpleAlert().
+ */
+function createSimpleAlertModal() {
+	simpleAlertModalOverlay = document.createElement("div");
+	simpleAlertModalOverlay.className = "settings-modal-overlay hidden";
+	simpleAlertModalOverlay.id = "simple-alert-modal-overlay";
+
+	var modal = document.createElement("div");
+	modal.className = "settings-modal simple-alert-modal";
+	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-modal", "true");
+	modal.setAttribute("aria-labelledby", "simple-alert-modal-title");
+	modal.setAttribute("aria-describedby", "simple-alert-modal-desc");
+	modal.id = "simple-alert-modal";
+
+	// Header with icon
+	var header = document.createElement("div");
+	header.className = "settings-modal-header simple-alert-header";
+	var title = document.createElement("span");
+	title.className = "settings-modal-title simple-alert-title";
+	title.id = "simple-alert-modal-title";
+	title.innerHTML =
+		'<span class="codicon codicon-info" id="simple-alert-icon"></span> <span id="simple-alert-title-text">Info</span>';
+	header.appendChild(title);
+
+	// Content
+	var content = document.createElement("div");
+	content.className = "settings-modal-content simple-alert-content";
+	content.id = "simple-alert-modal-desc";
+
+	var messageText = document.createElement("p");
+	messageText.className = "simple-alert-text";
+	messageText.id = "simple-alert-text";
+	content.appendChild(messageText);
+
+	// Button row
+	var btnRow = document.createElement("div");
+	btnRow.className = "new-session-btn-row";
+
+	var okBtn = document.createElement("button");
+	okBtn.className = "form-btn form-btn-primary";
+	okBtn.id = "simple-alert-ok-btn";
+	okBtn.textContent = "OK";
+	okBtn.addEventListener("click", closeSimpleAlert);
+	btnRow.appendChild(okBtn);
+
+	content.appendChild(btnRow);
+	modal.appendChild(header);
+	modal.appendChild(content);
+	simpleAlertModalOverlay.appendChild(modal);
+	document.body.appendChild(simpleAlertModalOverlay);
+
+	// Close on overlay click
+	simpleAlertModalOverlay.addEventListener("click", function (e) {
+		if (e.target === simpleAlertModalOverlay) closeSimpleAlert();
+	});
+
+	// Keyboard handling: Escape or Enter to close
+	simpleAlertModalOverlay.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" || e.key === "Enter") {
+			closeSimpleAlert();
+		}
+	});
+}
+
+/**
+ * Show the simple alert modal with custom content.
+ * @param {string} title - The title text
+ * @param {string} message - The message to display
+ * @param {string} [iconClass] - Optional codicon class (default: codicon-info)
+ */
+function showSimpleAlert(title, message, iconClass) {
+	if (!simpleAlertModalOverlay) return;
+
+	var titleText = document.getElementById("simple-alert-title-text");
+	var alertText = document.getElementById("simple-alert-text");
+	var alertIcon = document.getElementById("simple-alert-icon");
+
+	if (titleText) titleText.textContent = title;
+	if (alertText) alertText.textContent = message;
+	if (alertIcon) {
+		alertIcon.className = "codicon " + (iconClass || "codicon-info");
+	}
+
+	simpleAlertModalOverlay.classList.remove("hidden");
+
+	// Focus the OK button for keyboard accessibility
+	var okBtn = document.getElementById("simple-alert-ok-btn");
+	if (okBtn) okBtn.focus();
+}
+
+function closeSimpleAlert() {
+	if (simpleAlertModalOverlay) {
+		simpleAlertModalOverlay.classList.add("hidden");
 	}
 }

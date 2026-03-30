@@ -95,6 +95,7 @@ let sessions = []; // Multi-session orchestration: all sessions
 let activeSessionId = null; // Currently focused session ID
 let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
 let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
+let vertSplitRatio = previousState.vertSplitRatio || 35; // Vertical split: hub height percentage in single-column mode (default 35%)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -168,10 +169,12 @@ let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
 let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
 let threadBackBtn, threadHistoryBtn, threadSettingsBtn;
-let changesSection,
+let changesModalOverlay,
+	changesSection,
 	changesRefreshBtn,
 	changesCloseBtn,
 	changesSummary,
+	changesLoadingSpinner,
 	changesStatus,
 	changesUnstagedGroup,
 	changesUnstagedList,
@@ -199,6 +202,8 @@ let slashDropdown, slashList, slashEmpty;
 // Timeout warning modal for extended timeouts (>4h)
 let timeoutWarningModalOverlay = null;
 let pendingTimeoutValue = null;
+// Simple alert modal (reusable for info messages)
+let simpleAlertModalOverlay = null;
 // Settings modal elements
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,

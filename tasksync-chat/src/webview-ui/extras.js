@@ -635,22 +635,99 @@ function renderAttachmentsHtml(attachments) {
 }
 
 function initChangesPanel() {
-	if (!changesSection) return;
-	changesSection.classList.toggle("hidden", !changesPanelVisible);
+	if (!changesModalOverlay) return;
+	changesModalOverlay.classList.toggle("hidden", !changesPanelVisible);
 	updateChangesHeaderButton();
+
+	// Event delegation for file selection - handles dynamically rendered items
+	// This is set up ONCE at init, not on every render
+	if (changesUnstagedList) {
+		changesUnstagedList.addEventListener("click", function (e) {
+			// Find the button with data-select-change-file (could be target or ancestor)
+			var btn = e.target.closest("[data-select-change-file]");
+			if (btn) {
+				var filePath = btn.getAttribute("data-select-change-file");
+				if (filePath) handleChangeFileSelect(filePath);
+			}
+		});
+	}
+
 	renderChangesPanel();
 }
 
-function toggleChangesPanel(forceVisible) {
-	changesPanelVisible =
+/**
+ * Toggle the changes panel visibility.
+ * When opening, fetches changes first and shows alert if no changes exist.
+ * @param {boolean} [forceVisible] - Force a specific visibility state
+ */
+async function toggleChangesPanel(forceVisible) {
+	var targetVisible =
 		typeof forceVisible === "boolean" ? forceVisible : !changesPanelVisible;
-	if (changesSection) {
-		changesSection.classList.toggle("hidden", !changesPanelVisible);
+
+	// If closing, just close
+	if (!targetVisible) {
+		changesPanelVisible = false;
+		if (changesModalOverlay) {
+			changesModalOverlay.classList.add("hidden");
+		}
+		updateChangesHeaderButton();
+		return;
+	}
+
+	// If opening, fetch changes first to check if any exist
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi("GET", "/api/changes");
+
+			// Validate response format (must have staged/unstaged arrays)
+			if (!Array.isArray(data.staged) || !Array.isArray(data.unstaged)) {
+				console.error("[TaskSync] Invalid response format:", data);
+				showSimpleAlert(
+					"Error",
+					"Invalid response from git API. Please try again.",
+					"codicon-error",
+				);
+				return;
+			}
+
+			var hasChanges = data.staged.length > 0 || data.unstaged.length > 0;
+
+			if (!hasChanges) {
+				// No changes - show alert instead of panel
+				showSimpleAlert(
+					"No Changes",
+					"There are no git changes to review.",
+					"codicon-source-control",
+				);
+				return;
+			}
+
+			// Has changes - open panel and apply state
+			changesPanelVisible = true;
+			if (changesModalOverlay) {
+				changesModalOverlay.classList.remove("hidden");
+			}
+			updateChangesHeaderButton();
+			applyChangesState(data);
+		} catch (err) {
+			// Error fetching - show alert with error
+			console.error("[TaskSync] Error fetching changes:", err);
+			showSimpleAlert(
+				"Error",
+				err && err.message ? err.message : "Failed to load git changes.",
+				"codicon-error",
+			);
+		}
+		return;
+	}
+
+	// VS Code mode - just open panel and request changes (let it load)
+	changesPanelVisible = true;
+	if (changesModalOverlay) {
+		changesModalOverlay.classList.remove("hidden");
 	}
 	updateChangesHeaderButton();
-	if (changesPanelVisible) {
-		requestChangesRefresh();
-	}
+	requestChangesRefresh();
 }
 
 function updateChangesHeaderButton() {
@@ -825,33 +902,31 @@ function formatChangeStatusLabel(statusText) {
 function renderChangesPanel() {
 	if (!changesSection) return;
 
-	if (changesSummary) {
-		var summaryText;
-		if (
-			changesLoading &&
-			!changesState.staged.length &&
-			!changesState.unstaged.length
-		) {
-			summaryText = "Loading git changes...";
+	// Show/hide spinner based on loading state
+	if (changesLoadingSpinner) {
+		if (changesLoading) {
+			changesLoadingSpinner.classList.remove("hidden");
 		} else {
-			var totalChanges =
-				changesState.unstaged.length + changesState.staged.length;
-			summaryText =
-				totalChanges +
-				" changes (" +
-				changesState.unstaged.length +
-				" unstaged, " +
-				changesState.staged.length +
-				" staged)";
+			changesLoadingSpinner.classList.add("hidden");
 		}
+	}
+
+	if (changesSummary) {
+		var totalChanges =
+			changesState.unstaged.length + changesState.staged.length;
+		var summaryText =
+			totalChanges +
+			" changes (" +
+			changesState.unstaged.length +
+			" unstaged, " +
+			changesState.staged.length +
+			" staged)";
 		changesSummary.textContent = summaryText;
 	}
 
 	if (changesStatus) {
 		if (changesError) {
 			changesStatus.textContent = changesError;
-		} else if (changesLoading) {
-			changesStatus.textContent = "Loading...";
 		} else {
 			changesStatus.textContent = "";
 		}
@@ -878,8 +953,9 @@ function renderChangesPanel() {
 		if (selectedChangeDiff) {
 			changesDiffOutput.innerHTML = formatGitDiffHtml(selectedChangeDiff);
 			changesDiffOutput.classList.remove("empty");
-		} else if (changesLoading && selectedChangeFile) {
-			changesDiffOutput.textContent = "Loading diff...";
+		} else if (selectedChangeFile) {
+			// Empty state while loading or if diff is empty
+			changesDiffOutput.textContent = "";
 			changesDiffOutput.classList.add("empty");
 		} else {
 			changesDiffOutput.textContent =
@@ -1246,6 +1322,15 @@ function findChangeItem(filePath) {
 function bindChangePanelEvents() {
 	if (!changesSection) return;
 
+	// Click overlay backdrop to close (but not the panel itself)
+	if (changesModalOverlay) {
+		changesModalOverlay.onclick = function (e) {
+			if (e.target === changesModalOverlay) {
+				toggleChangesPanel(false);
+			}
+		};
+	}
+
 	if (changesRefreshBtn) {
 		changesRefreshBtn.onclick = function () {
 			void requestChangesRefresh();
@@ -1257,12 +1342,6 @@ function bindChangePanelEvents() {
 		};
 	}
 
-	changesSection
-		.querySelectorAll("[data-select-change-file]")
-		.forEach(function (btn) {
-			btn.onclick = function () {
-				var filePath = btn.getAttribute("data-select-change-file");
-				if (filePath) handleChangeFileSelect(filePath);
-			};
-		});
+	// Event delegation for file selection - handles dynamically rendered items
+	// (individual button handlers removed - using container delegation instead)
 }

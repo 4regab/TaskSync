@@ -119,6 +119,22 @@ body {
     display: block;
 }
 
+/* Vertical resizer for narrow split-view mode */
+.vert-resizer {
+    display: none;
+    /* Hidden by default, shown in narrow split-view via media query */
+    flex: 0 0 4px;
+    cursor: row-resize;
+    background: var(--vscode-panel-border);
+    transition: background 0.15s;
+    z-index: 10;
+}
+
+.vert-resizer:hover,
+.vert-resizer.active {
+    background: var(--vscode-focusBorder);
+}
+
 /* Hide back button in split view -- hub is always visible */
 .main-container.orch.split-view #thread-back-btn {
     display: none;
@@ -208,6 +224,14 @@ body {
     /* Hide horizontal resizer in narrow mode */
     .main-container.orch.split-view>.split-resizer {
         display: none;
+    }
+
+    /* Show vertical resizer in narrow split-view mode */
+    .main-container.orch.split-view>.vert-resizer {
+        display: block;
+        width: 100%;
+        height: 4px;
+        flex: 0 0 4px;
     }
 
     /* Show collapse bar in narrow mode */
@@ -1063,23 +1087,63 @@ body {
 }
 
 /* --- Changes / Code Review Panel --- */
+/* Code Review Modal Overlay */
+.changes-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 16px;
+    backdrop-filter: blur(2px);
+}
+
+.changes-modal-overlay.hidden {
+    display: none;
+}
+
 .changes-section {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin: 8px 4px 0 4px;
     padding: 12px;
     border: 1px solid var(--vscode-panel-border);
-    border-radius: 8px;
+    border-radius: 12px;
     background: var(--vscode-editor-background);
     flex-shrink: 0;
+    width: 100%;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
-.changes-section.hidden {
-    display: none;
+/* Modal-specific tweaks */
+.changes-modal-overlay .changes-content {
+    max-height: 70vh;
+    height: 70vh;
 }
 
-body:not(.remote-mode) .changes-section {
+.changes-modal-overlay .changes-diff-pane {
+    overflow: auto;
+    min-height: 200px;
+    max-height: none;
+}
+
+.changes-modal-overlay .changes-diff-output {
+    white-space: pre;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: none;
+}
+
+body:not(.remote-mode) .changes-modal-overlay {
     display: none !important;
 }
 
@@ -1105,6 +1169,16 @@ body:not(.remote-mode) .changes-section {
     font-size: 14px;
     font-weight: 600;
     color: var(--vscode-foreground);
+}
+
+.changes-loading-spinner {
+    display: inline-flex;
+    align-items: center;
+    color: var(--vscode-descriptionForeground);
+}
+
+.changes-loading-spinner.hidden {
+    display: none;
 }
 
 .changes-summary,
@@ -1185,11 +1259,12 @@ body:not(.remote-mode) .changes-section {
 
 .changes-content {
     display: grid;
-    grid-template-columns: minmax(200px, 0.85fr) minmax(280px, 1.35fr);
+    grid-template-columns: minmax(180px, 0.6fr) minmax(300px, 1.6fr);
     gap: 12px;
     min-height: 260px;
-    height: min(62vh, 620px);
+    height: min(50vh, 500px);
     overflow: hidden;
+    flex: 1 1 auto;
 }
 
 .changes-list-pane,
@@ -1197,7 +1272,9 @@ body:not(.remote-mode) .changes-section {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 8px;
     background: var(--vscode-input-background);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
     min-height: 0;
 }
 
@@ -1506,7 +1583,9 @@ body:not(.remote-mode) .changes-section {
         grid-template-columns: 1fr;
         grid-template-rows: minmax(120px, 0.9fr) minmax(220px, 1.35fr);
         min-height: 0;
-        height: min(68vh, 560px);
+        height: auto;
+        max-height: 55vh;
+        flex: 1 1 auto;
     }
 
     .changes-list-pane {
@@ -3674,6 +3753,46 @@ button#send-btn:disabled {
 .timeout-warning-disclaimer {
     font-size: 11px;
     color: var(--vscode-inputValidation-errorForeground, #f48771);
+    margin: 0 0 16px 0;
+    line-height: 1.4;
+}
+
+/* Simple Alert Modal (reusable info/warning/error alerts) */
+.simple-alert-modal {
+    max-width: 320px;
+}
+
+.simple-alert-header {
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.simple-alert-title {
+    color: var(--vscode-foreground);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.simple-alert-title .codicon {
+    font-size: 16px;
+    color: var(--vscode-notificationsInfoIcon-foreground, #3794ff);
+}
+
+.simple-alert-title .codicon.codicon-error {
+    color: var(--vscode-inputValidation-errorForeground, #f48771);
+}
+
+.simple-alert-title .codicon.codicon-warning {
+    color: var(--vscode-inputValidation-warningForeground, #cca700);
+}
+
+.simple-alert-content {
+    padding: 16px;
+}
+
+.simple-alert-text {
+    font-size: 12px;
+    color: var(--vscode-foreground);
     margin: 0 0 16px 0;
     line-height: 1.4;
 }

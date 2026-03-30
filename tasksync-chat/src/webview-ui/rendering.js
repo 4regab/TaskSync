@@ -603,6 +603,88 @@ function initSplitResizer() {
 }
 
 /**
+ * Initialise the vertical resizer for narrow split-view mode.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ * Works when split-view is enabled AND viewport is narrow (<=480px).
+ */
+function initVertResizer() {
+	var vertResizer = document.getElementById("vert-resizer");
+	if (!vertResizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	var hubEl = document.getElementById("workspace-hub");
+	if (!container || !hubEl) return;
+
+	var dragging = false;
+
+	function isNarrowSplitView() {
+		return splitViewEnabled && window.innerWidth <= 480;
+	}
+
+	function startDrag(e) {
+		if (!isNarrowSplitView()) return;
+		e.preventDefault();
+		dragging = true;
+		vertResizer.classList.add("active");
+		document.body.style.cursor = "row-resize";
+		document.body.style.userSelect = "none";
+	}
+
+	function onDrag(e) {
+		if (!dragging) return;
+		var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+		var rect = container.getBoundingClientRect();
+		var offset = clientY - rect.top;
+		var pct = (offset / rect.height) * 100;
+		// Clamp between 15% and 70%
+		pct = Math.min(70, Math.max(15, pct));
+		vertSplitRatio = Math.round(pct);
+		applyVertSplitRatio(vertSplitRatio);
+	}
+
+	function endDrag() {
+		if (!dragging) return;
+		dragging = false;
+		vertResizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	}
+
+	// Mouse events
+	vertResizer.addEventListener("mousedown", startDrag);
+	document.addEventListener("mousemove", onDrag);
+	document.addEventListener("mouseup", endDrag);
+
+	// Touch events for mobile
+	vertResizer.addEventListener("touchstart", startDrag, { passive: false });
+	document.addEventListener("touchmove", onDrag, { passive: false });
+	document.addEventListener("touchend", endDrag);
+
+	// Apply initial ratio if in narrow split-view mode
+	if (isNarrowSplitView() && vertSplitRatio) {
+		applyVertSplitRatio(vertSplitRatio);
+	}
+}
+
+/**
+ * Apply vertical split ratio to panels in narrow split-view mode.
+ * Sets hub max-height percentage to resize the stacked layout.
+ */
+function applyVertSplitRatio(pct) {
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+	if (!hubEl || !threadEl) return;
+
+	// Only apply in narrow split-view mode
+	if (!splitViewEnabled || window.innerWidth > 480) return;
+
+	hubEl.style.maxHeight = pct + "%";
+	hubEl.style.flex = "0 0 auto";
+	threadEl.style.flex = "1 1 0";
+}
+
+/**
  * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {

@@ -11,6 +11,7 @@ function createMockRepo(overrides: Partial<any> = {}) {
 			...overrides.state,
 		},
 		diffWithHEAD: vi.fn().mockResolvedValue("diff output"),
+		status: vi.fn().mockResolvedValue(undefined),
 		...overrides,
 	};
 }

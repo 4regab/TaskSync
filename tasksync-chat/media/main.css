@@ -547,7 +547,9 @@ body {
     max-width: 520px;
     margin: 0;
     line-height: 1.5;
-    text-align: center;
+    text-align: justify;
+    text-align-last: left;
+    text-justify: inter-word;
 }
 
 .welcome-autopilot-info strong {

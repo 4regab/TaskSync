@@ -236,5 +236,3 @@ let sessionSettingsOverlay,
 	ssAutopilotPromptInput,
 	ssSaveAutopilotPromptBtn,
 	ssCancelAutopilotPromptBtn;
-// Session-level override state (undefined = inherit workspace)
-let sessionSettingsHasOverrides = false;

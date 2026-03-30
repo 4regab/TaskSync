@@ -242,8 +242,7 @@ body {
     }
 }
 
-/* Hub Topbar & Thread Head */
-.topbar,
+/* Thread Head */
 .thread-head {
     display: flex;
     align-items: center;
@@ -251,31 +250,6 @@ body {
     gap: 8px;
     padding: 10px 12px;
     border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.topbar-spacer {
-    flex: 1 1 auto;
-}
-
-.brand img {
-    width: 16px;
-    height: 16px;
-    filter: brightness(0) invert(1);
-}
-
-.top-actions,
-.thread-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 .icon-btn {
@@ -369,11 +343,18 @@ body {
     -webkit-box-orient: vertical;
 }
 
-.thread-title {
+.thread-head-left {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
+}
+
+.thread-head-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .back {
@@ -391,11 +372,27 @@ body {
     background: var(--vscode-toolbar-hoverBackground);
 }
 
-.thread-title strong {
+.thread-head-left strong {
     font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.session-timer {
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--vscode-descriptionForeground, #8a8a8a);
+    white-space: nowrap;
+}
+
+.session-timer.active {
+    color: var(--vscode-foreground, #d4d4d4);
+}
+
+.session-timer.frozen {
+    color: var(--vscode-editorWarning-foreground, #d7ba7d);
 }
 
 .chat-container {
@@ -3892,15 +3889,20 @@ button#send-btn:disabled {
     content: "• ";
 }
 
-.session-thread-actions {
+.chat-row-top-actions {
     display: flex;
+    align-items: center;
     gap: 4px;
+    flex-shrink: 0;
+}
+
+.chat-row-top-actions .session-delete-btn {
     opacity: 0;
     transition: opacity 0.2s ease;
 }
 
-.chat-row:hover .session-thread-actions,
-.chat-row.active .session-thread-actions {
+.chat-row:hover .chat-row-top-actions .session-delete-btn,
+.chat-row.active .chat-row-top-actions .session-delete-btn {
     opacity: 1;
 }
 
@@ -4086,15 +4088,4 @@ button#send-btn:disabled {
     margin-left: auto;
     flex-shrink: 0;
     position: relative;
-}
-
-#thread-settings-btn.has-overrides::after {
-    content: "";
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background-color: var(--vscode-notificationsInfoIcon-foreground, #3794ff);
 }

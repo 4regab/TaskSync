@@ -63,12 +63,17 @@
     <!-- Thread Panel: Active Chat -->
     <div class="panel thread-shell hidden" id="thread-shell">
         <div class="thread-head" id="thread-head">
-            <div class="thread-title">
+            <div class="thread-head-left">
                 <span class="back icon-btn" id="thread-back-btn" title="Back to Sessions" role="button" tabindex="0">
                     <span class="codicon codicon-arrow-left"></span>
                 </span>
                 <strong id="thread-title">No session yet</strong>
-                <span id="thread-sub" class="hidden"></span>
+                <span id="thread-sub" class="session-timer hidden"></span>
+            </div>
+            <div class="thread-head-right">
+                <span class="icon-btn" id="thread-edit-btn" title="Rename Session" role="button" tabindex="0">
+                    <span class="codicon codicon-edit"></span>
+                </span>
                 <span class="icon-btn" id="thread-settings-btn" title="Session Settings" role="button" tabindex="0">
                     <span class="codicon codicon-gear"></span>
                 </span>

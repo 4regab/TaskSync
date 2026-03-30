@@ -236,7 +236,18 @@ function mapToRemoteMessage(msg) {
 			return null;
 		// Multi-session operations — forward to server as-is
 		case "switchSession":
-			return { type: "switchSession", sessionId: msg.sessionId || "" };
+			if (!msg.sessionId) {
+				// Back to hub — handle locally, no server round-trip needed
+				activeSessionId = null;
+				updateWelcomeSectionVisibility();
+				renderSessionsList();
+				return null;
+			}
+			// Optimistic update: switch view immediately, server will confirm
+			activeSessionId = msg.sessionId;
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
+			return { type: "switchSession", sessionId: msg.sessionId };
 		case "deleteSession":
 			return { type: "deleteSession", sessionId: msg.sessionId || "" };
 		case "archiveSession":

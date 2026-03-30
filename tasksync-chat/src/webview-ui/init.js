@@ -39,6 +39,18 @@ function init() {
 				settingsBtn.addEventListener("click", function () {
 					openSettingsModal();
 				});
+			var remoteSplitBtn = document.getElementById("remote-split-btn");
+			if (remoteSplitBtn)
+				remoteSplitBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					toggleSplitView();
+				});
+			var historyBtn = document.getElementById("remote-history-btn");
+			if (historyBtn)
+				historyBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					openHistoryModal();
+				});
 			// Hide attach button (VS Code-only)
 			var attachBtn = document.getElementById("attach-btn");
 			if (attachBtn) attachBtn.style.display = "none";
@@ -55,6 +67,8 @@ function init() {
 		if (splitViewEnabled) {
 			var container = document.querySelector(".main-container.orch");
 			if (container) container.classList.add("split-view");
+			var remoteSplitBtn = document.getElementById("remote-split-btn");
+			if (remoteSplitBtn) remoteSplitBtn.classList.add("active");
 		}
 		initSplitResizer();
 
@@ -159,21 +173,7 @@ function cacheDOMElements() {
 	changesDiffOutput = document.getElementById("changes-diff-output");
 	threadBackBtn = document.getElementById("thread-back-btn");
 	threadSettingsBtn = document.getElementById("thread-settings-btn");
-	remoteSessionTimerEl =
-		document.getElementById("remote-session-timer") ||
-		document.getElementById("thread-sub");
-	if (!remoteSessionTimerEl && isRemoteMode) {
-		var remoteHeaderLeft = document.querySelector(".remote-header-left");
-		if (remoteHeaderLeft) {
-			var timerSpan = document.createElement("span");
-			timerSpan.id = "remote-session-timer";
-			timerSpan.className = "remote-session-timer inactive";
-			timerSpan.textContent = "0s";
-			timerSpan.title = "Session timer (idle)";
-			remoteHeaderLeft.appendChild(timerSpan);
-			remoteSessionTimerEl = timerSpan;
-		}
-	}
+	remoteSessionTimerEl = document.getElementById("thread-sub");
 	autopilotToggle = document.getElementById("autopilot-toggle");
 	toolHistoryArea = document.getElementById("tool-history-area");
 	chatStreamArea = document.getElementById("chat-stream-area");

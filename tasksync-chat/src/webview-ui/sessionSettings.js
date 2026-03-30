@@ -107,9 +107,6 @@ function resetSessionSettings() {
 }
 
 function populateSessionSettings(msg) {
-	sessionSettingsHasOverrides = msg.isDefault === false;
-	updateSessionSettingsGearIndicator();
-
 	// Autopilot toggle
 	setToggle(ssAutopilotToggle, msg.autopilotEnabled === true);
 
@@ -139,14 +136,6 @@ function populateSessionSettings(msg) {
 
 	// Always Append Reminder toggle
 	setToggle(ssAlwaysAppendReminderToggle, msg.alwaysAppendReminder === true);
-}
-
-function updateSessionSettingsGearIndicator() {
-	if (!threadSettingsBtn) return;
-	threadSettingsBtn.classList.toggle(
-		"has-overrides",
-		sessionSettingsHasOverrides,
-	);
 }
 
 // --- Session toggle functions ---

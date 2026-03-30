@@ -30,8 +30,6 @@ function handleExtensionMessage(event) {
 			currentSessionCalls = message.history || [];
 			_inputHistoryCache = null; // Invalidate cache when session updates
 			renderCurrentSession();
-			// Hide welcome section if we have completed tool calls
-			updateWelcomeSectionVisibility();
 			// Auto-scroll to bottom after rendering
 			scrollToBottom();
 			break;

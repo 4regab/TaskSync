@@ -93,6 +93,56 @@ function bindEventListeners() {
 	if (threadSettingsBtn)
 		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
 
+	var threadEditBtn = document.getElementById("thread-edit-btn");
+	if (threadEditBtn) {
+		threadEditBtn.addEventListener("click", function () {
+			var titleEl = document.getElementById("thread-title");
+			if (!titleEl || !activeSessionId) return;
+			var currentTitle = titleEl.textContent || "";
+			var input = document.createElement("input");
+			input.type = "text";
+			input.className = "session-rename-input";
+			input.value = currentTitle;
+			input.maxLength = 50;
+			titleEl.replaceWith(input);
+			input.focus();
+			input.select();
+
+			var committed = false;
+			function commit() {
+				if (committed) return;
+				committed = true;
+				var newTitle = input.value.trim();
+				var strong = document.createElement("strong");
+				strong.id = "thread-title";
+				strong.textContent = newTitle || currentTitle;
+				input.replaceWith(strong);
+				if (newTitle && newTitle !== currentTitle) {
+					vscode.postMessage({
+						type: "updateSessionTitle",
+						sessionId: activeSessionId,
+						title: newTitle,
+					});
+				}
+			}
+
+			input.addEventListener("keydown", function (ev) {
+				if (ev.key === "Enter") {
+					ev.preventDefault();
+					commit();
+				} else if (ev.key === "Escape") {
+					ev.preventDefault();
+					committed = true;
+					var strong = document.createElement("strong");
+					strong.id = "thread-title";
+					strong.textContent = currentTitle;
+					input.replaceWith(strong);
+				}
+			});
+			input.addEventListener("blur", commit);
+		});
+	}
+
 	// Session settings modal events
 	bindSessionSettingsEvents();
 

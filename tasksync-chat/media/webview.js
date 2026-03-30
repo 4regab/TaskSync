@@ -288,7 +288,18 @@ function mapToRemoteMessage(msg) {
 			return null;
 		// Multi-session operations — forward to server as-is
 		case "switchSession":
-			return { type: "switchSession", sessionId: msg.sessionId || "" };
+			if (!msg.sessionId) {
+				// Back to hub — handle locally, no server round-trip needed
+				activeSessionId = null;
+				updateWelcomeSectionVisibility();
+				renderSessionsList();
+				return null;
+			}
+			// Optimistic update: switch view immediately, server will confirm
+			activeSessionId = msg.sessionId;
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
+			return { type: "switchSession", sessionId: msg.sessionId };
 		case "deleteSession":
 			return { type: "deleteSession", sessionId: msg.sessionId || "" };
 		case "archiveSession":
@@ -1100,8 +1111,6 @@ let sessionSettingsOverlay,
 	ssAutopilotPromptInput,
 	ssSaveAutopilotPromptBtn,
 	ssCancelAutopilotPromptBtn;
-// Session-level override state (undefined = inherit workspace)
-let sessionSettingsHasOverrides = false;
 function init() {
 	try {
 		cacheDOMElements();
@@ -1143,6 +1152,18 @@ function init() {
 				settingsBtn.addEventListener("click", function () {
 					openSettingsModal();
 				});
+			var remoteSplitBtn = document.getElementById("remote-split-btn");
+			if (remoteSplitBtn)
+				remoteSplitBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					toggleSplitView();
+				});
+			var historyBtn = document.getElementById("remote-history-btn");
+			if (historyBtn)
+				historyBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					openHistoryModal();
+				});
 			// Hide attach button (VS Code-only)
 			var attachBtn = document.getElementById("attach-btn");
 			if (attachBtn) attachBtn.style.display = "none";
@@ -1159,6 +1180,8 @@ function init() {
 		if (splitViewEnabled) {
 			var container = document.querySelector(".main-container.orch");
 			if (container) container.classList.add("split-view");
+			var remoteSplitBtn = document.getElementById("remote-split-btn");
+			if (remoteSplitBtn) remoteSplitBtn.classList.add("active");
 		}
 		initSplitResizer();
 
@@ -1263,21 +1286,7 @@ function cacheDOMElements() {
 	changesDiffOutput = document.getElementById("changes-diff-output");
 	threadBackBtn = document.getElementById("thread-back-btn");
 	threadSettingsBtn = document.getElementById("thread-settings-btn");
-	remoteSessionTimerEl =
-		document.getElementById("remote-session-timer") ||
-		document.getElementById("thread-sub");
-	if (!remoteSessionTimerEl && isRemoteMode) {
-		var remoteHeaderLeft = document.querySelector(".remote-header-left");
-		if (remoteHeaderLeft) {
-			var timerSpan = document.createElement("span");
-			timerSpan.id = "remote-session-timer";
-			timerSpan.className = "remote-session-timer inactive";
-			timerSpan.textContent = "0s";
-			timerSpan.title = "Session timer (idle)";
-			remoteHeaderLeft.appendChild(timerSpan);
-			remoteSessionTimerEl = timerSpan;
-		}
-	}
+	remoteSessionTimerEl = document.getElementById("thread-sub");
 	autopilotToggle = document.getElementById("autopilot-toggle");
 	toolHistoryArea = document.getElementById("tool-history-area");
 	chatStreamArea = document.getElementById("chat-stream-area");
@@ -2376,6 +2385,56 @@ function bindEventListeners() {
 	if (threadSettingsBtn)
 		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
 
+	var threadEditBtn = document.getElementById("thread-edit-btn");
+	if (threadEditBtn) {
+		threadEditBtn.addEventListener("click", function () {
+			var titleEl = document.getElementById("thread-title");
+			if (!titleEl || !activeSessionId) return;
+			var currentTitle = titleEl.textContent || "";
+			var input = document.createElement("input");
+			input.type = "text";
+			input.className = "session-rename-input";
+			input.value = currentTitle;
+			input.maxLength = 50;
+			titleEl.replaceWith(input);
+			input.focus();
+			input.select();
+
+			var committed = false;
+			function commit() {
+				if (committed) return;
+				committed = true;
+				var newTitle = input.value.trim();
+				var strong = document.createElement("strong");
+				strong.id = "thread-title";
+				strong.textContent = newTitle || currentTitle;
+				input.replaceWith(strong);
+				if (newTitle && newTitle !== currentTitle) {
+					vscode.postMessage({
+						type: "updateSessionTitle",
+						sessionId: activeSessionId,
+						title: newTitle,
+					});
+				}
+			}
+
+			input.addEventListener("keydown", function (ev) {
+				if (ev.key === "Enter") {
+					ev.preventDefault();
+					commit();
+				} else if (ev.key === "Escape") {
+					ev.preventDefault();
+					committed = true;
+					var strong = document.createElement("strong");
+					strong.id = "thread-title";
+					strong.textContent = currentTitle;
+					input.replaceWith(strong);
+				}
+			});
+			input.addEventListener("blur", commit);
+		});
+	}
+
 	// Session settings modal events
 	bindSessionSettingsEvents();
 
@@ -3287,8 +3346,6 @@ function handleExtensionMessage(event) {
 			currentSessionCalls = message.history || [];
 			_inputHistoryCache = null; // Invalidate cache when session updates
 			renderCurrentSession();
-			// Hide welcome section if we have completed tool calls
-			updateWelcomeSectionVisibility();
 			// Auto-scroll to bottom after rendering
 			scrollToBottom();
 			break;
@@ -4271,6 +4328,10 @@ function toggleSplitView() {
 	if (resizer) {
 		resizer.classList.toggle("hidden", !splitViewEnabled);
 	}
+	var remoteSplitBtn = document.getElementById("remote-split-btn");
+	if (remoteSplitBtn) {
+		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+	}
 	if (splitViewEnabled) {
 		applySplitRatio(splitRatio);
 	} else {
@@ -4486,25 +4547,18 @@ function renderSessionsList() {
 				'<strong class="session-title">' +
 				escapeHtml(session.title) +
 				"</strong>" +
-				"<span>" +
+				'<span class="chat-row-top-actions">' +
 				escapeHtml(timeStr) +
-				"</span>" +
-				"</div>" +
-				'<div class="chat-row-preview">' +
-				escapeHtml(promptPreview).substring(0, 100) +
-				"</div>" +
-				"</div>" +
-				'<div class="session-thread-actions">' +
-				'<button class="session-action-btn session-rename-btn" data-rename-session-id="' +
-				escapeHtml(session.id) +
-				'" title="Rename session" aria-label="Rename session ' +
-				escapeHtml(session.title) +
-				'"><span class="codicon codicon-edit"></span></button>' +
 				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
 				escapeHtml(session.id) +
 				'" title="Delete session" aria-label="Delete session ' +
 				escapeHtml(session.title) +
 				'"><span class="codicon codicon-trash"></span></button>' +
+				"</span>" +
+				"</div>" +
+				'<div class="chat-row-preview">' +
+				escapeHtml(promptPreview).substring(0, 100) +
+				"</div>" +
 				"</div>" +
 				"</div>"
 			);
@@ -4532,64 +4586,6 @@ function renderSessionsList() {
 				if (sessionId) {
 					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
 				}
-			});
-		});
-
-	sessionsListEl
-		.querySelectorAll(".session-rename-btn")
-		.forEach(function (btn) {
-			btn.addEventListener("click", function (e) {
-				e.stopPropagation();
-				var row = btn.closest(".chat-row");
-				if (!row) return;
-				var sessionId = btn.getAttribute("data-rename-session-id");
-				var titleEl = row.querySelector(".session-title");
-				if (!titleEl || !sessionId) return;
-
-				var currentTitle = titleEl.textContent || "";
-				var input = document.createElement("input");
-				input.type = "text";
-				input.className = "session-rename-input";
-				input.value = currentTitle;
-				input.maxLength = 50;
-				titleEl.replaceWith(input);
-				input.focus();
-				input.select();
-
-				var committed = false;
-				function commit() {
-					if (committed) return;
-					committed = true;
-					var newTitle = input.value.trim();
-					if (newTitle && newTitle !== currentTitle) {
-						vscode.postMessage({
-							type: "updateSessionTitle",
-							sessionId: sessionId,
-							title: newTitle,
-						});
-					} else {
-						// Revert — re-render will fix it, but restore immediately for UX
-						var strong = document.createElement("strong");
-						strong.className = "session-title";
-						strong.textContent = currentTitle;
-						input.replaceWith(strong);
-					}
-				}
-
-				input.addEventListener("keydown", function (ev) {
-					if (ev.key === "Enter") {
-						ev.preventDefault();
-						commit();
-					} else if (ev.key === "Escape") {
-						ev.preventDefault();
-						committed = true; // prevent blur from committing
-						var strong = document.createElement("strong");
-						strong.className = "session-title";
-						strong.textContent = currentTitle;
-						input.replaceWith(strong);
-					}
-				});
-				input.addEventListener("blur", commit);
 			});
 		});
 }
@@ -5920,9 +5916,6 @@ function resetSessionSettings() {
 }
 
 function populateSessionSettings(msg) {
-	sessionSettingsHasOverrides = msg.isDefault === false;
-	updateSessionSettingsGearIndicator();
-
 	// Autopilot toggle
 	setToggle(ssAutopilotToggle, msg.autopilotEnabled === true);
 
@@ -5952,14 +5945,6 @@ function populateSessionSettings(msg) {
 
 	// Always Append Reminder toggle
 	setToggle(ssAlwaysAppendReminderToggle, msg.alwaysAppendReminder === true);
-}
-
-function updateSessionSettingsGearIndicator() {
-	if (!threadSettingsBtn) return;
-	threadSettingsBtn.classList.toggle(
-		"has-overrides",
-		sessionSettingsHasOverrides,
-	);
 }
 
 // --- Session toggle functions ---

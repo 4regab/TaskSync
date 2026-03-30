@@ -527,6 +527,10 @@ function toggleSplitView() {
 	if (resizer) {
 		resizer.classList.toggle("hidden", !splitViewEnabled);
 	}
+	var remoteSplitBtn = document.getElementById("remote-split-btn");
+	if (remoteSplitBtn) {
+		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+	}
 	if (splitViewEnabled) {
 		applySplitRatio(splitRatio);
 	} else {
@@ -742,25 +746,18 @@ function renderSessionsList() {
 				'<strong class="session-title">' +
 				escapeHtml(session.title) +
 				"</strong>" +
-				"<span>" +
+				'<span class="chat-row-top-actions">' +
 				escapeHtml(timeStr) +
-				"</span>" +
-				"</div>" +
-				'<div class="chat-row-preview">' +
-				escapeHtml(promptPreview).substring(0, 100) +
-				"</div>" +
-				"</div>" +
-				'<div class="session-thread-actions">' +
-				'<button class="session-action-btn session-rename-btn" data-rename-session-id="' +
-				escapeHtml(session.id) +
-				'" title="Rename session" aria-label="Rename session ' +
-				escapeHtml(session.title) +
-				'"><span class="codicon codicon-edit"></span></button>' +
 				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
 				escapeHtml(session.id) +
 				'" title="Delete session" aria-label="Delete session ' +
 				escapeHtml(session.title) +
 				'"><span class="codicon codicon-trash"></span></button>' +
+				"</span>" +
+				"</div>" +
+				'<div class="chat-row-preview">' +
+				escapeHtml(promptPreview).substring(0, 100) +
+				"</div>" +
 				"</div>" +
 				"</div>"
 			);
@@ -788,64 +785,6 @@ function renderSessionsList() {
 				if (sessionId) {
 					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
 				}
-			});
-		});
-
-	sessionsListEl
-		.querySelectorAll(".session-rename-btn")
-		.forEach(function (btn) {
-			btn.addEventListener("click", function (e) {
-				e.stopPropagation();
-				var row = btn.closest(".chat-row");
-				if (!row) return;
-				var sessionId = btn.getAttribute("data-rename-session-id");
-				var titleEl = row.querySelector(".session-title");
-				if (!titleEl || !sessionId) return;
-
-				var currentTitle = titleEl.textContent || "";
-				var input = document.createElement("input");
-				input.type = "text";
-				input.className = "session-rename-input";
-				input.value = currentTitle;
-				input.maxLength = 50;
-				titleEl.replaceWith(input);
-				input.focus();
-				input.select();
-
-				var committed = false;
-				function commit() {
-					if (committed) return;
-					committed = true;
-					var newTitle = input.value.trim();
-					if (newTitle && newTitle !== currentTitle) {
-						vscode.postMessage({
-							type: "updateSessionTitle",
-							sessionId: sessionId,
-							title: newTitle,
-						});
-					} else {
-						// Revert — re-render will fix it, but restore immediately for UX
-						var strong = document.createElement("strong");
-						strong.className = "session-title";
-						strong.textContent = currentTitle;
-						input.replaceWith(strong);
-					}
-				}
-
-				input.addEventListener("keydown", function (ev) {
-					if (ev.key === "Enter") {
-						ev.preventDefault();
-						commit();
-					} else if (ev.key === "Escape") {
-						ev.preventDefault();
-						committed = true; // prevent blur from committing
-						var strong = document.createElement("strong");
-						strong.className = "session-title";
-						strong.textContent = currentTitle;
-						input.replaceWith(strong);
-					}
-				});
-				input.addEventListener("blur", commit);
 			});
 		});
 }

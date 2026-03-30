@@ -446,15 +446,10 @@ export class TaskSyncWebviewProvider
 	}
 
 	public _bindSession(sessionId: string): ChatSession {
-		const session = this._ensureSession(
+		return this._ensureSession(
 			sessionId,
 			this._sessionManager.getNextAgentTitle(),
 		);
-		for (const entry of session.history) {
-			entry.sessionId ??= session.id;
-			this._currentSessionCallsMap.set(entry.id, entry);
-		}
-		return session;
 	}
 
 	public createSessionForMissingId(): ChatSession {

@@ -346,6 +346,12 @@ function bindSessionSettingsEvents() {
 			}
 		});
 	}
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.addEventListener("input", ssValidateAutoAppendText);
+	}
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.addEventListener("click", ssSaveAutoAppendAsDefault);
+	}
 	if (ssAddAutopilotPromptBtn)
 		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
 	if (ssSaveAutopilotPromptBtn)

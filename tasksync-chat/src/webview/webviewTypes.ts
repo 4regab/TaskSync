@@ -183,6 +183,8 @@ export type ToWebviewMessage =
 			autopilotPrompts: string[];
 			autoAppendEnabled: boolean;
 			autoAppendText: string;
+			/** Workspace-level default text for auto-append (for dirty-check in UI). */
+			workspaceDefaultAutoAppendText: string;
 			/** True when all values match TaskSync's per-session defaults. */
 			isDefault: boolean;
 	  };
@@ -269,4 +271,5 @@ export type FromWebviewMessage =
 			autoAppendText?: string;
 	  }
 	| { type: "resetSessionSettings" }
-	| { type: "requestSessionSettings" };
+	| { type: "requestSessionSettings" }
+	| { type: "saveAutoAppendAsWorkspaceDefault" };

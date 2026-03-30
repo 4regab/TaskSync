@@ -3909,7 +3909,10 @@ button#send-btn:disabled {
 .new-session-btn-row {
     display: flex;
     gap: 8px;
-    justify-content: flex-end;
+}
+.new-session-btn-row .form-btn {
+    flex: 1 1 auto;
+    text-align: center;
 }
 
 /* --- Sessions List Area --- */
@@ -4216,4 +4219,35 @@ button#send-btn:disabled {
     margin-left: auto;
     flex-shrink: 0;
     position: relative;
+}
+
+/* Auto Append validation error */
+.ss-auto-append-error {
+    color: var(--vscode-errorForeground);
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+/* Save as Workspace Default button */
+.ss-save-default-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.ss-save-default-btn:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.ss-save-default-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
 }

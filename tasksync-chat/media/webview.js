@@ -1140,6 +1140,8 @@ let sessionSettingsOverlay,
 	ssAutopilotToggle,
 	ssAutoAppendToggle,
 	ssAutoAppendTextInput,
+	ssAutoAppendError,
+	ssSaveAsDefaultBtn,
 	ssAutopilotPromptsList,
 	ssAddAutopilotPromptBtn,
 	ssAddAutopilotPromptForm,
@@ -1914,13 +1916,16 @@ function createSessionSettingsModal() {
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
 		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
-		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. Leave it blank to append nothing. The AskUser reminder is configured globally in Settings.">' +
+		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. The AskUser reminder is configured globally in Settings.">' +
 		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
 		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
 		"</div>" +
 		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
 		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response in this session" maxlength="2000"></textarea>' +
+		'<div class="ss-auto-append-error hidden" id="ss-auto-append-error">Enter text to append, or disable Auto Append.</div>' +
+		'<button class="form-btn form-btn-secondary ss-save-default-btn hidden" id="ss-save-as-default-btn" title="Save these Auto Append settings as the default for all new sessions">' +
+		'<span class="codicon codicon-save"></span> Save as Workspace Default</button>' +
 		"</div>";
 	ssContent.appendChild(ssAutoAppendSection);
 
@@ -1934,6 +1939,8 @@ function createSessionSettingsModal() {
 	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
 	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
 	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
+	ssAutoAppendError = document.getElementById("ss-auto-append-error");
+	ssSaveAsDefaultBtn = document.getElementById("ss-save-as-default-btn");
 	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
 	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
 	ssAddAutopilotPromptForm = document.getElementById(
@@ -2005,13 +2012,6 @@ function createSessionActionModal(config) {
 
 	var btnRow = document.createElement("div");
 	btnRow.className = "new-session-btn-row";
-	var cancelBtn = document.createElement("button");
-	cancelBtn.className = "form-btn form-btn-cancel";
-	cancelBtn.textContent = "Cancel";
-	cancelBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-	});
-	btnRow.appendChild(cancelBtn);
 
 	var actions = Array.isArray(config.actions)
 		? config.actions
@@ -2027,6 +2027,7 @@ function createSessionActionModal(config) {
 		var actionBtn = document.createElement("button");
 		actionBtn.className = action.className || "form-btn form-btn-save";
 		actionBtn.textContent = action.label;
+		if (action.id) actionBtn.id = action.id;
 		actionBtn.addEventListener("click", function () {
 			closeSessionActionModal(overlay);
 			if (typeof action.onClick === "function") {
@@ -2096,18 +2097,19 @@ function createNewSessionModal() {
 		noteHtml:
 			'<span class="codicon codicon-info"></span> Please check the model and agent preselected in VS Code Chat before starting.',
 		warningText:
-			"Start a fresh Copilot chat, or stop the current TaskSync session and start a fresh one.",
+			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
 		actions: [
 			{
-				label: "Start New Session",
+				label: "New Session",
 				className: "form-btn form-btn-save",
 				onClick: function () {
 					submitNewSessionAction(false);
 				},
 			},
 			{
-				label: "Stop and Start New Session",
+				label: "End & New Session",
+				id: "new-session-end-btn",
 				className: "form-btn form-btn-save",
 				onClick: function () {
 					submitNewSessionAction(true);
@@ -2139,6 +2141,25 @@ function submitNewSessionAction(stopCurrentSession) {
 
 function openNewSessionModal() {
 	if (!newSessionModalOverlay) return;
+	// Show "End & New Session" only when the active session is non-terminated
+	var endBtn = document.getElementById("new-session-end-btn"); // ssot-id-allowed — dynamically created in createSessionActionModal
+	var activeSession =
+		activeSessionId &&
+		Array.isArray(sessions) &&
+		sessions.find(function (s) {
+			return s.id === activeSessionId;
+		});
+	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	if (endBtn) {
+		endBtn.classList.toggle("hidden", !hasActiveSession);
+	}
+	// Update warning text based on whether there's an active session
+	var warningEl = newSessionModalOverlay.querySelector(".new-session-warning");
+	if (warningEl) {
+		warningEl.textContent = hasActiveSession
+			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
+			: "Start a fresh Copilot chat session.";
+	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
 	var queueLabel = document.getElementById("new-session-queue-label");
@@ -2810,6 +2831,12 @@ function bindSessionSettingsEvents() {
 				ssToggleAutoAppend();
 			}
 		});
+	}
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.addEventListener("input", ssValidateAutoAppendText);
+	}
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.addEventListener("click", ssSaveAutoAppendAsDefault);
 	}
 	if (ssAddAutopilotPromptBtn)
 		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
@@ -6115,6 +6142,8 @@ function deletePrompt(id) {
 
 // Local state for session-level autopilot prompts (managed entirely in the modal)
 var ssAutopilotPromptsLocal = [];
+// Workspace-level default auto-append text (for dirty-check on save button)
+var ssWorkspaceDefaultAutoAppendText = "";
 
 // Shared prompt-list UI for session settings (delegates rendering/CRUD to promptListUI.js)
 var sessionPromptListUI = createPromptListUI({
@@ -6230,6 +6259,12 @@ function populateSessionSettings(msg) {
 	// Auto Append toggle
 	setToggle(ssAutoAppendToggle, msg.autoAppendEnabled === true);
 
+	// Store workspace default for dirty-check
+	ssWorkspaceDefaultAutoAppendText =
+		typeof msg.workspaceDefaultAutoAppendText === "string"
+			? msg.workspaceDefaultAutoAppendText
+			: "";
+
 	// Auto Append text row visibility
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
 	if (ssAutoAppendTextRow) {
@@ -6244,6 +6279,8 @@ function populateSessionSettings(msg) {
 		ssAutoAppendTextInput.value =
 			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
 	}
+
+	ssValidateAutoAppendText();
 }
 
 // --- Session toggle functions ---
@@ -6261,6 +6298,50 @@ function ssToggleAutoAppend() {
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
 	if (ssAutoAppendTextRow) {
 		ssAutoAppendTextRow.classList.toggle("hidden", !active);
+	}
+	ssValidateAutoAppendText();
+}
+
+/** Show/hide the error message and save-as-default button based on toggle + text state. */
+function ssValidateAutoAppendText() {
+	var isActive =
+		ssAutoAppendToggle && ssAutoAppendToggle.classList.contains("active");
+	var text = ssAutoAppendTextInput ? ssAutoAppendTextInput.value.trim() : "";
+	if (ssAutoAppendError) {
+		ssAutoAppendError.classList.toggle(
+			"hidden",
+			!(isActive && text.length === 0),
+		);
+	}
+	if (ssSaveAsDefaultBtn) {
+		// Show only when toggle ON, text is non-empty, and text differs from workspace default
+		var isDirty = text !== ssWorkspaceDefaultAutoAppendText;
+		ssSaveAsDefaultBtn.classList.toggle(
+			"hidden",
+			!(isActive && text.length > 0 && isDirty),
+		);
+	}
+}
+
+/** Save current auto-append settings as the workspace default for new sessions. */
+function ssSaveAutoAppendAsDefault() {
+	// Flush current modal state to the session first — messages are processed in order
+	saveSessionSettings();
+	vscode.postMessage({ type: "saveAutoAppendAsWorkspaceDefault" });
+	// Update cached default so button hides (text is now the new default)
+	ssWorkspaceDefaultAutoAppendText = ssAutoAppendTextInput
+		? ssAutoAppendTextInput.value.trim()
+		: "";
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.textContent = "\u2713 Saved";
+		ssSaveAsDefaultBtn.disabled = true;
+		setTimeout(function () {
+			if (ssSaveAsDefaultBtn) {
+				ssSaveAsDefaultBtn.innerHTML =
+					'<span class="codicon codicon-save"></span> Save as Workspace Default';
+				ssSaveAsDefaultBtn.disabled = false;
+			}
+		}, 2000);
 	}
 }
 // ===== SLASH COMMAND FUNCTIONS =====

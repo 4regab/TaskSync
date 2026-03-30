@@ -69,12 +69,12 @@ export function activate(context: vscode.ExtensionContext): void {
 			const answer = await vscode.window.showWarningMessage(
 				"Choose how to start the next TaskSync session.",
 				{ modal: true },
-				"Start New Session",
-				"Stop and Start New Session",
+				"New Session",
+				"End & New Session",
 			);
-			if (answer === "Start New Session") {
+			if (answer === "New Session") {
 				await provider.startNewSessionAndResetCopilotChat();
-			} else if (answer === "Stop and Start New Session") {
+			} else if (answer === "End & New Session") {
 				await provider.startNewSessionAndResetCopilotChat({
 					stopCurrentSession: true,
 				});

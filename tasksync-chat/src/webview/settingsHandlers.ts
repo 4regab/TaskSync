@@ -74,6 +74,11 @@ export function normalizeAutoAppendText(text: string): string {
 	return text.trim();
 }
 
+/** SSOT: auto-append can only be enabled when normalized text is non-empty. */
+export function isAutoAppendTextPresent(text: string): boolean {
+	return normalizeAutoAppendText(text).length > 0;
+}
+
 export function applyAutoAppendToResponse(p: P, response: string): string {
 	return buildFinalResponseText(
 		response,
@@ -153,6 +158,11 @@ export function loadSettings(p: P): void {
 		typeof activeSession?.autoAppendText === "string"
 			? normalizeAutoAppendText(activeSession.autoAppendText)
 			: "";
+	// Auto-disable when text is empty — protects against stale sessions from older versions
+	if (p._autoAppendEnabled && !isAutoAppendTextPresent(p._autoAppendText)) {
+		p._autoAppendEnabled = false;
+		if (activeSession) activeSession.autoAppendEnabled = false;
+	}
 	p._alwaysAppendReminder = config.get<boolean>(
 		"alwaysAppendAskUserReminder",
 		false,
@@ -333,10 +343,16 @@ export async function handleUpdateAutoAppendSetting(
 	p: P,
 	enabled: boolean,
 ): Promise<void> {
-	p._autoAppendEnabled = enabled;
 	const activeSession = p._sessionManager?.getActiveSession?.();
+	// Auto-disable when text is empty — nothing to append
+	const effectiveEnabled =
+		enabled &&
+		isAutoAppendTextPresent(
+			activeSession?.autoAppendText ?? p._autoAppendText ?? "",
+		);
+	p._autoAppendEnabled = effectiveEnabled;
 	if (activeSession) {
-		activeSession.autoAppendEnabled = enabled;
+		activeSession.autoAppendEnabled = effectiveEnabled;
 		p._saveSessionsToDisk?.();
 	}
 	updateSettingsUI(p);
@@ -353,6 +369,14 @@ export async function handleUpdateAutoAppendText(
 	const activeSession = p._sessionManager?.getActiveSession?.();
 	if (activeSession) {
 		activeSession.autoAppendText = normalizedText;
+		// Auto-disable when text is cleared
+		if (
+			!isAutoAppendTextPresent(normalizedText) &&
+			activeSession.autoAppendEnabled
+		) {
+			activeSession.autoAppendEnabled = false;
+			p._autoAppendEnabled = false;
+		}
 		p._saveSessionsToDisk?.();
 	}
 	updateSettingsUI(p);
@@ -755,6 +779,7 @@ export function buildSessionSettingsPayload(p: P): {
 	autopilotPrompts: string[];
 	autoAppendEnabled: boolean;
 	autoAppendText: string;
+	workspaceDefaultAutoAppendText: string;
 	isDefault: boolean;
 } {
 	const session = p._sessionManager?.getActiveSession?.();
@@ -773,12 +798,18 @@ export function buildSessionSettingsPayload(p: P): {
 			session.autoAppendEnabled !== true &&
 			normalizeAutoAppendText(session.autoAppendText ?? "").length === 0);
 
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+	const workspaceDefaultAutoAppendText = normalizeAutoAppendText(
+		config.get<string>("autoAppendText", "") ?? "",
+	);
+
 	return {
 		type: "sessionSettingsState",
 		autopilotEnabled,
 		autopilotPrompts,
 		autoAppendEnabled,
 		autoAppendText,
+		workspaceDefaultAutoAppendText,
 		isDefault,
 	} satisfies ToWebviewMessage;
 }
@@ -820,14 +851,18 @@ export function handleUpdateSessionSettings(
 			p._autopilotIndex = 0;
 		}
 	}
-	if (msg.autoAppendEnabled !== undefined) {
-		session.autoAppendEnabled = msg.autoAppendEnabled;
-		p._autoAppendEnabled = msg.autoAppendEnabled;
-	}
 	if (msg.autoAppendText !== undefined) {
 		const normalized = normalizeAutoAppendText(msg.autoAppendText);
 		session.autoAppendText = normalized;
 		p._autoAppendText = normalized;
+	}
+	if (msg.autoAppendEnabled !== undefined) {
+		// Auto-disable when text is empty — nothing to append
+		const effectiveEnabled =
+			msg.autoAppendEnabled &&
+			isAutoAppendTextPresent(session.autoAppendText ?? "");
+		session.autoAppendEnabled = effectiveEnabled;
+		p._autoAppendEnabled = effectiveEnabled;
 	}
 
 	p._saveSessionsToDisk?.();
@@ -845,15 +880,40 @@ export function handleResetSessionSettings(p: P): void {
 	const session = p._sessionManager?.getActiveSession?.();
 	if (!session) return;
 
+	const config = vscode?.workspace?.getConfiguration?.(CONFIG_SECTION);
 	session.autopilotEnabled = false;
 	session.autopilotText = undefined;
 	session.autopilotPrompts = [];
+	const resetText = normalizeAutoAppendText(
+		config?.get<string>("autoAppendText", "") ?? "",
+	);
 	session.autoAppendEnabled = false;
-	session.autoAppendText = "";
+	session.autoAppendText = resetText;
 
 	loadSettings(p);
 	p._saveSessionsToDisk?.();
 	updateSettingsUI(p);
 	sendSessionSettingsToWebview(p);
 	broadcastAllSettingsToRemote(p);
+}
+
+/**
+ * Persist current session's auto-append text as the workspace-level default
+ * for new sessions. Only the text is saved — new sessions always start with
+ * auto-append disabled so the user explicitly opts in each time.
+ */
+export async function handleSaveAutoAppendAsWorkspaceDefault(
+	p: P,
+): Promise<void> {
+	const session = p._sessionManager?.getActiveSession?.();
+	if (!session) return;
+
+	await withConfigGuard(p, async () => {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		await config.update(
+			"autoAppendText",
+			session.autoAppendText ?? "",
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
 }

@@ -242,19 +242,11 @@
           "default": true,
           "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
         },
-        "tasksync.autoAppendEnabled": {
-          "type": "boolean",
-          "default": false,
-          "scope": "window",
-          "description": "Deprecated legacy setting. Use Session Settings to configure Auto Append per session.",
-          "deprecationMessage": "Deprecated: configure Auto Append from TaskSync Session Settings instead of workspace settings."
-        },
         "tasksync.autoAppendText": {
           "type": "string",
           "default": "",
           "scope": "window",
-          "description": "Deprecated legacy setting. TaskSync now uses per-session Auto Append text.",
-          "deprecationMessage": "Deprecated: configure Auto Append text per session from TaskSync Session Settings."
+          "description": "Default Auto Append text for new sessions. Use 'Save as Workspace Default' in Session Settings to set."
         },
         "tasksync.alwaysAppendAskUserReminder": {
           "type": "boolean",
@@ -266,8 +258,8 @@
           "type": "boolean",
           "default": false,
           "scope": "window",
-          "description": "Deprecated legacy setting. Use tasksync.autoAppendEnabled instead.",
-          "deprecationMessage": "Deprecated: use TaskSync Auto Append settings (tasksync.autoAppendEnabled and tasksync.autoAppendText)."
+          "description": "Deprecated legacy setting. Use tasksync.autoAppendText instead.",
+          "deprecationMessage": "Deprecated: use 'Save as Workspace Default' in Session Settings to configure Auto Append text."
         },
         "tasksync.sendWithCtrlEnter": {
           "type": "boolean",

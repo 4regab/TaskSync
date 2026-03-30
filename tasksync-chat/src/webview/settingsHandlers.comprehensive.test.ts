@@ -532,7 +532,19 @@ describe("handleUpdateAutoAppendSetting", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("updates autoAppendEnabled setting", async () => {
+	it("updates autoAppendEnabled setting when text is present", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _autoAppendText: "Always use tools" });
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(p._autoAppendEnabled).toBe(true);
+		expect(config.update).not.toHaveBeenCalled();
+	});
+
+	it("forces autoAppendEnabled=false when text is empty", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
@@ -540,8 +552,7 @@ describe("handleUpdateAutoAppendSetting", () => {
 
 		const p = createMockP();
 		await handleUpdateAutoAppendSetting(p, true);
-		expect(p._autoAppendEnabled).toBe(true);
-		expect(config.update).not.toHaveBeenCalled();
+		expect(p._autoAppendEnabled).toBe(false);
 	});
 });
 
@@ -1442,7 +1453,7 @@ describe("per-session settings sync", () => {
 			autopilotText: "",
 			autopilotPrompts: [] as string[],
 			autoAppendEnabled: false,
-			autoAppendText: "",
+			autoAppendText: "some instructions",
 			consecutiveAutoResponses: 0,
 		};
 		const p = createMockP({

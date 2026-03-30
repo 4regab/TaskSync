@@ -718,13 +718,16 @@ function createSessionSettingsModal() {
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
 		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
-		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. Leave it blank to append nothing. The AskUser reminder is configured globally in Settings.">' +
+		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. The AskUser reminder is configured globally in Settings.">' +
 		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
 		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
 		"</div>" +
 		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
 		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response in this session" maxlength="2000"></textarea>' +
+		'<div class="ss-auto-append-error hidden" id="ss-auto-append-error">Enter text to append, or disable Auto Append.</div>' +
+		'<button class="form-btn form-btn-secondary ss-save-default-btn hidden" id="ss-save-as-default-btn" title="Save these Auto Append settings as the default for all new sessions">' +
+		'<span class="codicon codicon-save"></span> Save as Workspace Default</button>' +
 		"</div>";
 	ssContent.appendChild(ssAutoAppendSection);
 
@@ -738,6 +741,8 @@ function createSessionSettingsModal() {
 	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
 	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
 	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
+	ssAutoAppendError = document.getElementById("ss-auto-append-error");
+	ssSaveAsDefaultBtn = document.getElementById("ss-save-as-default-btn");
 	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
 	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
 	ssAddAutopilotPromptForm = document.getElementById(
@@ -809,13 +814,6 @@ function createSessionActionModal(config) {
 
 	var btnRow = document.createElement("div");
 	btnRow.className = "new-session-btn-row";
-	var cancelBtn = document.createElement("button");
-	cancelBtn.className = "form-btn form-btn-cancel";
-	cancelBtn.textContent = "Cancel";
-	cancelBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-	});
-	btnRow.appendChild(cancelBtn);
 
 	var actions = Array.isArray(config.actions)
 		? config.actions
@@ -831,6 +829,7 @@ function createSessionActionModal(config) {
 		var actionBtn = document.createElement("button");
 		actionBtn.className = action.className || "form-btn form-btn-save";
 		actionBtn.textContent = action.label;
+		if (action.id) actionBtn.id = action.id;
 		actionBtn.addEventListener("click", function () {
 			closeSessionActionModal(overlay);
 			if (typeof action.onClick === "function") {
@@ -900,18 +899,19 @@ function createNewSessionModal() {
 		noteHtml:
 			'<span class="codicon codicon-info"></span> Please check the model and agent preselected in VS Code Chat before starting.',
 		warningText:
-			"Start a fresh Copilot chat, or stop the current TaskSync session and start a fresh one.",
+			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
 		actions: [
 			{
-				label: "Start New Session",
+				label: "New Session",
 				className: "form-btn form-btn-save",
 				onClick: function () {
 					submitNewSessionAction(false);
 				},
 			},
 			{
-				label: "Stop and Start New Session",
+				label: "End & New Session",
+				id: "new-session-end-btn",
 				className: "form-btn form-btn-save",
 				onClick: function () {
 					submitNewSessionAction(true);
@@ -943,6 +943,25 @@ function submitNewSessionAction(stopCurrentSession) {
 
 function openNewSessionModal() {
 	if (!newSessionModalOverlay) return;
+	// Show "End & New Session" only when the active session is non-terminated
+	var endBtn = document.getElementById("new-session-end-btn"); // ssot-id-allowed — dynamically created in createSessionActionModal
+	var activeSession =
+		activeSessionId &&
+		Array.isArray(sessions) &&
+		sessions.find(function (s) {
+			return s.id === activeSessionId;
+		});
+	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	if (endBtn) {
+		endBtn.classList.toggle("hidden", !hasActiveSession);
+	}
+	// Update warning text based on whether there's an active session
+	var warningEl = newSessionModalOverlay.querySelector(".new-session-warning");
+	if (warningEl) {
+		warningEl.textContent = hasActiveSession
+			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
+			: "Start a fresh Copilot chat session.";
+	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
 	var queueLabel = document.getElementById("new-session-queue-label");

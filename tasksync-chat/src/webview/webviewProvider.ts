@@ -340,12 +340,16 @@ export class TaskSyncWebviewProvider
 	}
 
 	private _sessionDefaults(): Partial<ChatSession> {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		const autoAppendText = settingsH.normalizeAutoAppendText(
+			config.get<string>("autoAppendText", "") ?? "",
+		);
 		return {
 			queueEnabled: this._queueEnabled,
 			autopilotEnabled: false,
 			autopilotPrompts: [],
 			autoAppendEnabled: false,
-			autoAppendText: "",
+			autoAppendText,
 		};
 	}
 

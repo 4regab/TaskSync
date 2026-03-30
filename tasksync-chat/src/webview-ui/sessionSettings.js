@@ -2,6 +2,8 @@
 
 // Local state for session-level autopilot prompts (managed entirely in the modal)
 var ssAutopilotPromptsLocal = [];
+// Workspace-level default auto-append text (for dirty-check on save button)
+var ssWorkspaceDefaultAutoAppendText = "";
 
 // Shared prompt-list UI for session settings (delegates rendering/CRUD to promptListUI.js)
 var sessionPromptListUI = createPromptListUI({
@@ -117,6 +119,12 @@ function populateSessionSettings(msg) {
 	// Auto Append toggle
 	setToggle(ssAutoAppendToggle, msg.autoAppendEnabled === true);
 
+	// Store workspace default for dirty-check
+	ssWorkspaceDefaultAutoAppendText =
+		typeof msg.workspaceDefaultAutoAppendText === "string"
+			? msg.workspaceDefaultAutoAppendText
+			: "";
+
 	// Auto Append text row visibility
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
 	if (ssAutoAppendTextRow) {
@@ -131,6 +139,8 @@ function populateSessionSettings(msg) {
 		ssAutoAppendTextInput.value =
 			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
 	}
+
+	ssValidateAutoAppendText();
 }
 
 // --- Session toggle functions ---
@@ -148,5 +158,49 @@ function ssToggleAutoAppend() {
 	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
 	if (ssAutoAppendTextRow) {
 		ssAutoAppendTextRow.classList.toggle("hidden", !active);
+	}
+	ssValidateAutoAppendText();
+}
+
+/** Show/hide the error message and save-as-default button based on toggle + text state. */
+function ssValidateAutoAppendText() {
+	var isActive =
+		ssAutoAppendToggle && ssAutoAppendToggle.classList.contains("active");
+	var text = ssAutoAppendTextInput ? ssAutoAppendTextInput.value.trim() : "";
+	if (ssAutoAppendError) {
+		ssAutoAppendError.classList.toggle(
+			"hidden",
+			!(isActive && text.length === 0),
+		);
+	}
+	if (ssSaveAsDefaultBtn) {
+		// Show only when toggle ON, text is non-empty, and text differs from workspace default
+		var isDirty = text !== ssWorkspaceDefaultAutoAppendText;
+		ssSaveAsDefaultBtn.classList.toggle(
+			"hidden",
+			!(isActive && text.length > 0 && isDirty),
+		);
+	}
+}
+
+/** Save current auto-append settings as the workspace default for new sessions. */
+function ssSaveAutoAppendAsDefault() {
+	// Flush current modal state to the session first — messages are processed in order
+	saveSessionSettings();
+	vscode.postMessage({ type: "saveAutoAppendAsWorkspaceDefault" });
+	// Update cached default so button hides (text is now the new default)
+	ssWorkspaceDefaultAutoAppendText = ssAutoAppendTextInput
+		? ssAutoAppendTextInput.value.trim()
+		: "";
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.textContent = "\u2713 Saved";
+		ssSaveAsDefaultBtn.disabled = true;
+		setTimeout(function () {
+			if (ssSaveAsDefaultBtn) {
+				ssSaveAsDefaultBtn.innerHTML =
+					'<span class="codicon codicon-save"></span> Save as Workspace Default';
+				ssSaveAsDefaultBtn.disabled = false;
+			}
+		}, 2000);
 	}
 }

@@ -290,6 +290,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 		case "requestSessionSettings":
 			settingsH.sendSessionSettingsToWebview(p);
 			break;
+		case "saveAutoAppendAsWorkspaceDefault":
+			settingsH.handleSaveAutoAppendAsWorkspaceDefault(p);
+			break;
 		default: {
 			const _exhaustiveCheck: never = message;
 			console.error(

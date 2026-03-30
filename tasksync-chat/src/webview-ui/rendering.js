@@ -838,7 +838,7 @@ function renderSessionsList() {
 				"</span>" +
 				"</div>" +
 				'<div class="chat-row-preview">' +
-				escapeHtml(promptPreview).substring(0, 100) +
+				escapeHtml(promptPreview).substring(0, 200) +
 				"</div>" +
 				"</div>" +
 				"</div>"

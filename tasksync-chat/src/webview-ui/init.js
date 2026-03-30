@@ -63,14 +63,7 @@ function init() {
 		initChangesPanel();
 
 		restoreActiveSessionComposerState();
-
-		// Restore split view state
-		if (splitViewEnabled) {
-			var container = document.querySelector(".main-container.orch");
-			if (container) container.classList.add("split-view");
-			var remoteSplitBtn = document.getElementById("remote-split-btn");
-			if (remoteSplitBtn) remoteSplitBtn.classList.add("active");
-		}
+		updateWelcomeSectionVisibility();
 		initSplitResizer();
 		initVertResizer();
 
@@ -938,6 +931,7 @@ function submitNewSessionAction(stopCurrentSession) {
 	var queueCheckbox = document.getElementById("new-session-use-queue");
 	var initialPrompt = promptInput ? promptInput.value.trim() : "";
 	var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
+	requestFollowServerActiveSession();
 	var msg = { type: "newSession" };
 	if (initialPrompt) {
 		msg.initialPrompt = initialPrompt;

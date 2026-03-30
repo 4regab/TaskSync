@@ -174,7 +174,7 @@ function handleChoicesSend() {
 	// Send the response
 	vscode.postMessage({
 		type: "submit",
-		sessionId: activeSessionId,
+		sessionId: getSubmitSessionId(),
 		toolCallId: pendingToolCall ? pendingToolCall.id : null,
 		value: responseValue,
 		attachments: [],

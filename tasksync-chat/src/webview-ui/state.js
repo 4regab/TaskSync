@@ -92,7 +92,9 @@ let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
 let sessions = []; // Multi-session orchestration: all sessions
-let activeSessionId = null; // Currently focused session ID
+let activeSessionId = null; // Currently opened thread in the UI
+let serverActiveSessionId = null; // Backend-selected session used for routing
+let followServerActiveSessionOnce = false; // Opt into opening the next server-selected session
 let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
 let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
 let vertSplitRatio = previousState.vertSplitRatio || 35; // Vertical split: hub height percentage in single-column mode (default 35%)
@@ -240,3 +242,51 @@ let sessionSettingsOverlay,
 	ssAutopilotPromptInput,
 	ssSaveAutopilotPromptBtn,
 	ssCancelAutopilotPromptBtn;
+
+function sessionExists(sessionId) {
+	return (
+		!!sessionId &&
+		Array.isArray(sessions) &&
+		sessions.some(function (session) {
+			return session.id === sessionId;
+		})
+	);
+}
+
+function requestFollowServerActiveSession() {
+	followServerActiveSessionOnce = true;
+}
+
+function syncClientSessionSelection(nextServerActiveSessionId) {
+	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	if (pendingToolCall && sessionExists(pendingToolCall.sessionId)) {
+		activeSessionId = pendingToolCall.sessionId;
+	} else if (
+		followServerActiveSessionOnce &&
+		sessionExists(serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	followServerActiveSessionOnce = false;
+}
+
+function getSubmitSessionId() {
+	if (pendingToolCall && pendingToolCall.sessionId) {
+		return pendingToolCall.sessionId;
+	}
+	return activeSessionId || serverActiveSessionId || null;
+}
+
+function isSplitViewLayoutActive() {
+	return splitViewEnabled && sessionExists(activeSessionId);
+}

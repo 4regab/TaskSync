@@ -105,7 +105,7 @@ body {
 .split-resizer {
     flex: 0 0 4px;
     cursor: col-resize;
-    background: var(--vscode-panel-border);
+    background: transparent;
     transition: background 0.15s;
     z-index: 10;
 }
@@ -125,7 +125,7 @@ body {
     /* Hidden by default, shown in narrow split-view via media query */
     flex: 0 0 4px;
     cursor: row-resize;
-    background: var(--vscode-panel-border);
+    background: transparent;
     transition: background 0.15s;
     z-index: 10;
 }

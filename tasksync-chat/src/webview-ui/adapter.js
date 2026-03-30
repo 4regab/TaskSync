@@ -173,7 +173,10 @@ function mapToRemoteMessage(msg) {
 		case "updateResponseTimeout":
 			return { type: "updateResponseTimeout", timeout: msg.value };
 		case "newSession":
-			return { type: "newSession" };
+			return {
+				type: "newSession",
+				stopCurrentSession: msg.stopCurrentSession === true,
+			};
 		case "resetSession":
 			return { type: "resetSession" };
 		case "chatMessage":
@@ -238,7 +241,13 @@ function mapToRemoteMessage(msg) {
 		case "switchSession":
 			if (!msg.sessionId) {
 				// Back to hub — handle locally, no server round-trip needed
+				if (typeof saveActiveSessionComposerState === "function") {
+					saveActiveSessionComposerState();
+				}
 				activeSessionId = null;
+				if (typeof restoreActiveSessionComposerState === "function") {
+					restoreActiveSessionComposerState();
+				}
 				updateWelcomeSectionVisibility();
 				renderSessionsList();
 				return null;
@@ -534,6 +543,9 @@ function handleRemoteMessage(msg) {
 			break;
 		case "newSession":
 			debugLog("newSession received - clearing state");
+			if (typeof requestFollowServerActiveSession === "function") {
+				requestFollowServerActiveSession();
+			}
 			clearRemoteSessionState(msg.data && msg.data.statusMessage);
 			debugLog("newSession complete - state cleared");
 			break;
@@ -559,7 +571,11 @@ function handleRemoteMessage(msg) {
 		case "updateSessions":
 			if (msg.data) {
 				sessions = Array.isArray(msg.data.sessions) ? msg.data.sessions : [];
-				activeSessionId = msg.data.activeSessionId || null;
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(msg.data.activeSessionId || null);
+				} else {
+					activeSessionId = msg.data.activeSessionId || null;
+				}
 				if (typeof renderSessionsList === "function") renderSessionsList();
 				if (typeof updateWelcomeSectionVisibility === "function")
 					updateWelcomeSectionVisibility();
@@ -626,6 +642,15 @@ function clearRemoteSessionState(statusMessage) {
 	pendingToolCall = null;
 	lastPendingContentHtml = "";
 	isProcessingResponse = false;
+	if (
+		typeof statusMessage === "string" &&
+		statusMessage &&
+		((typeof sessionExists === "function" &&
+			sessionExists(serverActiveSessionId)) ||
+			serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
 	if (chatStreamArea) {
 		chatStreamArea.innerHTML = "";
 		chatStreamArea.classList.add("hidden");
@@ -731,14 +756,18 @@ function applyServerState(state) {
 	}
 	updatePendingUI();
 	if (typeof updateCardSelection === "function") updateCardSelection();
-	if (typeof updateWelcomeSectionVisibility === "function")
-		updateWelcomeSectionVisibility();
 	// Multi-session state (sessions list + active session ID)
 	if (Array.isArray(state.sessions)) {
 		sessions = state.sessions;
-		activeSessionId = state.activeSessionId || null;
+		if (typeof syncClientSessionSelection === "function") {
+			syncClientSessionSelection(state.activeSessionId || null);
+		} else {
+			activeSessionId = state.activeSessionId || null;
+		}
 		if (typeof renderSessionsList === "function") renderSessionsList();
 	}
+	if (typeof updateWelcomeSectionVisibility === "function")
+		updateWelcomeSectionVisibility();
 }
 
 function handlePendingToolCall(data) {

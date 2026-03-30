@@ -225,7 +225,10 @@ function mapToRemoteMessage(msg) {
 		case "updateResponseTimeout":
 			return { type: "updateResponseTimeout", timeout: msg.value };
 		case "newSession":
-			return { type: "newSession" };
+			return {
+				type: "newSession",
+				stopCurrentSession: msg.stopCurrentSession === true,
+			};
 		case "resetSession":
 			return { type: "resetSession" };
 		case "chatMessage":
@@ -290,7 +293,13 @@ function mapToRemoteMessage(msg) {
 		case "switchSession":
 			if (!msg.sessionId) {
 				// Back to hub — handle locally, no server round-trip needed
+				if (typeof saveActiveSessionComposerState === "function") {
+					saveActiveSessionComposerState();
+				}
 				activeSessionId = null;
+				if (typeof restoreActiveSessionComposerState === "function") {
+					restoreActiveSessionComposerState();
+				}
 				updateWelcomeSectionVisibility();
 				renderSessionsList();
 				return null;
@@ -586,6 +595,9 @@ function handleRemoteMessage(msg) {
 			break;
 		case "newSession":
 			debugLog("newSession received - clearing state");
+			if (typeof requestFollowServerActiveSession === "function") {
+				requestFollowServerActiveSession();
+			}
 			clearRemoteSessionState(msg.data && msg.data.statusMessage);
 			debugLog("newSession complete - state cleared");
 			break;
@@ -611,7 +623,11 @@ function handleRemoteMessage(msg) {
 		case "updateSessions":
 			if (msg.data) {
 				sessions = Array.isArray(msg.data.sessions) ? msg.data.sessions : [];
-				activeSessionId = msg.data.activeSessionId || null;
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(msg.data.activeSessionId || null);
+				} else {
+					activeSessionId = msg.data.activeSessionId || null;
+				}
 				if (typeof renderSessionsList === "function") renderSessionsList();
 				if (typeof updateWelcomeSectionVisibility === "function")
 					updateWelcomeSectionVisibility();
@@ -678,6 +694,15 @@ function clearRemoteSessionState(statusMessage) {
 	pendingToolCall = null;
 	lastPendingContentHtml = "";
 	isProcessingResponse = false;
+	if (
+		typeof statusMessage === "string" &&
+		statusMessage &&
+		((typeof sessionExists === "function" &&
+			sessionExists(serverActiveSessionId)) ||
+			serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
 	if (chatStreamArea) {
 		chatStreamArea.innerHTML = "";
 		chatStreamArea.classList.add("hidden");
@@ -783,14 +808,18 @@ function applyServerState(state) {
 	}
 	updatePendingUI();
 	if (typeof updateCardSelection === "function") updateCardSelection();
-	if (typeof updateWelcomeSectionVisibility === "function")
-		updateWelcomeSectionVisibility();
 	// Multi-session state (sessions list + active session ID)
 	if (Array.isArray(state.sessions)) {
 		sessions = state.sessions;
-		activeSessionId = state.activeSessionId || null;
+		if (typeof syncClientSessionSelection === "function") {
+			syncClientSessionSelection(state.activeSessionId || null);
+		} else {
+			activeSessionId = state.activeSessionId || null;
+		}
 		if (typeof renderSessionsList === "function") renderSessionsList();
 	}
+	if (typeof updateWelcomeSectionVisibility === "function")
+		updateWelcomeSectionVisibility();
 }
 
 function handlePendingToolCall(data) {
@@ -967,7 +996,9 @@ let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
 let sessions = []; // Multi-session orchestration: all sessions
-let activeSessionId = null; // Currently focused session ID
+let activeSessionId = null; // Currently opened thread in the UI
+let serverActiveSessionId = null; // Backend-selected session used for routing
+let followServerActiveSessionOnce = false; // Opt into opening the next server-selected session
 let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
 let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
 let vertSplitRatio = previousState.vertSplitRatio || 35; // Vertical split: hub height percentage in single-column mode (default 35%)
@@ -1115,6 +1146,54 @@ let sessionSettingsOverlay,
 	ssAutopilotPromptInput,
 	ssSaveAutopilotPromptBtn,
 	ssCancelAutopilotPromptBtn;
+
+function sessionExists(sessionId) {
+	return (
+		!!sessionId &&
+		Array.isArray(sessions) &&
+		sessions.some(function (session) {
+			return session.id === sessionId;
+		})
+	);
+}
+
+function requestFollowServerActiveSession() {
+	followServerActiveSessionOnce = true;
+}
+
+function syncClientSessionSelection(nextServerActiveSessionId) {
+	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	if (pendingToolCall && sessionExists(pendingToolCall.sessionId)) {
+		activeSessionId = pendingToolCall.sessionId;
+	} else if (
+		followServerActiveSessionOnce &&
+		sessionExists(serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	followServerActiveSessionOnce = false;
+}
+
+function getSubmitSessionId() {
+	if (pendingToolCall && pendingToolCall.sessionId) {
+		return pendingToolCall.sessionId;
+	}
+	return activeSessionId || serverActiveSessionId || null;
+}
+
+function isSplitViewLayoutActive() {
+	return splitViewEnabled && sessionExists(activeSessionId);
+}
 function init() {
 	try {
 		cacheDOMElements();
@@ -1180,14 +1259,7 @@ function init() {
 		initChangesPanel();
 
 		restoreActiveSessionComposerState();
-
-		// Restore split view state
-		if (splitViewEnabled) {
-			var container = document.querySelector(".main-container.orch");
-			if (container) container.classList.add("split-view");
-			var remoteSplitBtn = document.getElementById("remote-split-btn");
-			if (remoteSplitBtn) remoteSplitBtn.classList.add("active");
-		}
+		updateWelcomeSectionVisibility();
 		initSplitResizer();
 		initVertResizer();
 
@@ -2055,6 +2127,7 @@ function submitNewSessionAction(stopCurrentSession) {
 	var queueCheckbox = document.getElementById("new-session-use-queue");
 	var initialPrompt = promptInput ? promptInput.value.trim() : "";
 	var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
+	requestFollowServerActiveSession();
 	var msg = { type: "newSession" };
 	if (initialPrompt) {
 		msg.initialPrompt = initialPrompt;
@@ -2484,6 +2557,11 @@ function bindEventListeners() {
 	// Hub & Thread Shell events
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
+			saveActiveSessionComposerState();
+			activeSessionId = null;
+			restoreActiveSessionComposerState();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
 			vscode.postMessage({ type: "switchSession", sessionId: null });
 		});
 	}
@@ -3316,7 +3394,7 @@ function handleSend() {
 	} else {
 		vscode.postMessage({
 			type: "submit",
-			sessionId: activeSessionId,
+			sessionId: getSubmitSessionId(),
 			toolCallId: pendingToolCall ? pendingToolCall.id : null,
 			value: text,
 			attachments: currentAttachments,
@@ -3461,7 +3539,7 @@ function handleExtensionMessage(event) {
 				saveActiveSessionComposerState();
 			}
 			sessions = Array.isArray(message.sessions) ? message.sessions : [];
-			activeSessionId = message.activeSessionId || null;
+			syncClientSessionSelection(message.activeSessionId || null);
 			renderSessionsList();
 			if (typeof restoreActiveSessionComposerState === "function") {
 				restoreActiveSessionComposerState();
@@ -3570,6 +3648,13 @@ function handleExtensionMessage(event) {
 			pendingToolCall = null;
 			lastPendingContentHtml = "";
 			isProcessingResponse = false;
+			if (
+				typeof message.statusMessage === "string" &&
+				message.statusMessage &&
+				sessionExists(serverActiveSessionId)
+			) {
+				activeSessionId = serverActiveSessionId;
+			}
 			if (activeSessionId) {
 				sessionComposerState[activeSessionId] = { inputValue: "" };
 			}
@@ -3595,6 +3680,9 @@ function handleExtensionMessage(event) {
 					pendingMessage.classList.add("hidden");
 					pendingMessage.innerHTML = "";
 				}
+			}
+			if (typeof restoreActiveSessionComposerState === "function") {
+				restoreActiveSessionComposerState();
 			}
 			updateWelcomeSectionVisibility();
 			break;
@@ -3692,6 +3780,19 @@ function showPendingToolCall(id, sessionId, prompt, isApproval, choices) {
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];
+
+	if (sessionId && activeSessionId !== sessionId) {
+		if (typeof saveActiveSessionComposerState === "function") {
+			saveActiveSessionComposerState();
+		}
+		activeSessionId = sessionId;
+		if (typeof renderSessionsList === "function") {
+			renderSessionsList();
+		}
+		if (typeof restoreActiveSessionComposerState === "function") {
+			restoreActiveSessionComposerState();
+		}
+	}
 
 	if (welcomeSection) {
 		welcomeSection.classList.add("hidden");
@@ -4422,25 +4523,7 @@ function renderMermaidDiagrams() {
  */
 function toggleSplitView() {
 	splitViewEnabled = !splitViewEnabled;
-	var container = document.querySelector(".main-container.orch");
-	if (container) {
-		container.classList.toggle("split-view", splitViewEnabled);
-	}
-	var resizer = document.getElementById("split-resizer");
-	if (resizer) {
-		resizer.classList.toggle("hidden", !splitViewEnabled);
-	}
-	var remoteSplitBtn = document.getElementById("remote-split-btn");
-	if (remoteSplitBtn) {
-		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
-	}
-	if (splitViewEnabled) {
-		applySplitRatio(splitRatio);
-	} else {
-		// Reset inline styles when exiting split view
-		var hubEl = document.getElementById("workspace-hub");
-		if (hubEl) hubEl.style.flex = "";
-	}
+	syncSplitViewLayout();
 	updateWelcomeSectionVisibility();
 	saveWebviewState();
 }
@@ -4470,7 +4553,7 @@ function initSplitResizer() {
 	var dragging = false;
 
 	resizer.addEventListener("mousedown", function (e) {
-		if (!splitViewEnabled) return;
+		if (!isSplitViewLayoutActive()) return;
 		e.preventDefault();
 		dragging = true;
 		resizer.classList.add("active");
@@ -4499,7 +4582,7 @@ function initSplitResizer() {
 	});
 
 	// Restore persisted ratio on init
-	if (splitViewEnabled) {
+	if (isSplitViewLayoutActive()) {
 		resizer.classList.remove("hidden");
 		applySplitRatio(splitRatio);
 	}
@@ -4521,7 +4604,7 @@ function initVertResizer() {
 	var dragging = false;
 
 	function isNarrowSplitView() {
-		return splitViewEnabled && window.innerWidth <= 480;
+		return isSplitViewLayoutActive() && window.innerWidth <= 480;
 	}
 
 	function startDrag(e) {
@@ -4580,11 +4663,46 @@ function applyVertSplitRatio(pct) {
 	if (!hubEl || !threadEl) return;
 
 	// Only apply in narrow split-view mode
-	if (!splitViewEnabled || window.innerWidth > 480) return;
+	if (!isSplitViewLayoutActive() || window.innerWidth > 480) return;
 
 	hubEl.style.maxHeight = pct + "%";
 	hubEl.style.flex = "0 0 auto";
 	threadEl.style.flex = "1 1 0";
+}
+
+function syncSplitViewLayout() {
+	var effectiveSplitView = isSplitViewLayoutActive();
+	var container = document.querySelector(".main-container.orch");
+	var resizer = document.getElementById("split-resizer");
+	var remoteSplitBtn = document.getElementById("remote-split-btn");
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+
+	if (container) {
+		container.classList.toggle("split-view", effectiveSplitView);
+	}
+	if (resizer) {
+		resizer.classList.toggle("hidden", !effectiveSplitView);
+	}
+	if (remoteSplitBtn) {
+		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+	}
+
+	if (effectiveSplitView) {
+		applySplitRatio(splitRatio);
+		if (window.innerWidth <= 480 && vertSplitRatio) {
+			applyVertSplitRatio(vertSplitRatio);
+		}
+		return;
+	}
+
+	if (hubEl) {
+		hubEl.style.flex = "";
+		hubEl.style.maxHeight = "";
+	}
+	if (threadEl) {
+		threadEl.style.flex = "";
+	}
 }
 
 /**
@@ -4597,7 +4715,9 @@ function updateWelcomeSectionVisibility() {
 	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
 
-	if (splitViewEnabled) {
+	syncSplitViewLayout();
+
+	if (isSplitViewLayoutActive()) {
 		// Split view: always show hub, always show thread shell
 		if (hubEl) hubEl.classList.remove("hidden");
 		if (threadEl) threadEl.classList.remove("hidden");
@@ -4756,6 +4876,7 @@ function renderSessionsList() {
 		item.addEventListener("click", function () {
 			var sessionId = item.getAttribute("data-session-id");
 			if (sessionId) {
+				requestFollowServerActiveSession();
 				vscode.postMessage({ type: "switchSession", sessionId: sessionId });
 			}
 		});
@@ -5036,7 +5157,7 @@ function handleApprovalContinue() {
 	// Send affirmative response
 	vscode.postMessage({
 		type: "submit",
-		sessionId: activeSessionId,
+		sessionId: getSubmitSessionId(),
 		toolCallId: pendingToolCall ? pendingToolCall.id : null,
 		value: "yes",
 		attachments: [],
@@ -5259,7 +5380,7 @@ function handleChoicesSend() {
 	// Send the response
 	vscode.postMessage({
 		type: "submit",
-		sessionId: activeSessionId,
+		sessionId: getSubmitSessionId(),
 		toolCallId: pendingToolCall ? pendingToolCall.id : null,
 		value: responseValue,
 		attachments: [],

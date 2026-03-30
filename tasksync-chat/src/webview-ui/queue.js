@@ -252,7 +252,7 @@ function handleApprovalContinue() {
 	// Send affirmative response
 	vscode.postMessage({
 		type: "submit",
-		sessionId: activeSessionId,
+		sessionId: getSubmitSessionId(),
 		toolCallId: pendingToolCall ? pendingToolCall.id : null,
 		value: "yes",
 		attachments: [],

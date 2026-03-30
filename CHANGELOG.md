@@ -2,12 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## TaskSync v3.0.8 (03-30-26)
-- feat: split session settings from global reminder controls
-- Move configurable Auto Append into per-session settings and keep AskUser Reminder as a separate global toggle
-- Make Autopilot session-specific in the TaskSync UI instead of editing it from global settings
-- Add separate New Session actions for starting fresh or stopping the current TaskSync session before starting fresh
-
 ## TaskSync v3.0.7 (03-28-26)
 - fix: remove deprecated wordWrap (redundant with overflowWrap)
 

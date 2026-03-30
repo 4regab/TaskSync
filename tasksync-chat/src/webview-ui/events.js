@@ -87,6 +87,11 @@ function bindEventListeners() {
 	// Hub & Thread Shell events
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
+			saveActiveSessionComposerState();
+			activeSessionId = null;
+			restoreActiveSessionComposerState();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
 			vscode.postMessage({ type: "switchSession", sessionId: null });
 		});
 	}

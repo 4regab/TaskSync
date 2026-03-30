@@ -43,7 +43,7 @@ function handleExtensionMessage(event) {
 				saveActiveSessionComposerState();
 			}
 			sessions = Array.isArray(message.sessions) ? message.sessions : [];
-			activeSessionId = message.activeSessionId || null;
+			syncClientSessionSelection(message.activeSessionId || null);
 			renderSessionsList();
 			if (typeof restoreActiveSessionComposerState === "function") {
 				restoreActiveSessionComposerState();
@@ -152,6 +152,13 @@ function handleExtensionMessage(event) {
 			pendingToolCall = null;
 			lastPendingContentHtml = "";
 			isProcessingResponse = false;
+			if (
+				typeof message.statusMessage === "string" &&
+				message.statusMessage &&
+				sessionExists(serverActiveSessionId)
+			) {
+				activeSessionId = serverActiveSessionId;
+			}
 			if (activeSessionId) {
 				sessionComposerState[activeSessionId] = { inputValue: "" };
 			}
@@ -177,6 +184,9 @@ function handleExtensionMessage(event) {
 					pendingMessage.classList.add("hidden");
 					pendingMessage.innerHTML = "";
 				}
+			}
+			if (typeof restoreActiveSessionComposerState === "function") {
+				restoreActiveSessionComposerState();
 			}
 			updateWelcomeSectionVisibility();
 			break;
@@ -274,6 +284,19 @@ function showPendingToolCall(id, sessionId, prompt, isApproval, choices) {
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];
+
+	if (sessionId && activeSessionId !== sessionId) {
+		if (typeof saveActiveSessionComposerState === "function") {
+			saveActiveSessionComposerState();
+		}
+		activeSessionId = sessionId;
+		if (typeof renderSessionsList === "function") {
+			renderSessionsList();
+		}
+		if (typeof restoreActiveSessionComposerState === "function") {
+			restoreActiveSessionComposerState();
+		}
+	}
 
 	if (welcomeSection) {
 		welcomeSection.classList.add("hidden");

@@ -519,25 +519,7 @@ function renderMermaidDiagrams() {
  */
 function toggleSplitView() {
 	splitViewEnabled = !splitViewEnabled;
-	var container = document.querySelector(".main-container.orch");
-	if (container) {
-		container.classList.toggle("split-view", splitViewEnabled);
-	}
-	var resizer = document.getElementById("split-resizer");
-	if (resizer) {
-		resizer.classList.toggle("hidden", !splitViewEnabled);
-	}
-	var remoteSplitBtn = document.getElementById("remote-split-btn");
-	if (remoteSplitBtn) {
-		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
-	}
-	if (splitViewEnabled) {
-		applySplitRatio(splitRatio);
-	} else {
-		// Reset inline styles when exiting split view
-		var hubEl = document.getElementById("workspace-hub");
-		if (hubEl) hubEl.style.flex = "";
-	}
+	syncSplitViewLayout();
 	updateWelcomeSectionVisibility();
 	saveWebviewState();
 }
@@ -567,7 +549,7 @@ function initSplitResizer() {
 	var dragging = false;
 
 	resizer.addEventListener("mousedown", function (e) {
-		if (!splitViewEnabled) return;
+		if (!isSplitViewLayoutActive()) return;
 		e.preventDefault();
 		dragging = true;
 		resizer.classList.add("active");
@@ -596,7 +578,7 @@ function initSplitResizer() {
 	});
 
 	// Restore persisted ratio on init
-	if (splitViewEnabled) {
+	if (isSplitViewLayoutActive()) {
 		resizer.classList.remove("hidden");
 		applySplitRatio(splitRatio);
 	}
@@ -618,7 +600,7 @@ function initVertResizer() {
 	var dragging = false;
 
 	function isNarrowSplitView() {
-		return splitViewEnabled && window.innerWidth <= 480;
+		return isSplitViewLayoutActive() && window.innerWidth <= 480;
 	}
 
 	function startDrag(e) {
@@ -677,11 +659,46 @@ function applyVertSplitRatio(pct) {
 	if (!hubEl || !threadEl) return;
 
 	// Only apply in narrow split-view mode
-	if (!splitViewEnabled || window.innerWidth > 480) return;
+	if (!isSplitViewLayoutActive() || window.innerWidth > 480) return;
 
 	hubEl.style.maxHeight = pct + "%";
 	hubEl.style.flex = "0 0 auto";
 	threadEl.style.flex = "1 1 0";
+}
+
+function syncSplitViewLayout() {
+	var effectiveSplitView = isSplitViewLayoutActive();
+	var container = document.querySelector(".main-container.orch");
+	var resizer = document.getElementById("split-resizer");
+	var remoteSplitBtn = document.getElementById("remote-split-btn");
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+
+	if (container) {
+		container.classList.toggle("split-view", effectiveSplitView);
+	}
+	if (resizer) {
+		resizer.classList.toggle("hidden", !effectiveSplitView);
+	}
+	if (remoteSplitBtn) {
+		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+	}
+
+	if (effectiveSplitView) {
+		applySplitRatio(splitRatio);
+		if (window.innerWidth <= 480 && vertSplitRatio) {
+			applyVertSplitRatio(vertSplitRatio);
+		}
+		return;
+	}
+
+	if (hubEl) {
+		hubEl.style.flex = "";
+		hubEl.style.maxHeight = "";
+	}
+	if (threadEl) {
+		threadEl.style.flex = "";
+	}
 }
 
 /**
@@ -694,7 +711,9 @@ function updateWelcomeSectionVisibility() {
 	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
 
-	if (splitViewEnabled) {
+	syncSplitViewLayout();
+
+	if (isSplitViewLayoutActive()) {
 		// Split view: always show hub, always show thread shell
 		if (hubEl) hubEl.classList.remove("hidden");
 		if (threadEl) threadEl.classList.remove("hidden");
@@ -853,6 +872,7 @@ function renderSessionsList() {
 		item.addEventListener("click", function () {
 			var sessionId = item.getAttribute("data-session-id");
 			if (sessionId) {
+				requestFollowServerActiveSession();
 				vscode.postMessage({ type: "switchSession", sessionId: sessionId });
 			}
 		});

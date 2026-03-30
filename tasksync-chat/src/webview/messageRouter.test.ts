@@ -178,3 +178,85 @@ describe("handleWebviewReady", () => {
 		);
 	});
 });
+
+describe("handleWebviewMessage archiveSession", () => {
+	it("cleans _currentSessionCallsMap and _toolCallSessionMap on archive", () => {
+		const callsMap = new Map([
+			["tc-1", { id: "tc-1", prompt: "p1" }],
+			["tc-2", { id: "tc-2", prompt: "p2" }],
+		]);
+		const sessionMap = new Map([
+			["tc-1", "ses-1"],
+			["tc-2", "ses-1"],
+		]);
+		const p = createMockP({
+			_getSession: vi.fn().mockReturnValue({
+				id: "ses-1",
+				history: [
+					{ id: "tc-1", prompt: "p1" },
+					{ id: "tc-2", prompt: "p2" },
+				],
+			}),
+			_sessionManager: {
+				archiveSession: vi.fn().mockReturnValue(true),
+			},
+			_currentSessionCallsMap: callsMap,
+			_toolCallSessionMap: sessionMap,
+			_syncActiveSessionState: vi.fn(),
+			_saveSessionsToDisk: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+		});
+
+		handleWebviewMessage(p, { type: "archiveSession", sessionId: "ses-1" });
+
+		expect(callsMap.has("tc-1")).toBe(false);
+		expect(callsMap.has("tc-2")).toBe(false);
+		expect(sessionMap.has("tc-1")).toBe(false);
+		expect(sessionMap.has("tc-2")).toBe(false);
+		expect(p._sessionManager.archiveSession).toHaveBeenCalledWith("ses-1");
+	});
+});
+
+describe("handleWebviewMessage updateSessionTitle", () => {
+	it("routes updateSessionTitle to sessionManager.renameSession", () => {
+		const p = createMockP({
+			_sessionManager: {
+				renameSession: vi.fn().mockReturnValue(true),
+			},
+			_saveSessionsToDisk: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+		});
+
+		handleWebviewMessage(p, {
+			type: "updateSessionTitle",
+			sessionId: "ses-1",
+			title: "My Agent",
+		});
+
+		expect(p._sessionManager.renameSession).toHaveBeenCalledWith(
+			"ses-1",
+			"My Agent",
+		);
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
+		expect(p._updateSessionsUI).toHaveBeenCalled();
+	});
+
+	it("does not save when renameSession returns false", () => {
+		const p = createMockP({
+			_sessionManager: {
+				renameSession: vi.fn().mockReturnValue(false),
+			},
+			_saveSessionsToDisk: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+		});
+
+		handleWebviewMessage(p, {
+			type: "updateSessionTitle",
+			sessionId: "nonexistent",
+			title: "Title",
+		});
+
+		expect(p._saveSessionsToDisk).not.toHaveBeenCalled();
+		expect(p._updateSessionsUI).not.toHaveBeenCalled();
+	});
+});

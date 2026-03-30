@@ -229,16 +229,25 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 				}
 				p._saveSessionsToDisk();
 				p._updateSessionsUI();
+				settingsH.sendSessionSettingsToWebview(p);
 			}
 
 			break;
-		case "archiveSession":
+		case "archiveSession": {
+			const sessionToArchive = p._getSession(message.sessionId);
+			if (sessionToArchive) {
+				for (const entry of sessionToArchive.history) {
+					p._currentSessionCallsMap.delete(entry.id);
+					p._toolCallSessionMap.delete(entry.id);
+				}
+			}
 			if (p._sessionManager.archiveSession(message.sessionId)) {
 				p._syncActiveSessionState();
 				p._saveSessionsToDisk();
 				p._updateSessionsUI();
 			}
 			break;
+		}
 		case "deleteSession":
 			const sessionToDelete = p._getSession(message.sessionId);
 			if (sessionToDelete?.pendingToolCallId) {
@@ -255,6 +264,21 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 				p._saveSessionsToDisk();
 				p._updateSessionsUI();
 			}
+			break;
+		case "updateSessionTitle":
+			if (p._sessionManager.renameSession(message.sessionId, message.title)) {
+				p._saveSessionsToDisk();
+				p._updateSessionsUI();
+			}
+			break;
+		case "updateSessionSettings":
+			settingsH.handleUpdateSessionSettings(p, message);
+			break;
+		case "resetSessionSettings":
+			settingsH.handleResetSessionSettings(p);
+			break;
+		case "requestSessionSettings":
+			settingsH.sendSessionSettingsToWebview(p);
 			break;
 		default: {
 			const _exhaustiveCheck: never = message;
@@ -276,6 +300,8 @@ export function handleWebviewReady(p: P): void {
 
 	// Send settings
 	p._updateSettingsUI();
+	// Send session-level overrides (gear indicator)
+	settingsH.sendSessionSettingsToWebview(p);
 	// Send initial queue state and current session history
 	p._updateQueueUI();
 	p._updateCurrentSessionUI();

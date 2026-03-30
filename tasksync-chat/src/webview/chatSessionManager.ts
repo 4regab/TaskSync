@@ -97,6 +97,25 @@ export class ChatSessionManager {
 			history: Array.isArray(raw.history) ? raw.history : [],
 			attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
 			autopilotEnabled: raw.autopilotEnabled === true,
+			...(typeof raw.autopilotText === "string"
+				? { autopilotText: raw.autopilotText }
+				: {}),
+			...(Array.isArray(raw.autopilotPrompts)
+				? {
+						autopilotPrompts: raw.autopilotPrompts.filter(
+							(s: unknown) => typeof s === "string" && s.trim().length > 0,
+						),
+					}
+				: {}),
+			...(typeof raw.autoAppendEnabled === "boolean"
+				? { autoAppendEnabled: raw.autoAppendEnabled }
+				: {}),
+			...(typeof raw.autoAppendText === "string"
+				? { autoAppendText: raw.autoAppendText }
+				: {}),
+			...(typeof raw.alwaysAppendReminder === "boolean"
+				? { alwaysAppendReminder: raw.alwaysAppendReminder }
+				: {}),
 			waitingOnUser: raw.waitingOnUser === true,
 			createdAt:
 				typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt)
@@ -255,6 +274,15 @@ export class ChatSessionManager {
 			}
 		}
 		return existed;
+	}
+
+	public renameSession(id: string, title: string): boolean {
+		const session = this.sessions.get(id);
+		if (!session) return false;
+		const trimmed = title.trim();
+		if (trimmed.length === 0) return false;
+		session.title = trimmed;
+		return true;
 	}
 
 	/**

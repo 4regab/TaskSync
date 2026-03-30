@@ -82,6 +82,16 @@ export interface ChatSession {
 	history: ToolCallEntry[];
 	attachments: AttachmentInfo[];
 	autopilotEnabled: boolean;
+	/** Per-session override; undefined = inherit from workspace config */
+	autopilotText?: string;
+	/** Per-session override; undefined = inherit from workspace config */
+	autopilotPrompts?: string[];
+	/** Per-session override; undefined = inherit from workspace config */
+	autoAppendEnabled?: boolean;
+	/** Per-session override; undefined = inherit from workspace config */
+	autoAppendText?: string;
+	/** Per-session override; undefined = inherit from workspace config */
+	alwaysAppendReminder?: boolean;
 	waitingOnUser: boolean;
 	createdAt: number;
 	/** The toolCallId currently pending for THIS session (null if not waiting) */
@@ -162,11 +172,22 @@ export type ToWebviewMessage =
 	| { type: "openHistoryModal" }
 	| { type: "openNewSessionModal" }
 	| { type: "openResetSessionModal" }
+	| { type: "toggleSplitView" }
 	| { type: "clearPendingState" }
 	| {
 			type: "updateSessions";
 			sessions: ChatSession[];
 			activeSessionId: string | null;
+	  }
+	| {
+			type: "sessionSettingsState";
+			autopilotEnabled: boolean;
+			autopilotPrompts: string[];
+			autoAppendEnabled: boolean;
+			autoAppendText: string;
+			alwaysAppendReminder: boolean;
+			/** True when all values equal workspace defaults (no per-session overrides) */
+			isDefault: boolean;
 	  };
 
 // Message types sent from webview to extension
@@ -235,4 +256,15 @@ export type FromWebviewMessage =
 	| { type: "copyToClipboard"; text: string }
 	| { type: "switchSession"; sessionId: string | null }
 	| { type: "archiveSession"; sessionId: string }
-	| { type: "deleteSession"; sessionId: string };
+	| { type: "deleteSession"; sessionId: string }
+	| { type: "updateSessionTitle"; sessionId: string; title: string }
+	| {
+			type: "updateSessionSettings";
+			autopilotEnabled?: boolean;
+			autopilotPrompts?: string[];
+			autoAppendEnabled?: boolean;
+			autoAppendText?: string;
+			alwaysAppendReminder?: boolean;
+	  }
+	| { type: "resetSessionSettings" }
+	| { type: "requestSessionSettings" };

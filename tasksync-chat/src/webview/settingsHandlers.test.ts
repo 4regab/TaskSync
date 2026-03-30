@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "../__mocks__/vscode";
 import {
 	RESPONSE_TIMEOUT_ALLOWED_VALUES,
 	RESPONSE_TIMEOUT_DEFAULT_MINUTES,
 } from "../constants/remoteConstants";
-import { normalizeResponseTimeout } from "./settingsHandlers";
+import {
+	handleUpdateAutopilotSetting,
+	normalizeResponseTimeout,
+} from "./settingsHandlers";
 
 describe("normalizeResponseTimeout", () => {
 	it("accepts valid allowed values", () => {
@@ -65,5 +68,68 @@ describe("normalizeResponseTimeout", () => {
 		);
 		expect(normalizeResponseTimeout({})).toBe(RESPONSE_TIMEOUT_DEFAULT_MINUTES);
 		expect(normalizeResponseTimeout([])).toBe(RESPONSE_TIMEOUT_DEFAULT_MINUTES);
+	});
+});
+
+describe("handleUpdateAutopilotSetting", () => {
+	it("updates per-session state without writing to workspace config", () => {
+		const activeSession = {
+			autopilotEnabled: false,
+			consecutiveAutoResponses: 5,
+		};
+		const p = {
+			_autopilotEnabled: false,
+			_consecutiveAutoResponses: 3,
+			_sessionManager: {
+				getActiveSession: () => activeSession,
+			},
+			_saveSessionsToDisk: vi.fn(),
+			_remoteServer: null,
+		} as any;
+
+		handleUpdateAutopilotSetting(p, true);
+
+		expect(p._autopilotEnabled).toBe(true);
+		expect(p._consecutiveAutoResponses).toBe(0);
+		expect(activeSession.autopilotEnabled).toBe(true);
+		expect(activeSession.consecutiveAutoResponses).toBe(0);
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
+	});
+
+	it("broadcasts settings to remote when server is available", () => {
+		const broadcast = vi.fn();
+		const p = {
+			_autopilotEnabled: true,
+			_consecutiveAutoResponses: 0,
+			_sessionManager: {
+				getActiveSession: () => null,
+			},
+			_saveSessionsToDisk: vi.fn(),
+			_remoteServer: { broadcast },
+			// Fields read by buildSettingsPayload
+			_soundEnabled: false,
+			_interactiveApproval: false,
+			_queueEnabled: false,
+			_autoAppendEnabled: false,
+			_autoAppendText: "",
+			_alwaysAppendReminder: false,
+			_autopilotText: "",
+			_autopilotPrompts: [],
+			_responseTimeoutMinutes: 0,
+			_sessionWarningHours: 0,
+			_askUserVerbosePayload: false,
+			_maxConsecutiveAutoResponses: 0,
+			_humanDelayEnabled: false,
+			_humanDelayMin: 0,
+			_humanDelayMax: 0,
+			_sendWithCtrlEnter: false,
+		} as any;
+
+		handleUpdateAutopilotSetting(p, false);
+
+		expect(broadcast).toHaveBeenCalledWith(
+			"settingsChanged",
+			expect.objectContaining({ autopilotEnabled: false }),
+		);
 	});
 });

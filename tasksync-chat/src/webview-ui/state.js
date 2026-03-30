@@ -93,6 +93,8 @@ let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
 let sessions = []; // Multi-session orchestration: all sessions
 let activeSessionId = null; // Currently focused session ID
+let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
+let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -221,3 +223,18 @@ let humanDelayToggle,
 	humanDelayRangeContainer,
 	humanDelayMinInput,
 	humanDelayMaxInput;
+// Session settings mini-modal elements
+let sessionSettingsOverlay,
+	sessionSettingsModal,
+	ssAutopilotToggle,
+	ssAutoAppendToggle,
+	ssAutoAppendTextInput,
+	ssAlwaysAppendReminderToggle,
+	ssAutopilotPromptsList,
+	ssAddAutopilotPromptBtn,
+	ssAddAutopilotPromptForm,
+	ssAutopilotPromptInput,
+	ssSaveAutopilotPromptBtn,
+	ssCancelAutopilotPromptBtn;
+// Session-level override state (undefined = inherit workspace)
+let sessionSettingsHasOverrides = false;

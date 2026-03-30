@@ -104,6 +104,14 @@ export function activate(context: vscode.ExtensionContext): void {
 		},
 	);
 
+	// Toggle split view command (triggered from view title bar)
+	const toggleSplitViewCmd = vscode.commands.registerCommand(
+		"tasksync.toggleSplitView",
+		() => {
+			provider.toggleSplitView();
+		},
+	);
+
 	// Initialize remote server
 	remoteServer = new RemoteServer(provider, context.extensionUri, context);
 	provider.setRemoteServer(remoteServer);
@@ -301,6 +309,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		newSessionCmd,
 		resetSessionCmd,
 		openSettingsCmd,
+		toggleSplitViewCmd,
 		startRemoteLanCmd,
 		stopRemoteCmd,
 		goRemoteCmd,

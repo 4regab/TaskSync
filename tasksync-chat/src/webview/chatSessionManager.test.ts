@@ -166,6 +166,42 @@ describe("ChatSessionManager", () => {
 		expect(manager2.getSession(s2.id)?.autopilotEnabled).toBe(true);
 	});
 
+	test("fromJSON leaves per-session fields undefined for legacy sessions", () => {
+		const manager = new ChatSessionManager();
+		// Simulate old session data that never had per-session fields
+		manager.fromJSON({
+			activeSessionId: "1",
+			sessions: [
+				{
+					id: "1",
+					title: "Agent 1",
+					status: "active",
+					queue: [],
+					queueEnabled: true,
+					history: [],
+					attachments: [],
+					autopilotEnabled: false,
+					waitingOnUser: false,
+					createdAt: Date.now(),
+					pendingToolCallId: null,
+					sessionStartTime: null,
+					sessionFrozenElapsed: null,
+					sessionTerminated: false,
+					sessionWarningShown: false,
+					aiTurnActive: false,
+					consecutiveAutoResponses: 0,
+					autopilotIndex: 0,
+				},
+			],
+		});
+		const session = manager.getSession("1");
+		// Fields not present in raw data should remain undefined (inherit from config)
+		expect(session?.autopilotText).toBeUndefined();
+		expect(session?.autopilotPrompts).toBeUndefined();
+		expect(session?.autoAppendEnabled).toBeUndefined();
+		expect(session?.autoAppendText).toBeUndefined();
+	});
+
 	test("fromJSON handles invalid activeSessionId gracefully", () => {
 		const manager = new ChatSessionManager();
 		const session = manager.createSession("Only One");
@@ -207,6 +243,10 @@ describe("ChatSessionManager", () => {
 					history: [],
 					attachments: [],
 					autopilotEnabled: false,
+					autopilotText: "",
+					autopilotPrompts: [],
+					autoAppendEnabled: false,
+					autoAppendText: "",
 					waitingOnUser: false,
 					createdAt: Date.now(),
 					pendingToolCallId: null,
@@ -222,5 +262,32 @@ describe("ChatSessionManager", () => {
 		});
 
 		expect(manager.getSession("1")?.title).toBe("Agent 1");
+	});
+
+	test("renameSession updates session title", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1");
+		expect(manager.renameSession("1", "My Custom Name")).toBe(true);
+		expect(manager.getSession("1")?.title).toBe("My Custom Name");
+	});
+
+	test("renameSession returns false for non-existent session", () => {
+		const manager = new ChatSessionManager();
+		expect(manager.renameSession("nonexistent", "Title")).toBe(false);
+	});
+
+	test("renameSession rejects empty or whitespace-only title", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1");
+		expect(manager.renameSession("1", "")).toBe(false);
+		expect(manager.renameSession("1", "   ")).toBe(false);
+		expect(manager.getSession("1")?.title).toBe("Agent 1");
+	});
+
+	test("renameSession trims whitespace from title", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1");
+		expect(manager.renameSession("1", "  New Title  ")).toBe(true);
+		expect(manager.getSession("1")?.title).toBe("New Title");
 	});
 });

@@ -514,13 +514,130 @@ function renderMermaidDiagrams() {
 }
 
 /**
+ * Toggle split view mode (sessions list + thread side by side)
+ */
+function toggleSplitView() {
+	splitViewEnabled = !splitViewEnabled;
+	var container = document.querySelector(".main-container.orch");
+	if (container) {
+		container.classList.toggle("split-view", splitViewEnabled);
+	}
+	var resizer = document.getElementById("split-resizer");
+	if (resizer) {
+		resizer.classList.toggle("hidden", !splitViewEnabled);
+	}
+	if (splitViewEnabled) {
+		applySplitRatio(splitRatio);
+	} else {
+		// Reset inline styles when exiting split view
+		var hubEl = document.getElementById("workspace-hub");
+		if (hubEl) hubEl.style.flex = "";
+	}
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+}
+
+/**
+ * Apply the split ratio to the hub panel width
+ */
+function applySplitRatio(ratio) {
+	var hubEl = document.getElementById("workspace-hub");
+	if (hubEl) {
+		hubEl.style.flex = "0 0 " + ratio + "%";
+	}
+}
+
+/**
+ * Initialise the split-view drag resizer.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ */
+function initSplitResizer() {
+	var resizer = document.getElementById("split-resizer");
+	if (!resizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	if (!container) return;
+
+	var dragging = false;
+
+	resizer.addEventListener("mousedown", function (e) {
+		if (!splitViewEnabled) return;
+		e.preventDefault();
+		dragging = true;
+		resizer.classList.add("active");
+		document.body.style.cursor = "col-resize";
+		document.body.style.userSelect = "none";
+	});
+
+	document.addEventListener("mousemove", function (e) {
+		if (!dragging) return;
+		var rect = container.getBoundingClientRect();
+		var offset = e.clientX - rect.left;
+		var pct = (offset / rect.width) * 100;
+		// Clamp between 20% and 60%
+		pct = Math.min(60, Math.max(20, pct));
+		splitRatio = Math.round(pct);
+		applySplitRatio(splitRatio);
+	});
+
+	document.addEventListener("mouseup", function () {
+		if (!dragging) return;
+		dragging = false;
+		resizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	});
+
+	// Restore persisted ratio on init
+	if (splitViewEnabled) {
+		resizer.classList.remove("hidden");
+		applySplitRatio(splitRatio);
+	}
+}
+
+/**
  * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {
 	var hubEl = document.getElementById("workspace-hub");
 	var threadEl = document.getElementById("thread-shell");
+	var placeholderEl = document.getElementById("split-placeholder");
+	var threadHeadEl = document.getElementById("stage-head");
+	var composerEl = document.getElementById("input-area-container");
 
-	// If there's an active session, show the thread shell, hide the hub
+	if (splitViewEnabled) {
+		// Split view: always show hub, always show thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		if (activeSessionId) {
+			// Session selected: show thread content, hide placeholder
+			if (placeholderEl) placeholderEl.classList.add("hidden");
+			if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+			if (composerEl) composerEl.classList.remove("hidden");
+			var activeSession = (sessions || []).find(function (s) {
+				return s.id === activeSessionId;
+			});
+			var stageTitle = document.getElementById("stage-title");
+			if (activeSession && stageTitle) {
+				stageTitle.textContent = activeSession.title;
+			}
+		} else {
+			// No session: show placeholder, hide thread head + composer
+			if (placeholderEl) placeholderEl.classList.remove("hidden");
+			if (threadHeadEl) threadHeadEl.classList.add("hidden");
+			if (composerEl) composerEl.classList.add("hidden");
+		}
+		return;
+	}
+
+	// Single view (default): hide placeholder, restore thread head + composer
+	if (placeholderEl) placeholderEl.classList.add("hidden");
+	if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+	if (composerEl) composerEl.classList.remove("hidden");
+
+	// Toggle between hub and thread
 	if (activeSessionId) {
 		if (hubEl) hubEl.classList.add("hidden");
 		if (threadEl) threadEl.classList.remove("hidden");
@@ -564,10 +681,12 @@ function renderSessionsList() {
 	if (!sessions || sessions.length === 0) {
 		sessionsListEl.innerHTML = "";
 		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) welcomeSection.classList.remove("hidden");
 		return;
 	}
 
 	if (sessionsPanelEl) sessionsPanelEl.classList.remove("hidden");
+	if (welcomeSection) welcomeSection.classList.add("hidden");
 
 	// Sort: active sessions first (newest first), then archived
 	var sorted = sessions.slice().sort(function (a, b) {
@@ -620,7 +739,7 @@ function renderSessionsList() {
 				'">' +
 				'<div class="chat-row-main">' +
 				'<div class="chat-row-top">' +
-				"<strong>" +
+				'<strong class="session-title">' +
 				escapeHtml(session.title) +
 				"</strong>" +
 				"<span>" +
@@ -632,6 +751,11 @@ function renderSessionsList() {
 				"</div>" +
 				"</div>" +
 				'<div class="session-thread-actions">' +
+				'<button class="session-action-btn session-rename-btn" data-rename-session-id="' +
+				escapeHtml(session.id) +
+				'" title="Rename session" aria-label="Rename session ' +
+				escapeHtml(session.title) +
+				'"><span class="codicon codicon-edit"></span></button>' +
 				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
 				escapeHtml(session.id) +
 				'" title="Delete session" aria-label="Delete session ' +
@@ -664,6 +788,64 @@ function renderSessionsList() {
 				if (sessionId) {
 					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
 				}
+			});
+		});
+
+	sessionsListEl
+		.querySelectorAll(".session-rename-btn")
+		.forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				var row = btn.closest(".chat-row");
+				if (!row) return;
+				var sessionId = btn.getAttribute("data-rename-session-id");
+				var titleEl = row.querySelector(".session-title");
+				if (!titleEl || !sessionId) return;
+
+				var currentTitle = titleEl.textContent || "";
+				var input = document.createElement("input");
+				input.type = "text";
+				input.className = "session-rename-input";
+				input.value = currentTitle;
+				input.maxLength = 50;
+				titleEl.replaceWith(input);
+				input.focus();
+				input.select();
+
+				var committed = false;
+				function commit() {
+					if (committed) return;
+					committed = true;
+					var newTitle = input.value.trim();
+					if (newTitle && newTitle !== currentTitle) {
+						vscode.postMessage({
+							type: "updateSessionTitle",
+							sessionId: sessionId,
+							title: newTitle,
+						});
+					} else {
+						// Revert — re-render will fix it, but restore immediately for UX
+						var strong = document.createElement("strong");
+						strong.className = "session-title";
+						strong.textContent = currentTitle;
+						input.replaceWith(strong);
+					}
+				}
+
+				input.addEventListener("keydown", function (ev) {
+					if (ev.key === "Enter") {
+						ev.preventDefault();
+						commit();
+					} else if (ev.key === "Escape") {
+						ev.preventDefault();
+						committed = true; // prevent blur from committing
+						var strong = document.createElement("strong");
+						strong.className = "session-title";
+						strong.textContent = currentTitle;
+						input.replaceWith(strong);
+					}
+				});
+				input.addEventListener("blur", commit);
 			});
 		});
 }

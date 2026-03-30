@@ -148,7 +148,7 @@ export function loadSettings(p: P): void {
 		"askUserVerbosePayload",
 		false,
 	);
-	p._autoAppendEnabled = config.get<boolean>(
+	const configAutoAppendEnabled = config.get<boolean>(
 		"autoAppendEnabled",
 		legacyAutoAppendEnabled,
 	);
@@ -156,11 +156,16 @@ export function loadSettings(p: P): void {
 		"autoAppendText",
 		AUTO_APPEND_DEFAULT_TEXT,
 	);
-	p._autoAppendText = normalizeAutoAppendText(configuredAutoAppendText);
-	p._alwaysAppendReminder = config.get<boolean>(
-		"alwaysAppendAskUserReminder",
-		false,
-	);
+	// Per-session overrides: prefer active session values when they differ from defaults.
+	p._autoAppendEnabled = activeSession
+		? (activeSession.autoAppendEnabled ?? configAutoAppendEnabled)
+		: configAutoAppendEnabled;
+	p._autoAppendText = activeSession?.autoAppendText
+		? activeSession.autoAppendText
+		: normalizeAutoAppendText(configuredAutoAppendText);
+	p._alwaysAppendReminder =
+		activeSession?.alwaysAppendReminder ??
+		config.get<boolean>("alwaysAppendAskUserReminder", false);
 	const configuredAutopilotEnabled = config.get<boolean>("autopilot", false);
 	p._autopilotEnabled = activeSession
 		? activeSession.autopilotEnabled
@@ -171,18 +176,26 @@ export function loadSettings(p: P): void {
 		"autopilotText",
 		defaultAutopilotText,
 	);
-	p._autopilotText = normalizeAutopilotText(p, configuredAutopilotText, config);
+	p._autopilotText = activeSession?.autopilotText
+		? activeSession.autopilotText
+		: normalizeAutopilotText(p, configuredAutopilotText, config);
 
-	// Load autopilot prompts array, falling back to autopilotText when empty.
-	const savedAutopilotPrompts = config.get<string[]>("autopilotPrompts", []);
-	if (savedAutopilotPrompts.length > 0) {
-		p._autopilotPrompts = savedAutopilotPrompts.filter(
-			(pr: string) => pr.trim().length > 0,
-		);
-	} else if (p._autopilotText && p._autopilotText !== defaultAutopilotText) {
-		p._autopilotPrompts = [p._autopilotText];
+	// Load autopilot prompts array — prefer per-session, fall back to config.
+	// Array.isArray distinguishes "explicitly set (even empty)" from "undefined (inherit config)".
+	const sessionPrompts = activeSession?.autopilotPrompts;
+	if (Array.isArray(sessionPrompts)) {
+		p._autopilotPrompts = [...sessionPrompts];
 	} else {
-		p._autopilotPrompts = [];
+		const savedAutopilotPrompts = config.get<string[]>("autopilotPrompts", []);
+		if (savedAutopilotPrompts.length > 0) {
+			p._autopilotPrompts = savedAutopilotPrompts.filter(
+				(pr: string) => pr.trim().length > 0,
+			);
+		} else if (p._autopilotText && p._autopilotText !== defaultAutopilotText) {
+			p._autopilotPrompts = [p._autopilotText];
+		} else {
+			p._autopilotPrompts = [];
+		}
 	}
 	if (p._autopilotIndex >= p._autopilotPrompts.length) {
 		p._autopilotIndex = 0;
@@ -314,6 +327,19 @@ export async function saveAutopilotPrompts(p: P): Promise<void> {
 			vscode.ConfigurationTarget.Global,
 		);
 	});
+	syncAutopilotToSession(p);
+}
+
+/** Write provider-level autopilot/autoAppend fields to the active session. */
+function syncAutopilotToSession(p: P): void {
+	const session = p._sessionManager?.getActiveSession?.();
+	if (!session) return;
+	session.autopilotText = p._autopilotText;
+	session.autopilotPrompts = [...p._autopilotPrompts];
+	session.autoAppendEnabled = p._autoAppendEnabled;
+	session.autoAppendText = p._autoAppendText;
+	session.alwaysAppendReminder = p._alwaysAppendReminder;
+	p._saveSessionsToDisk?.();
 }
 
 export async function handleUpdateSoundSetting(
@@ -351,6 +377,7 @@ export async function handleUpdateAutoAppendSetting(
 	enabled: boolean,
 ): Promise<void> {
 	p._autoAppendEnabled = enabled;
+	syncAutopilotToSession(p);
 	await withConfigGuard(p, async () => {
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		await config.update(
@@ -367,6 +394,7 @@ export async function handleUpdateAutoAppendText(
 ): Promise<void> {
 	const normalizedText = normalizeAutoAppendText(text);
 	p._autoAppendText = normalizedText;
+	syncAutopilotToSession(p);
 	await withConfigGuard(p, async () => {
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		await config.update(
@@ -392,10 +420,7 @@ export async function handleUpdateAlwaysAppendReminderSetting(
 	});
 }
 
-export async function handleUpdateAutopilotSetting(
-	p: P,
-	enabled: boolean,
-): Promise<void> {
+export function handleUpdateAutopilotSetting(p: P, enabled: boolean): void {
 	p._autopilotEnabled = enabled;
 	p._consecutiveAutoResponses = 0;
 	const activeSession = p._sessionManager?.getActiveSession?.();
@@ -404,15 +429,9 @@ export async function handleUpdateAutopilotSetting(
 		activeSession.consecutiveAutoResponses = 0;
 		p._saveSessionsToDisk?.();
 	}
-	await withConfigGuard(p, async () => {
-		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-		await config.update(
-			"autopilot",
-			enabled,
-			vscode.ConfigurationTarget.Workspace,
-		);
-	});
-	// Remote broadcast handled by onDidChangeConfiguration → broadcastAllSettingsToRemote
+	// Autopilot on/off is per-session state; do NOT write to workspace config.
+	// The workspace config `tasksync.autopilot` is only the default for new sessions.
+	broadcastAllSettingsToRemote(p);
 }
 
 export async function handleUpdateAutopilotText(
@@ -423,6 +442,7 @@ export async function handleUpdateAutopilotText(
 		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		const normalizedText = normalizeAutopilotText(p, text, config);
 		p._autopilotText = normalizedText;
+		syncAutopilotToSession(p);
 		await config.update(
 			"autopilotText",
 			normalizedText,
@@ -741,4 +761,132 @@ export function handleSearchSlashCommands(p: P, query: string): void {
 		type: "slashCommandResults",
 		prompts: matchingPrompts,
 	} satisfies ToWebviewMessage);
+}
+
+// ========== Per-Session Settings ==========
+
+/** Build the per-session settings state payload for the webview. */
+export function buildSessionSettingsPayload(p: P): {
+	type: "sessionSettingsState";
+	autopilotEnabled: boolean;
+	autopilotPrompts: string[];
+	autoAppendEnabled: boolean;
+	autoAppendText: string;
+	alwaysAppendReminder: boolean;
+	isDefault: boolean;
+} {
+	const session = p._sessionManager?.getActiveSession?.();
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+
+	// Current effective values
+	const autopilotEnabled = p._autopilotEnabled;
+	const autopilotPrompts = p._autopilotPrompts;
+	const autoAppendEnabled = p._autoAppendEnabled;
+	const autoAppendText = p._autoAppendText;
+	const alwaysAppendReminder = p._alwaysAppendReminder;
+
+	// Determine if all overrides are unset (using workspace defaults)
+	const configAutopilot = config.get<boolean>("autopilot", false);
+	const isDefault =
+		!session ||
+		(session.autopilotEnabled === configAutopilot &&
+			session.autopilotPrompts === undefined &&
+			session.autoAppendEnabled === undefined &&
+			session.autoAppendText === undefined &&
+			session.alwaysAppendReminder === undefined);
+
+	return {
+		type: "sessionSettingsState",
+		autopilotEnabled,
+		autopilotPrompts,
+		autoAppendEnabled,
+		autoAppendText,
+		alwaysAppendReminder,
+		isDefault,
+	} satisfies ToWebviewMessage;
+}
+
+/** Send per-session settings state to the webview. */
+export function sendSessionSettingsToWebview(p: P): void {
+	p._view?.webview.postMessage(buildSessionSettingsPayload(p));
+}
+
+/**
+ * Handle per-session settings update from the webview.
+ * Writes ONLY to the session object — does NOT touch workspace config.
+ */
+export function handleUpdateSessionSettings(
+	p: P,
+	msg: {
+		autopilotEnabled?: boolean;
+		autopilotPrompts?: string[];
+		autoAppendEnabled?: boolean;
+		autoAppendText?: string;
+		alwaysAppendReminder?: boolean;
+	},
+): void {
+	const session = p._sessionManager?.getActiveSession?.();
+	if (!session) return;
+
+	if (msg.autopilotEnabled !== undefined) {
+		session.autopilotEnabled = msg.autopilotEnabled;
+		p._autopilotEnabled = msg.autopilotEnabled;
+		p._consecutiveAutoResponses = 0;
+		session.consecutiveAutoResponses = 0;
+	}
+	if (msg.autopilotPrompts !== undefined) {
+		const cleaned = msg.autopilotPrompts.filter(
+			(pr: string) => pr.trim().length > 0,
+		);
+		session.autopilotPrompts = cleaned;
+		p._autopilotPrompts = [...cleaned];
+		if (p._autopilotIndex >= cleaned.length) {
+			p._autopilotIndex = 0;
+		}
+	}
+	if (msg.autoAppendEnabled !== undefined) {
+		session.autoAppendEnabled = msg.autoAppendEnabled;
+		p._autoAppendEnabled = msg.autoAppendEnabled;
+	}
+	if (msg.autoAppendText !== undefined) {
+		const normalized = normalizeAutoAppendText(msg.autoAppendText);
+		session.autoAppendText = normalized;
+		p._autoAppendText = normalized;
+	}
+	if (msg.alwaysAppendReminder !== undefined) {
+		session.alwaysAppendReminder = msg.alwaysAppendReminder;
+		p._alwaysAppendReminder = msg.alwaysAppendReminder;
+	}
+
+	p._saveSessionsToDisk?.();
+	// Send updated global settings UI (keeps the global modal in sync)
+	updateSettingsUI(p);
+	// Send per-session state back
+	sendSessionSettingsToWebview(p);
+	broadcastAllSettingsToRemote(p);
+}
+
+/**
+ * Reset all per-session overrides to undefined (inherit from workspace config).
+ */
+export function handleResetSessionSettings(p: P): void {
+	const session = p._sessionManager?.getActiveSession?.();
+	if (!session) return;
+
+	// Reset autopilot on/off to the workspace default
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+	session.autopilotEnabled = config.get<boolean>("autopilot", false);
+
+	session.autopilotText = undefined;
+	session.autopilotPrompts = undefined;
+	session.autoAppendEnabled = undefined;
+	session.autoAppendText = undefined;
+	session.alwaysAppendReminder = undefined;
+
+	// Re-load from workspace config
+	loadSettings(p);
+	p._saveSessionsToDisk?.();
+	updateSettingsUI(p);
+	sendSessionSettingsToWebview(p);
+	broadcastAllSettingsToRemote(p);
 }

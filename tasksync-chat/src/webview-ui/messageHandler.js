@@ -64,6 +64,9 @@ function handleExtensionMessage(event) {
 		case "openResetSessionModal":
 			openResetSessionModal();
 			break;
+		case "toggleSplitView":
+			toggleSplitView();
+			break;
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
@@ -201,6 +204,9 @@ function handleExtensionMessage(event) {
 			break;
 		case "triggerSendFromShortcut":
 			handleSendFromShortcut();
+			break;
+		case "sessionSettingsState":
+			populateSessionSettings(message);
 			break;
 	}
 }

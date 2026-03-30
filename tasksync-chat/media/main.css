@@ -83,8 +83,75 @@ body {
     display: none !important;
 }
 
+/* ==================== Split View Layout ==================== */
+
+.main-container.orch.split-view {
+    flex-direction: row;
+}
+
+.main-container.orch.split-view>.mobile-shell.hub-shell {
+    flex: 0 0 38%;
+    max-width: 50%;
+    border-right: none;
+    overflow-y: auto;
+}
+
+.main-container.orch.split-view>.mobile-shell.thread-shell {
+    flex: 1 1 62%;
+    min-width: 0;
+}
+
+/* Split view drag resizer */
+.split-resizer {
+    flex: 0 0 4px;
+    cursor: col-resize;
+    background: var(--vscode-panel-border);
+    transition: background 0.15s;
+    z-index: 10;
+}
+
+.split-resizer:hover,
+.split-resizer.active {
+    background: var(--vscode-focusBorder);
+}
+
+.main-container.orch.split-view>.split-resizer {
+    display: block;
+}
+
+/* Hide back button in split view — hub is always visible */
+.main-container.orch.split-view #thread-back-btn {
+    display: none;
+}
+
+/* Split view placeholder — shown when no session is selected */
+.split-placeholder {
+    grid-row: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    opacity: 0.5;
+}
+
+.split-placeholder-icon {
+    font-size: 32px;
+}
+
+.split-placeholder-text {
+    font-size: 13px;
+    margin: 0;
+}
+
+/* In split view, hub is always visible even when a session is active */
+.main-container.orch.split-view>.mobile-shell.hub-shell.hidden {
+    display: grid !important;
+}
+
 /* Hub Topbar & Thread Head */
-.topbar, .thread-head {
+.topbar,
+.thread-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -111,7 +178,8 @@ body {
     filter: brightness(0) invert(1);
 }
 
-.top-actions, .thread-actions {
+.top-actions,
+.thread-actions {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -155,12 +223,14 @@ body {
     cursor: pointer;
 }
 
-.chat-row:hover, .chat-row.active {
+.chat-row:hover,
+.chat-row.active {
     background: var(--vscode-list-hoverBackground);
 }
 
 .chat-row.waiting strong {
-    color: #f4d35e; /* var(--vscode-inputValidation-warningBorder) approx */
+    color: #f4d35e;
+    /* var(--vscode-inputValidation-warningBorder) approx */
 }
 
 .chat-row.archived {
@@ -188,7 +258,10 @@ body {
     white-space: nowrap;
 }
 
-.chat-row-top span, .chat-row-preview, .msg-meta, .day {
+.chat-row-top span,
+.chat-row-preview,
+.msg-meta,
+.day {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
 }
@@ -317,11 +390,9 @@ body {
 .welcome-card-spec.selected {
     border-color: var(--vscode-focusBorder);
     box-shadow: 0 0 0 2px var(--vscode-focusBorder);
-    background-color: color-mix(
-        in srgb,
-        var(--vscode-focusBorder) 10%,
-        var(--vscode-input-background)
-    );
+    background-color: color-mix(in srgb,
+            var(--vscode-focusBorder) 10%,
+            var(--vscode-input-background));
 }
 
 .welcome-card-header {
@@ -3723,6 +3794,7 @@ button#send-btn:disabled {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
 }
+
 .session-count::before {
     content: "• ";
 }
@@ -3759,6 +3831,24 @@ button#send-btn:disabled {
 
 .session-delete-btn:hover {
     color: var(--vscode-errorForeground);
+}
+
+.session-rename-input {
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, var(--vscode-focusBorder));
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: inherit;
+    font-family: inherit;
+    font-weight: bold;
+    width: 100%;
+    max-width: 140px;
+    outline: none;
+}
+
+.session-rename-input:focus {
+    border-color: var(--vscode-focusBorder);
 }
 
 /* --- Pending Inbox Area --- */
@@ -3882,4 +3972,36 @@ button#send-btn:disabled {
 
 .inbox-btn:hover {
     background: var(--vscode-button-hoverBackground);
+}
+
+/* ===== Session Settings Mini-Modal ===== */
+
+.session-settings-modal {
+    max-width: 300px;
+    max-height: 60vh;
+}
+
+.session-settings-desc {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 10px;
+    padding: 0 2px;
+}
+
+/* Gear icon override indicator (dot) */
+#thread-settings-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    position: relative;
+}
+
+#thread-settings-btn.has-overrides::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--vscode-notificationsInfoIcon-foreground, #3794ff);
 }

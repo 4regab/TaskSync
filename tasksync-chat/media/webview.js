@@ -919,6 +919,8 @@ let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
 let sessions = []; // Multi-session orchestration: all sessions
 let activeSessionId = null; // Currently focused session ID
+let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
+let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -1047,6 +1049,21 @@ let humanDelayToggle,
 	humanDelayRangeContainer,
 	humanDelayMinInput,
 	humanDelayMaxInput;
+// Session settings mini-modal elements
+let sessionSettingsOverlay,
+	sessionSettingsModal,
+	ssAutopilotToggle,
+	ssAutoAppendToggle,
+	ssAutoAppendTextInput,
+	ssAlwaysAppendReminderToggle,
+	ssAutopilotPromptsList,
+	ssAddAutopilotPromptBtn,
+	ssAddAutopilotPromptForm,
+	ssAutopilotPromptInput,
+	ssSaveAutopilotPromptBtn,
+	ssCancelAutopilotPromptBtn;
+// Session-level override state (undefined = inherit workspace)
+let sessionSettingsHasOverrides = false;
 function init() {
 	try {
 		cacheDOMElements();
@@ -1054,6 +1071,7 @@ function init() {
 		createEditModeUI();
 		createApprovalModal();
 		createSettingsModal();
+		createSessionSettingsModal();
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();
@@ -1097,6 +1115,13 @@ function init() {
 
 		restoreActiveSessionComposerState();
 
+		// Restore split view state
+		if (splitViewEnabled) {
+			var container = document.querySelector(".main-container.orch");
+			if (container) container.classList.add("split-view");
+		}
+		initSplitResizer();
+
 		// Restore attachments display
 		if (currentAttachments.length > 0) {
 			updateChipsDisplay();
@@ -1123,6 +1148,8 @@ function saveWebviewState() {
 			return !a.isTemporary;
 		}), // Don't persist temp images
 		sessionComposerState: sessionComposerState,
+		splitViewEnabled: splitViewEnabled,
+		splitRatio: splitRatio,
 	});
 }
 
@@ -1691,6 +1718,142 @@ function createSettingsModal() {
 	addPromptForm = document.getElementById("add-prompt-form");
 }
 
+// ===== SESSION SETTINGS MINI-MODAL =====
+
+function createSessionSettingsModal() {
+	sessionSettingsOverlay = document.createElement("div");
+	sessionSettingsOverlay.className = "settings-modal-overlay hidden";
+	sessionSettingsOverlay.id = "session-settings-overlay";
+
+	sessionSettingsModal = document.createElement("div");
+	sessionSettingsModal.className = "settings-modal session-settings-modal";
+	sessionSettingsModal.id = "session-settings-modal";
+	sessionSettingsModal.setAttribute("role", "dialog");
+	sessionSettingsModal.setAttribute(
+		"aria-labelledby",
+		"session-settings-title",
+	);
+
+	// Modal header
+	var ssHeader = document.createElement("div");
+	ssHeader.className = "settings-modal-header";
+
+	var ssTitleSpan = document.createElement("span");
+	ssTitleSpan.className = "settings-modal-title";
+	ssTitleSpan.id = "session-settings-title";
+	ssTitleSpan.textContent = "Session Settings";
+	ssHeader.appendChild(ssTitleSpan);
+
+	var ssHeaderBtns = document.createElement("div");
+	ssHeaderBtns.className = "settings-modal-header-buttons";
+
+	var ssResetBtn = document.createElement("button");
+	ssResetBtn.className = "settings-modal-header-btn";
+	ssResetBtn.innerHTML = '<span class="codicon codicon-discard"></span>';
+	ssResetBtn.title = "Reset to workspace defaults";
+	ssResetBtn.setAttribute(
+		"aria-label",
+		"Reset session settings to workspace defaults",
+	);
+	ssResetBtn.id = "ss-reset-btn";
+	ssHeaderBtns.appendChild(ssResetBtn);
+
+	var ssCloseBtn = document.createElement("button");
+	ssCloseBtn.className = "settings-modal-header-btn";
+	ssCloseBtn.innerHTML = '<span class="codicon codicon-close"></span>';
+	ssCloseBtn.title = "Close";
+	ssCloseBtn.setAttribute("aria-label", "Close session settings");
+	ssCloseBtn.id = "ss-close-btn";
+	ssHeaderBtns.appendChild(ssCloseBtn);
+
+	ssHeader.appendChild(ssHeaderBtns);
+
+	// Modal content
+	var ssContent = document.createElement("div");
+	ssContent.className = "settings-modal-content";
+
+	// Description
+	var ssDesc = document.createElement("div");
+	ssDesc.className = "session-settings-desc";
+	ssDesc.textContent = "Override workspace settings for this session only.";
+	ssContent.appendChild(ssDesc);
+
+	// Autopilot toggle section
+	var ssAutopilotSection = document.createElement("div");
+	ssAutopilotSection.className = "settings-section";
+	ssAutopilotSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-rocket"></span> Autopilot</div>' +
+		'<div class="toggle-switch" id="ss-autopilot-toggle" role="switch" aria-checked="false" aria-label="Enable Autopilot for this session" tabindex="0"></div>' +
+		"</div>";
+	ssContent.appendChild(ssAutopilotSection);
+
+	// Autopilot Prompts section
+	var ssPromptsSection = document.createElement("div");
+	ssPromptsSection.className = "settings-section";
+	ssPromptsSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-list-ordered"></span> Autopilot Prompts</div>' +
+		'<button class="add-prompt-btn-inline" id="ss-autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
+		"</div>" +
+		'<div class="autopilot-prompts-list" id="ss-autopilot-prompts-list"></div>' +
+		'<div class="add-autopilot-prompt-form hidden" id="ss-add-autopilot-prompt-form">' +
+		'<div class="form-row">' +
+		'<textarea class="form-input form-textarea" id="ss-autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
+		"</div>" +
+		'<div class="form-actions">' +
+		'<button class="form-btn form-btn-cancel" id="ss-cancel-autopilot-prompt-btn">Cancel</button>' +
+		'<button class="form-btn form-btn-save" id="ss-save-autopilot-prompt-btn">Save</button>' +
+		"</div>" +
+		"</div>";
+	ssContent.appendChild(ssPromptsSection);
+
+	// Auto Append section
+	var ssAutoAppendSection = document.createElement("div");
+	ssAutoAppendSection.className = "settings-section";
+	ssAutoAppendSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
+		"</div>" +
+		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
+		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
+		'<div class="auto-append-reminder-row">' +
+		'<label class="form-label-inline" for="ss-always-append-reminder-toggle">Always append askUser reminder</label>' +
+		'<div class="toggle-switch-small" id="ss-always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder for this session" tabindex="0"></div>' +
+		"</div>" +
+		"</div>";
+	ssContent.appendChild(ssAutoAppendSection);
+
+	// Assemble
+	sessionSettingsModal.appendChild(ssHeader);
+	sessionSettingsModal.appendChild(ssContent);
+	sessionSettingsOverlay.appendChild(sessionSettingsModal);
+	document.body.appendChild(sessionSettingsOverlay);
+
+	// Cache inner elements
+	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
+	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
+	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
+	ssAlwaysAppendReminderToggle = document.getElementById(
+		"ss-always-append-reminder-toggle",
+	);
+	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
+	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
+	ssAddAutopilotPromptForm = document.getElementById(
+		"ss-add-autopilot-prompt-form",
+	);
+	ssAutopilotPromptInput = document.getElementById("ss-autopilot-prompt-input");
+	ssSaveAutopilotPromptBtn = document.getElementById(
+		"ss-save-autopilot-prompt-btn",
+	);
+	ssCancelAutopilotPromptBtn = document.getElementById(
+		"ss-cancel-autopilot-prompt-btn",
+	);
+}
+
 // ===== NEW SESSION MODAL =====
 
 var newSessionModalOverlay = null;
@@ -2174,7 +2337,10 @@ function bindEventListeners() {
 	if (threadHistoryBtn)
 		threadHistoryBtn.addEventListener("click", openHistoryModal);
 	if (threadSettingsBtn)
-		threadSettingsBtn.addEventListener("click", openSettingsModal);
+		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
+
+	// Session settings modal events
+	bindSessionSettingsEvents();
 
 	// Edit mode button events
 	if (editCancelBtn) editCancelBtn.addEventListener("click", cancelEditMode);
@@ -2345,6 +2511,42 @@ function bindEventListeners() {
 	if (savePromptBtn) savePromptBtn.addEventListener("click", saveNewPrompt);
 
 	window.addEventListener("message", handleExtensionMessage);
+}
+
+function bindSessionSettingsEvents() {
+	var ssCloseBtn = document.getElementById("ss-close-btn");
+	var ssResetBtn = document.getElementById("ss-reset-btn");
+
+	if (sessionSettingsOverlay) {
+		sessionSettingsOverlay.addEventListener("click", function (e) {
+			if (e.target === sessionSettingsOverlay) closeSessionSettingsModal();
+		});
+	}
+	if (ssCloseBtn)
+		ssCloseBtn.addEventListener("click", closeSessionSettingsModal);
+	if (ssResetBtn) ssResetBtn.addEventListener("click", resetSessionSettings);
+	if (ssAutopilotToggle)
+		ssAutopilotToggle.addEventListener("click", ssToggleAutopilot);
+	if (ssAutoAppendToggle)
+		ssAutoAppendToggle.addEventListener("click", ssToggleAutoAppend);
+	if (ssAlwaysAppendReminderToggle)
+		ssAlwaysAppendReminderToggle.addEventListener(
+			"click",
+			ssToggleAlwaysAppendReminder,
+		);
+	if (ssAddAutopilotPromptBtn)
+		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
+	if (ssSaveAutopilotPromptBtn)
+		ssSaveAutopilotPromptBtn.addEventListener("click", ssSavePrompt);
+	if (ssCancelAutopilotPromptBtn)
+		ssCancelAutopilotPromptBtn.addEventListener("click", ssHideAddPromptForm);
+	if (ssAutopilotPromptsList) {
+		ssAutopilotPromptsList.addEventListener("click", ssHandlePromptsListClick);
+		ssAutopilotPromptsList.addEventListener("dragstart", ssHandleDragStart);
+		ssAutopilotPromptsList.addEventListener("dragover", ssHandleDragOver);
+		ssAutopilotPromptsList.addEventListener("dragend", ssHandleDragEnd);
+		ssAutopilotPromptsList.addEventListener("drop", ssHandleDrop);
+	}
 }
 // ==================== History Modal ====================
 
@@ -3077,6 +3279,9 @@ function handleExtensionMessage(event) {
 		case "openResetSessionModal":
 			openResetSessionModal();
 			break;
+		case "toggleSplitView":
+			toggleSplitView();
+			break;
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
@@ -3214,6 +3419,9 @@ function handleExtensionMessage(event) {
 			break;
 		case "triggerSendFromShortcut":
 			handleSendFromShortcut();
+			break;
+		case "sessionSettingsState":
+			populateSessionSettings(message);
 			break;
 	}
 }
@@ -4008,13 +4216,130 @@ function renderMermaidDiagrams() {
 }
 
 /**
+ * Toggle split view mode (sessions list + thread side by side)
+ */
+function toggleSplitView() {
+	splitViewEnabled = !splitViewEnabled;
+	var container = document.querySelector(".main-container.orch");
+	if (container) {
+		container.classList.toggle("split-view", splitViewEnabled);
+	}
+	var resizer = document.getElementById("split-resizer");
+	if (resizer) {
+		resizer.classList.toggle("hidden", !splitViewEnabled);
+	}
+	if (splitViewEnabled) {
+		applySplitRatio(splitRatio);
+	} else {
+		// Reset inline styles when exiting split view
+		var hubEl = document.getElementById("workspace-hub");
+		if (hubEl) hubEl.style.flex = "";
+	}
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+}
+
+/**
+ * Apply the split ratio to the hub panel width
+ */
+function applySplitRatio(ratio) {
+	var hubEl = document.getElementById("workspace-hub");
+	if (hubEl) {
+		hubEl.style.flex = "0 0 " + ratio + "%";
+	}
+}
+
+/**
+ * Initialise the split-view drag resizer.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ */
+function initSplitResizer() {
+	var resizer = document.getElementById("split-resizer");
+	if (!resizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	if (!container) return;
+
+	var dragging = false;
+
+	resizer.addEventListener("mousedown", function (e) {
+		if (!splitViewEnabled) return;
+		e.preventDefault();
+		dragging = true;
+		resizer.classList.add("active");
+		document.body.style.cursor = "col-resize";
+		document.body.style.userSelect = "none";
+	});
+
+	document.addEventListener("mousemove", function (e) {
+		if (!dragging) return;
+		var rect = container.getBoundingClientRect();
+		var offset = e.clientX - rect.left;
+		var pct = (offset / rect.width) * 100;
+		// Clamp between 20% and 60%
+		pct = Math.min(60, Math.max(20, pct));
+		splitRatio = Math.round(pct);
+		applySplitRatio(splitRatio);
+	});
+
+	document.addEventListener("mouseup", function () {
+		if (!dragging) return;
+		dragging = false;
+		resizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	});
+
+	// Restore persisted ratio on init
+	if (splitViewEnabled) {
+		resizer.classList.remove("hidden");
+		applySplitRatio(splitRatio);
+	}
+}
+
+/**
  * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {
 	var hubEl = document.getElementById("workspace-hub");
 	var threadEl = document.getElementById("thread-shell");
+	var placeholderEl = document.getElementById("split-placeholder");
+	var threadHeadEl = document.getElementById("stage-head");
+	var composerEl = document.getElementById("input-area-container");
 
-	// If there's an active session, show the thread shell, hide the hub
+	if (splitViewEnabled) {
+		// Split view: always show hub, always show thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		if (activeSessionId) {
+			// Session selected: show thread content, hide placeholder
+			if (placeholderEl) placeholderEl.classList.add("hidden");
+			if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+			if (composerEl) composerEl.classList.remove("hidden");
+			var activeSession = (sessions || []).find(function (s) {
+				return s.id === activeSessionId;
+			});
+			var stageTitle = document.getElementById("stage-title");
+			if (activeSession && stageTitle) {
+				stageTitle.textContent = activeSession.title;
+			}
+		} else {
+			// No session: show placeholder, hide thread head + composer
+			if (placeholderEl) placeholderEl.classList.remove("hidden");
+			if (threadHeadEl) threadHeadEl.classList.add("hidden");
+			if (composerEl) composerEl.classList.add("hidden");
+		}
+		return;
+	}
+
+	// Single view (default): hide placeholder, restore thread head + composer
+	if (placeholderEl) placeholderEl.classList.add("hidden");
+	if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+	if (composerEl) composerEl.classList.remove("hidden");
+
+	// Toggle between hub and thread
 	if (activeSessionId) {
 		if (hubEl) hubEl.classList.add("hidden");
 		if (threadEl) threadEl.classList.remove("hidden");
@@ -4058,10 +4383,12 @@ function renderSessionsList() {
 	if (!sessions || sessions.length === 0) {
 		sessionsListEl.innerHTML = "";
 		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) welcomeSection.classList.remove("hidden");
 		return;
 	}
 
 	if (sessionsPanelEl) sessionsPanelEl.classList.remove("hidden");
+	if (welcomeSection) welcomeSection.classList.add("hidden");
 
 	// Sort: active sessions first (newest first), then archived
 	var sorted = sessions.slice().sort(function (a, b) {
@@ -4114,7 +4441,7 @@ function renderSessionsList() {
 				'">' +
 				'<div class="chat-row-main">' +
 				'<div class="chat-row-top">' +
-				"<strong>" +
+				'<strong class="session-title">' +
 				escapeHtml(session.title) +
 				"</strong>" +
 				"<span>" +
@@ -4126,6 +4453,11 @@ function renderSessionsList() {
 				"</div>" +
 				"</div>" +
 				'<div class="session-thread-actions">' +
+				'<button class="session-action-btn session-rename-btn" data-rename-session-id="' +
+				escapeHtml(session.id) +
+				'" title="Rename session" aria-label="Rename session ' +
+				escapeHtml(session.title) +
+				'"><span class="codicon codicon-edit"></span></button>' +
 				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
 				escapeHtml(session.id) +
 				'" title="Delete session" aria-label="Delete session ' +
@@ -4158,6 +4490,64 @@ function renderSessionsList() {
 				if (sessionId) {
 					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
 				}
+			});
+		});
+
+	sessionsListEl
+		.querySelectorAll(".session-rename-btn")
+		.forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				var row = btn.closest(".chat-row");
+				if (!row) return;
+				var sessionId = btn.getAttribute("data-rename-session-id");
+				var titleEl = row.querySelector(".session-title");
+				if (!titleEl || !sessionId) return;
+
+				var currentTitle = titleEl.textContent || "";
+				var input = document.createElement("input");
+				input.type = "text";
+				input.className = "session-rename-input";
+				input.value = currentTitle;
+				input.maxLength = 50;
+				titleEl.replaceWith(input);
+				input.focus();
+				input.select();
+
+				var committed = false;
+				function commit() {
+					if (committed) return;
+					committed = true;
+					var newTitle = input.value.trim();
+					if (newTitle && newTitle !== currentTitle) {
+						vscode.postMessage({
+							type: "updateSessionTitle",
+							sessionId: sessionId,
+							title: newTitle,
+						});
+					} else {
+						// Revert — re-render will fix it, but restore immediately for UX
+						var strong = document.createElement("strong");
+						strong.className = "session-title";
+						strong.textContent = currentTitle;
+						input.replaceWith(strong);
+					}
+				}
+
+				input.addEventListener("keydown", function (ev) {
+					if (ev.key === "Enter") {
+						ev.preventDefault();
+						commit();
+					} else if (ev.key === "Escape") {
+						ev.preventDefault();
+						committed = true; // prevent blur from committing
+						var strong = document.createElement("strong");
+						strong.className = "session-title";
+						strong.textContent = currentTitle;
+						input.replaceWith(strong);
+					}
+				});
+				input.addEventListener("blur", commit);
 			});
 		});
 }
@@ -5322,6 +5712,332 @@ function editPrompt(id) {
 
 function deletePrompt(id) {
 	vscode.postMessage({ type: "removeReusablePrompt", id: id });
+}
+// ===== SESSION SETTINGS MINI-MODAL FUNCTIONS =====
+
+// Local state for session-level autopilot prompts (managed entirely in the modal)
+var ssAutopilotPromptsLocal = [];
+var ssEditingPromptIndex = -1;
+var ssDraggedIndex = -1;
+
+function openSessionSettingsModal() {
+	if (!sessionSettingsOverlay) return;
+	vscode.postMessage({ type: "requestSessionSettings" });
+	sessionSettingsOverlay.classList.remove("hidden");
+}
+
+function closeSessionSettingsModal() {
+	if (!sessionSettingsOverlay) return;
+	// Auto-save on close
+	saveSessionSettings();
+	sessionSettingsOverlay.classList.add("hidden");
+	ssHideAddPromptForm();
+}
+
+function saveSessionSettings() {
+	var isAutopilotEnabled = ssAutopilotToggle
+		? ssAutopilotToggle.classList.contains("active")
+		: false;
+	var isAutoAppendEnabled = ssAutoAppendToggle
+		? ssAutoAppendToggle.classList.contains("active")
+		: false;
+	var autoAppendText = ssAutoAppendTextInput ? ssAutoAppendTextInput.value : "";
+	var isReminderEnabled = ssAlwaysAppendReminderToggle
+		? ssAlwaysAppendReminderToggle.classList.contains("active")
+		: false;
+
+	vscode.postMessage({
+		type: "updateSessionSettings",
+		autopilotEnabled: isAutopilotEnabled,
+		autopilotPrompts: ssAutopilotPromptsLocal.filter(function (p) {
+			return p.trim().length > 0;
+		}),
+		autoAppendEnabled: isAutoAppendEnabled,
+		autoAppendText: autoAppendText,
+		alwaysAppendReminder: isReminderEnabled,
+	});
+}
+
+function resetSessionSettings() {
+	vscode.postMessage({ type: "resetSessionSettings" });
+	// The backend will send back a sessionSettingsState with workspace defaults
+}
+
+function populateSessionSettings(msg) {
+	sessionSettingsHasOverrides = msg.isDefault === false;
+	updateSessionSettingsGearIndicator();
+
+	// Autopilot toggle
+	if (ssAutopilotToggle) {
+		ssAutopilotToggle.classList.toggle("active", msg.autopilotEnabled === true);
+		ssAutopilotToggle.setAttribute(
+			"aria-checked",
+			msg.autopilotEnabled ? "true" : "false",
+		);
+	}
+
+	// Autopilot prompts
+	ssAutopilotPromptsLocal = Array.isArray(msg.autopilotPrompts)
+		? msg.autopilotPrompts.slice()
+		: [];
+	ssRenderPromptsList();
+
+	// Auto Append toggle
+	if (ssAutoAppendToggle) {
+		ssAutoAppendToggle.classList.toggle(
+			"active",
+			msg.autoAppendEnabled === true,
+		);
+		ssAutoAppendToggle.setAttribute(
+			"aria-checked",
+			msg.autoAppendEnabled ? "true" : "false",
+		);
+	}
+
+	// Auto Append text row visibility
+	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
+	if (ssAutoAppendTextRow) {
+		ssAutoAppendTextRow.classList.toggle(
+			"hidden",
+			msg.autoAppendEnabled !== true,
+		);
+	}
+
+	// Auto Append text
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.value =
+			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
+	}
+
+	// Always Append Reminder toggle
+	if (ssAlwaysAppendReminderToggle) {
+		ssAlwaysAppendReminderToggle.classList.toggle(
+			"active",
+			msg.alwaysAppendReminder === true,
+		);
+		ssAlwaysAppendReminderToggle.setAttribute(
+			"aria-checked",
+			msg.alwaysAppendReminder ? "true" : "false",
+		);
+	}
+}
+
+function updateSessionSettingsGearIndicator() {
+	if (!threadSettingsBtn) return;
+	threadSettingsBtn.classList.toggle(
+		"has-overrides",
+		sessionSettingsHasOverrides,
+	);
+}
+
+// --- Session autopilot prompts list (local) ---
+
+function ssRenderPromptsList() {
+	if (!ssAutopilotPromptsList) return;
+
+	if (ssAutopilotPromptsLocal.length === 0) {
+		ssAutopilotPromptsList.innerHTML =
+			'<div class="empty-prompts-hint">No session prompts. Inherits workspace prompts.</div>';
+		return;
+	}
+
+	ssAutopilotPromptsList.innerHTML = ssAutopilotPromptsLocal
+		.map(function (prompt, index) {
+			var truncated =
+				prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt;
+			var tooltipText =
+				prompt.length > 300 ? prompt.substring(0, 300) + "..." : prompt;
+			tooltipText = escapeHtml(tooltipText);
+			return (
+				'<div class="autopilot-prompt-item" draggable="true" data-index="' +
+				index +
+				'" title="' +
+				tooltipText +
+				'">' +
+				'<span class="autopilot-prompt-drag-handle codicon codicon-grabber"></span>' +
+				'<span class="autopilot-prompt-number">' +
+				(index + 1) +
+				".</span>" +
+				'<span class="autopilot-prompt-text">' +
+				escapeHtml(truncated) +
+				"</span>" +
+				'<div class="autopilot-prompt-actions">' +
+				'<button class="prompt-item-btn edit" data-index="' +
+				index +
+				'" title="Edit"><span class="codicon codicon-edit"></span></button>' +
+				'<button class="prompt-item-btn delete" data-index="' +
+				index +
+				'" title="Delete"><span class="codicon codicon-trash"></span></button>' +
+				"</div></div>"
+			);
+		})
+		.join("");
+}
+
+function ssShowAddPromptForm() {
+	if (!ssAddAutopilotPromptForm || !ssAutopilotPromptInput) return;
+	ssEditingPromptIndex = -1;
+	ssAutopilotPromptInput.value = "";
+	ssAddAutopilotPromptForm.classList.remove("hidden");
+	ssAddAutopilotPromptForm.removeAttribute("data-editing-index");
+	ssAutopilotPromptInput.focus();
+}
+
+function ssHideAddPromptForm() {
+	if (!ssAddAutopilotPromptForm || !ssAutopilotPromptInput) return;
+	ssAddAutopilotPromptForm.classList.add("hidden");
+	ssAutopilotPromptInput.value = "";
+	ssEditingPromptIndex = -1;
+	ssAddAutopilotPromptForm.removeAttribute("data-editing-index");
+}
+
+function ssSavePrompt() {
+	if (!ssAutopilotPromptInput) return;
+	var prompt = ssAutopilotPromptInput.value.trim();
+	if (!prompt) return;
+
+	var editingIndex = ssAddAutopilotPromptForm
+		? ssAddAutopilotPromptForm.getAttribute("data-editing-index")
+		: null;
+	if (editingIndex !== null) {
+		var idx = parseInt(editingIndex, 10);
+		if (idx >= 0 && idx < ssAutopilotPromptsLocal.length) {
+			ssAutopilotPromptsLocal[idx] = prompt;
+		}
+	} else {
+		ssAutopilotPromptsLocal.push(prompt);
+	}
+	ssHideAddPromptForm();
+	ssRenderPromptsList();
+}
+
+function ssHandlePromptsListClick(e) {
+	var target = e.target.closest(".prompt-item-btn");
+	if (!target) return;
+
+	var index = parseInt(target.getAttribute("data-index"), 10);
+	if (isNaN(index)) return;
+
+	if (target.classList.contains("edit")) {
+		ssEditPrompt(index);
+	} else if (target.classList.contains("delete")) {
+		ssDeletePrompt(index);
+	}
+}
+
+function ssEditPrompt(index) {
+	if (index < 0 || index >= ssAutopilotPromptsLocal.length) return;
+	if (!ssAddAutopilotPromptForm || !ssAutopilotPromptInput) return;
+
+	ssEditingPromptIndex = index;
+	ssAutopilotPromptInput.value = ssAutopilotPromptsLocal[index];
+	ssAddAutopilotPromptForm.setAttribute("data-editing-index", index);
+	ssAddAutopilotPromptForm.classList.remove("hidden");
+	ssAutopilotPromptInput.focus();
+}
+
+function ssDeletePrompt(index) {
+	if (index < 0 || index >= ssAutopilotPromptsLocal.length) return;
+	ssAutopilotPromptsLocal.splice(index, 1);
+	ssRenderPromptsList();
+}
+
+function ssToggleAutopilot() {
+	if (!ssAutopilotToggle) return;
+	var active = !ssAutopilotToggle.classList.contains("active");
+	ssAutopilotToggle.classList.toggle("active", active);
+	ssAutopilotToggle.setAttribute("aria-checked", active ? "true" : "false");
+}
+
+function ssToggleAutoAppend() {
+	if (!ssAutoAppendToggle) return;
+	var active = !ssAutoAppendToggle.classList.contains("active");
+	ssAutoAppendToggle.classList.toggle("active", active);
+	ssAutoAppendToggle.setAttribute("aria-checked", active ? "true" : "false");
+
+	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
+	if (ssAutoAppendTextRow) {
+		ssAutoAppendTextRow.classList.toggle("hidden", !active);
+	}
+}
+
+function ssToggleAlwaysAppendReminder() {
+	if (!ssAlwaysAppendReminderToggle) return;
+	var active = !ssAlwaysAppendReminderToggle.classList.contains("active");
+	ssAlwaysAppendReminderToggle.classList.toggle("active", active);
+	ssAlwaysAppendReminderToggle.setAttribute(
+		"aria-checked",
+		active ? "true" : "false",
+	);
+}
+
+function ssHandleDragStart(e) {
+	var item = e.target.closest(".autopilot-prompt-item");
+	if (!item) return;
+	ssDraggedIndex = parseInt(item.getAttribute("data-index"), 10);
+	item.classList.add("dragging");
+	e.dataTransfer.effectAllowed = "move";
+	e.dataTransfer.setData("text/plain", ssDraggedIndex);
+}
+
+function ssHandleDragOver(e) {
+	e.preventDefault();
+	e.dataTransfer.dropEffect = "move";
+	var item = e.target.closest(".autopilot-prompt-item");
+	if (!item || !ssAutopilotPromptsList) return;
+
+	ssAutopilotPromptsList
+		.querySelectorAll(".autopilot-prompt-item")
+		.forEach(function (el) {
+			el.classList.remove("drag-over-top", "drag-over-bottom");
+		});
+
+	var rect = item.getBoundingClientRect();
+	var midY = rect.top + rect.height / 2;
+	if (e.clientY < midY) {
+		item.classList.add("drag-over-top");
+	} else {
+		item.classList.add("drag-over-bottom");
+	}
+}
+
+function ssHandleDragEnd() {
+	ssDraggedIndex = -1;
+	if (!ssAutopilotPromptsList) return;
+	ssAutopilotPromptsList
+		.querySelectorAll(".autopilot-prompt-item")
+		.forEach(function (el) {
+			el.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
+		});
+}
+
+function ssHandleDrop(e) {
+	e.preventDefault();
+	var item = e.target.closest(".autopilot-prompt-item");
+	if (!item || ssDraggedIndex < 0) return;
+
+	var toIndex = parseInt(item.getAttribute("data-index"), 10);
+	if (isNaN(toIndex) || ssDraggedIndex === toIndex) {
+		ssHandleDragEnd();
+		return;
+	}
+
+	var rect = item.getBoundingClientRect();
+	var midY = rect.top + rect.height / 2;
+	var insertBelow = e.clientY >= midY;
+
+	var targetIndex = toIndex;
+	if (insertBelow && toIndex < ssAutopilotPromptsLocal.length - 1) {
+		targetIndex = toIndex + 1;
+	}
+	if (ssDraggedIndex < targetIndex) {
+		targetIndex--;
+	}
+
+	var moved = ssAutopilotPromptsLocal.splice(ssDraggedIndex, 1)[0];
+	ssAutopilotPromptsLocal.splice(targetIndex, 0, moved);
+	ssHandleDragEnd();
+	ssRenderPromptsList();
 }
 // ===== SLASH COMMAND FUNCTIONS =====
 

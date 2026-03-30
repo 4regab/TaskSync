@@ -15,22 +15,30 @@
                             <span class="codicon codicon-comment-discussion"></span>
                             <span class="welcome-card-title">Normal</span>
                         </div>
-                        <p class="welcome-card-desc">Respond to each Copilot agent request directly. Full control over every interaction.</p>
+                        <p class="welcome-card-desc">Respond to each Copilot agent request directly. Full control over
+                            every interaction.</p>
                     </div>
                     <div class="welcome-card welcome-card-spec" id="card-spec">
                         <div class="welcome-card-header">
                             <span class="codicon codicon-layers"></span>
                             <span class="welcome-card-title">Queue</span>
                         </div>
-                        <p class="welcome-card-desc">Batch replies for each agent session. TaskSync feeds queued responses automatically, one by one.</p>
+                        <p class="welcome-card-desc">Batch replies for each agent session. TaskSync feeds queued
+                            responses automatically, one by one.</p>
                     </div>
                 </div>
 
-                <p class="welcome-autopilot-info"><strong>Multi-Agent Orchestrator</strong> keeps each Copilot session isolated with its own pending <code>ask_user</code>, queue, history, timer, and attachments.</p>
-                <p class="welcome-autopilot-info"><strong>Autopilot</strong> responds to <code>ask_user</code> prompts with your configured prompt list. Queued prompts still go first.</p>
-                <p class="welcome-autopilot-info"><strong>Auto Append</strong> is a Settings toggle that appends your configured text to every <code>ask_user</code> response so Copilot reliably loops back through the tool.</p>
-                <p class="welcome-autopilot-info"><strong>Remote server</strong> lets you control TaskSync from another device over LAN or Tailscale with a PIN.</p>
-                <p class="welcome-autopilot-info">Use the TaskSync title bar buttons to start a new agent session, inspect history, or open settings.</p>
+                <p class="welcome-autopilot-info"><strong>Multi-Agent Orchestrator</strong> keeps each Copilot session
+                    isolated with its own pending <code>ask_user</code>, queue, history, timer, and attachments.</p>
+                <p class="welcome-autopilot-info"><strong>Autopilot</strong> responds to <code>ask_user</code> prompts
+                    with your configured prompt list. Queued prompts still go first.</p>
+                <p class="welcome-autopilot-info"><strong>Auto Append</strong> is a Settings toggle that appends your
+                    configured text to every <code>ask_user</code> response so Copilot reliably loops back through the
+                    tool.</p>
+                <p class="welcome-autopilot-info"><strong>Remote server</strong> lets you control TaskSync from another
+                    device over LAN or Tailscale with a PIN.</p>
+                <p class="welcome-autopilot-info">Use the TaskSync title bar buttons to start a new agent session,
+                    inspect history, or open settings.</p>
             </div>
 
             <section class="sessions-panel hidden" id="sessions-panel" aria-label="Copilot agent sessions">
@@ -41,6 +49,9 @@
         </div>
     </div>
 
+    <!-- Split view drag resizer -->
+    <div class="split-resizer hidden" id="split-resizer"></div>
+
     <!-- Mobile Shell: Thread View (Active Chat) -->
     <div class="mobile-shell thread-shell hidden" id="thread-shell">
         <div class="thread-head" id="stage-head">
@@ -50,6 +61,9 @@
                 </span>
                 <strong id="stage-title">No session yet</strong>
                 <span id="stage-sub" class="hidden"></span>
+                <span class="icon-btn" id="thread-settings-btn" title="Session Settings" role="button" tabindex="0">
+                    <span class="codicon codicon-gear"></span>
+                </span>
             </div>
         </div>
 
@@ -93,14 +107,14 @@
                     <div class="input-row">
                         <div class="input-highlighter-wrapper">
                             <div class="input-highlighter" id="input-highlighter" aria-hidden="true"></div>
-                            <textarea id="chat-input" placeholder="Message session... (# files, / prompts)"
-                                rows="1"
+                            <textarea id="chat-input" placeholder="Message session... (# files, / prompts)" rows="1"
                                 aria-label="Message input. Use # for file references, / for saved prompts"></textarea>
                         </div>
                     </div>
                     <div class="actions-bar">
                         <div class="actions-left">
-                            <button id="attach-btn" class="icon-btn" title="Add attachment (+)" aria-label="Add attachment">
+                            <button id="attach-btn" class="icon-btn" title="Add attachment (+)"
+                                aria-label="Add attachment">
                                 <span class="codicon codicon-add"></span>
                             </button>
                             <div class="mode-selector" id="mode-selector">
@@ -132,6 +146,10 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="split-placeholder hidden" id="split-placeholder">
+            <span class="codicon codicon-comment-discussion split-placeholder-icon"></span>
+            <p class="split-placeholder-text">Select a session to view its thread</p>
         </div>
     </div>
 

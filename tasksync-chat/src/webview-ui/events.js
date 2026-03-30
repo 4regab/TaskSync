@@ -98,7 +98,10 @@ function bindEventListeners() {
 	if (threadHistoryBtn)
 		threadHistoryBtn.addEventListener("click", openHistoryModal);
 	if (threadSettingsBtn)
-		threadSettingsBtn.addEventListener("click", openSettingsModal);
+		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
+
+	// Session settings modal events
+	bindSessionSettingsEvents();
 
 	// Edit mode button events
 	if (editCancelBtn) editCancelBtn.addEventListener("click", cancelEditMode);
@@ -269,4 +272,40 @@ function bindEventListeners() {
 	if (savePromptBtn) savePromptBtn.addEventListener("click", saveNewPrompt);
 
 	window.addEventListener("message", handleExtensionMessage);
+}
+
+function bindSessionSettingsEvents() {
+	var ssCloseBtn = document.getElementById("ss-close-btn");
+	var ssResetBtn = document.getElementById("ss-reset-btn");
+
+	if (sessionSettingsOverlay) {
+		sessionSettingsOverlay.addEventListener("click", function (e) {
+			if (e.target === sessionSettingsOverlay) closeSessionSettingsModal();
+		});
+	}
+	if (ssCloseBtn)
+		ssCloseBtn.addEventListener("click", closeSessionSettingsModal);
+	if (ssResetBtn) ssResetBtn.addEventListener("click", resetSessionSettings);
+	if (ssAutopilotToggle)
+		ssAutopilotToggle.addEventListener("click", ssToggleAutopilot);
+	if (ssAutoAppendToggle)
+		ssAutoAppendToggle.addEventListener("click", ssToggleAutoAppend);
+	if (ssAlwaysAppendReminderToggle)
+		ssAlwaysAppendReminderToggle.addEventListener(
+			"click",
+			ssToggleAlwaysAppendReminder,
+		);
+	if (ssAddAutopilotPromptBtn)
+		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
+	if (ssSaveAutopilotPromptBtn)
+		ssSaveAutopilotPromptBtn.addEventListener("click", ssSavePrompt);
+	if (ssCancelAutopilotPromptBtn)
+		ssCancelAutopilotPromptBtn.addEventListener("click", ssHideAddPromptForm);
+	if (ssAutopilotPromptsList) {
+		ssAutopilotPromptsList.addEventListener("click", ssHandlePromptsListClick);
+		ssAutopilotPromptsList.addEventListener("dragstart", ssHandleDragStart);
+		ssAutopilotPromptsList.addEventListener("dragover", ssHandleDragOver);
+		ssAutopilotPromptsList.addEventListener("dragend", ssHandleDragEnd);
+		ssAutopilotPromptsList.addEventListener("drop", ssHandleDrop);
+	}
 }

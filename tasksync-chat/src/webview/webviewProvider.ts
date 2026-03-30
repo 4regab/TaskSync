@@ -340,14 +340,26 @@ export class TaskSyncWebviewProvider
 		return this._sessionManager.getSession(sessionId);
 	}
 
+	private _sessionDefaults(): Partial<ChatSession> {
+		return {
+			queueEnabled: this._queueEnabled,
+			autopilotEnabled: this._autopilotEnabled,
+			autopilotText: this._autopilotText,
+			autopilotPrompts: [...this._autopilotPrompts],
+			autoAppendEnabled: this._autoAppendEnabled,
+			autoAppendText: this._autoAppendText,
+		};
+	}
+
 	public _ensureSession(
 		sessionId: string,
 		title: string = this._sessionManager.getNextAgentTitle(),
 	): ChatSession {
-		const session = this._sessionManager.ensureSession(sessionId, title, {
-			queueEnabled: this._queueEnabled,
-			autopilotEnabled: this._autopilotEnabled,
-		});
+		const session = this._sessionManager.ensureSession(
+			sessionId,
+			title,
+			this._sessionDefaults(),
+		);
 		for (const entry of session.history) {
 			entry.sessionId ??= session.id;
 			this._currentSessionCallsMap.set(entry.id, entry);
@@ -428,6 +440,7 @@ export class TaskSyncWebviewProvider
 		this._updateCurrentSessionUI();
 		this._updateQueueUI();
 		this._updateAttachmentsUI();
+		this._loadSettings();
 		this._updateSettingsUI();
 	}
 
@@ -447,10 +460,7 @@ export class TaskSyncWebviewProvider
 		const session = this._sessionManager.createSession(
 			this._sessionManager.getNextAgentTitle(),
 			this._sessionManager.getNextSessionId(),
-			{
-				queueEnabled: this._queueEnabled,
-				autopilotEnabled: this._autopilotEnabled,
-			},
+			this._sessionDefaults(),
 			false,
 		);
 		this._updateSessionsUI();
@@ -492,10 +502,7 @@ export class TaskSyncWebviewProvider
 		const chatSession = this._sessionManager.createSession(
 			this._sessionManager.getNextAgentTitle(),
 			undefined,
-			{
-				queueEnabled: this._queueEnabled,
-				autopilotEnabled: this._autopilotEnabled,
-			},
+			this._sessionDefaults(),
 		);
 		this._syncActiveSessionState();
 		this._saveSessionsToDisk();
@@ -571,6 +578,12 @@ export class TaskSyncWebviewProvider
 			type: "openResetSessionModal",
 		} satisfies ToWebviewMessage);
 		return true;
+	}
+
+	public toggleSplitView(): void {
+		this._view?.webview.postMessage({
+			type: "toggleSplitView",
+		} satisfies ToWebviewMessage);
 	}
 
 	_updateViewTitle(): void {
@@ -829,6 +842,14 @@ export class TaskSyncWebviewProvider
 				session.pendingToolCallId = null;
 				session.waitingOnUser = false;
 				session.aiTurnActive = false;
+			}
+			// Transition stale "pending" history entries to "completed" —
+			// their tool-call Promises are gone so they can never resolve.
+			for (const entry of session.history) {
+				if (entry.status === "pending") {
+					entry.status = "completed";
+					entry.response ??= "[Session interrupted]";
+				}
 			}
 		}
 		this._syncActiveSessionState();

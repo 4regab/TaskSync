@@ -5,6 +5,7 @@ function init() {
 		createEditModeUI();
 		createApprovalModal();
 		createSettingsModal();
+		createSessionSettingsModal();
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();
@@ -48,6 +49,13 @@ function init() {
 
 		restoreActiveSessionComposerState();
 
+		// Restore split view state
+		if (splitViewEnabled) {
+			var container = document.querySelector(".main-container.orch");
+			if (container) container.classList.add("split-view");
+		}
+		initSplitResizer();
+
 		// Restore attachments display
 		if (currentAttachments.length > 0) {
 			updateChipsDisplay();
@@ -74,6 +82,8 @@ function saveWebviewState() {
 			return !a.isTemporary;
 		}), // Don't persist temp images
 		sessionComposerState: sessionComposerState,
+		splitViewEnabled: splitViewEnabled,
+		splitRatio: splitRatio,
 	});
 }
 
@@ -640,6 +650,142 @@ function createSettingsModal() {
 	promptsList = document.getElementById("prompts-list");
 	addPromptBtn = document.getElementById("add-prompt-btn");
 	addPromptForm = document.getElementById("add-prompt-form");
+}
+
+// ===== SESSION SETTINGS MINI-MODAL =====
+
+function createSessionSettingsModal() {
+	sessionSettingsOverlay = document.createElement("div");
+	sessionSettingsOverlay.className = "settings-modal-overlay hidden";
+	sessionSettingsOverlay.id = "session-settings-overlay";
+
+	sessionSettingsModal = document.createElement("div");
+	sessionSettingsModal.className = "settings-modal session-settings-modal";
+	sessionSettingsModal.id = "session-settings-modal";
+	sessionSettingsModal.setAttribute("role", "dialog");
+	sessionSettingsModal.setAttribute(
+		"aria-labelledby",
+		"session-settings-title",
+	);
+
+	// Modal header
+	var ssHeader = document.createElement("div");
+	ssHeader.className = "settings-modal-header";
+
+	var ssTitleSpan = document.createElement("span");
+	ssTitleSpan.className = "settings-modal-title";
+	ssTitleSpan.id = "session-settings-title";
+	ssTitleSpan.textContent = "Session Settings";
+	ssHeader.appendChild(ssTitleSpan);
+
+	var ssHeaderBtns = document.createElement("div");
+	ssHeaderBtns.className = "settings-modal-header-buttons";
+
+	var ssResetBtn = document.createElement("button");
+	ssResetBtn.className = "settings-modal-header-btn";
+	ssResetBtn.innerHTML = '<span class="codicon codicon-discard"></span>';
+	ssResetBtn.title = "Reset to workspace defaults";
+	ssResetBtn.setAttribute(
+		"aria-label",
+		"Reset session settings to workspace defaults",
+	);
+	ssResetBtn.id = "ss-reset-btn";
+	ssHeaderBtns.appendChild(ssResetBtn);
+
+	var ssCloseBtn = document.createElement("button");
+	ssCloseBtn.className = "settings-modal-header-btn";
+	ssCloseBtn.innerHTML = '<span class="codicon codicon-close"></span>';
+	ssCloseBtn.title = "Close";
+	ssCloseBtn.setAttribute("aria-label", "Close session settings");
+	ssCloseBtn.id = "ss-close-btn";
+	ssHeaderBtns.appendChild(ssCloseBtn);
+
+	ssHeader.appendChild(ssHeaderBtns);
+
+	// Modal content
+	var ssContent = document.createElement("div");
+	ssContent.className = "settings-modal-content";
+
+	// Description
+	var ssDesc = document.createElement("div");
+	ssDesc.className = "session-settings-desc";
+	ssDesc.textContent = "Override workspace settings for this session only.";
+	ssContent.appendChild(ssDesc);
+
+	// Autopilot toggle section
+	var ssAutopilotSection = document.createElement("div");
+	ssAutopilotSection.className = "settings-section";
+	ssAutopilotSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-rocket"></span> Autopilot</div>' +
+		'<div class="toggle-switch" id="ss-autopilot-toggle" role="switch" aria-checked="false" aria-label="Enable Autopilot for this session" tabindex="0"></div>' +
+		"</div>";
+	ssContent.appendChild(ssAutopilotSection);
+
+	// Autopilot Prompts section
+	var ssPromptsSection = document.createElement("div");
+	ssPromptsSection.className = "settings-section";
+	ssPromptsSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-list-ordered"></span> Autopilot Prompts</div>' +
+		'<button class="add-prompt-btn-inline" id="ss-autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
+		"</div>" +
+		'<div class="autopilot-prompts-list" id="ss-autopilot-prompts-list"></div>' +
+		'<div class="add-autopilot-prompt-form hidden" id="ss-add-autopilot-prompt-form">' +
+		'<div class="form-row">' +
+		'<textarea class="form-input form-textarea" id="ss-autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
+		"</div>" +
+		'<div class="form-actions">' +
+		'<button class="form-btn form-btn-cancel" id="ss-cancel-autopilot-prompt-btn">Cancel</button>' +
+		'<button class="form-btn form-btn-save" id="ss-save-autopilot-prompt-btn">Save</button>' +
+		"</div>" +
+		"</div>";
+	ssContent.appendChild(ssPromptsSection);
+
+	// Auto Append section
+	var ssAutoAppendSection = document.createElement("div");
+	ssAutoAppendSection.className = "settings-section";
+	ssAutoAppendSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
+		"</div>" +
+		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
+		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
+		'<div class="auto-append-reminder-row">' +
+		'<label class="form-label-inline" for="ss-always-append-reminder-toggle">Always append askUser reminder</label>' +
+		'<div class="toggle-switch-small" id="ss-always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder for this session" tabindex="0"></div>' +
+		"</div>" +
+		"</div>";
+	ssContent.appendChild(ssAutoAppendSection);
+
+	// Assemble
+	sessionSettingsModal.appendChild(ssHeader);
+	sessionSettingsModal.appendChild(ssContent);
+	sessionSettingsOverlay.appendChild(sessionSettingsModal);
+	document.body.appendChild(sessionSettingsOverlay);
+
+	// Cache inner elements
+	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
+	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
+	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
+	ssAlwaysAppendReminderToggle = document.getElementById(
+		"ss-always-append-reminder-toggle",
+	);
+	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
+	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
+	ssAddAutopilotPromptForm = document.getElementById(
+		"ss-add-autopilot-prompt-form",
+	);
+	ssAutopilotPromptInput = document.getElementById("ss-autopilot-prompt-input");
+	ssSaveAutopilotPromptBtn = document.getElementById(
+		"ss-save-autopilot-prompt-btn",
+	);
+	ssCancelAutopilotPromptBtn = document.getElementById(
+		"ss-cancel-autopilot-prompt-btn",
+	);
 }
 
 // ===== NEW SESSION MODAL =====

@@ -138,6 +138,7 @@ const WEBVIEW_FILES = [
     "queue.js",
     "approval.js",
     "settings.js",
+    "sessionSettings.js",
     "slashCommands.js",
     "extras.js",
 ];

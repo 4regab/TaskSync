@@ -205,12 +205,17 @@ export async function waitForUserResponse(
 
 			if (session.autopilotEnabled) {
 				let effectiveText: string;
-				if (p._autopilotPrompts.length > 0) {
-					effectiveText = p._autopilotPrompts[session.autopilotIndex];
+				// Use session-level prompts/text to avoid race with provider state during session switches.
+				const prompts = Array.isArray(session.autopilotPrompts)
+					? session.autopilotPrompts
+					: p._autopilotPrompts;
+				if (prompts.length > 0) {
+					effectiveText = prompts[session.autopilotIndex] ?? prompts[0];
 					session.autopilotIndex =
-						(session.autopilotIndex + 1) % p._autopilotPrompts.length;
+						(session.autopilotIndex + 1) % prompts.length;
 				} else {
-					effectiveText = settingsH.normalizeAutopilotText(p, p._autopilotText);
+					const text = session.autopilotText || p._autopilotText;
+					effectiveText = settingsH.normalizeAutopilotText(p, text);
 				}
 				debugLog(
 					`[TaskSync] waitForUserResponse — autopilot auto-responding for session ${session.id} with: "${effectiveText.slice(0, 60)}" (${session.consecutiveAutoResponses}/${maxConsecutive})`,
@@ -481,7 +486,8 @@ export async function handleResponseTimeout(
 			`TaskSync: Auto-response limit (${maxConsecutive}) reached. Session terminated after ${timeoutMinutes} min idle.`,
 		);
 	} else if (session.autopilotEnabled) {
-		responseText = settingsH.normalizeAutopilotText(p, p._autopilotText);
+		const text = session.autopilotText || p._autopilotText;
+		responseText = settingsH.normalizeAutopilotText(p, text);
 		debugLog(
 			`[TaskSync] handleResponseTimeout — session ${session.id} autopilot auto-responding with: "${responseText.slice(0, 60)}"`,
 		);

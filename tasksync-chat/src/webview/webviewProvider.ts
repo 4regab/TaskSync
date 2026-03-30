@@ -764,6 +764,7 @@ export class TaskSyncWebviewProvider
 
 	/**
 	 * Push multi-session state to the webview (threads list, active session)
+	 * and broadcast lightweight session summaries to remote clients.
 	 */
 	_updateSessionsUI(): void {
 		const data = this._sessionManager.toJSON();
@@ -772,6 +773,10 @@ export class TaskSyncWebviewProvider
 			sessions: data.sessions,
 			activeSessionId: data.activeSessionId,
 		} satisfies ToWebviewMessage);
+		this._remoteServer?.broadcast("updateSessions", {
+			sessions: remote.getRemoteSessionSummaries(this),
+			activeSessionId: data.activeSessionId,
+		});
 	}
 
 	/**

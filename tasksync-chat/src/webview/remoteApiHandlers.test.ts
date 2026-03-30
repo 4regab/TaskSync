@@ -137,3 +137,114 @@ describe("cancelPendingToolCall", () => {
 		expect(provider._currentToolCallId).toBe("tc_1");
 	});
 });
+
+describe("getRemoteSessionSummaries", () => {
+	it("returns lightweight summaries with first history prompt", async () => {
+		const { getRemoteSessionSummaries } = await import("./remoteApiHandlers");
+		const provider = createProvider({
+			_sessionManager: {
+				getAllSessions: () => [
+					{
+						id: "s1",
+						title: "Agent 1",
+						status: "active",
+						waitingOnUser: true,
+						createdAt: 1000,
+						history: [{ prompt: "first question" }, { prompt: "second" }],
+					},
+					{
+						id: "s2",
+						title: "Agent 2",
+						status: "archived",
+						waitingOnUser: false,
+						createdAt: 2000,
+						history: [],
+					},
+				],
+				getActiveSessionId: () => "s1",
+				getActiveSession: () => null,
+			},
+		});
+
+		const summaries = getRemoteSessionSummaries(provider);
+
+		expect(summaries).toHaveLength(2);
+		expect(summaries[0]).toEqual({
+			id: "s1",
+			title: "Agent 1",
+			status: "active",
+			waitingOnUser: true,
+			createdAt: 1000,
+			history: [{ prompt: "first question" }],
+		});
+		expect(summaries[1]).toEqual({
+			id: "s2",
+			title: "Agent 2",
+			status: "archived",
+			waitingOnUser: false,
+			createdAt: 2000,
+			history: [],
+		});
+	});
+
+	it("truncates long prompt previews to 200 chars", async () => {
+		const { getRemoteSessionSummaries } = await import("./remoteApiHandlers");
+		const longPrompt = "X".repeat(500);
+		const provider = createProvider({
+			_sessionManager: {
+				getAllSessions: () => [
+					{
+						id: "s1",
+						title: "T",
+						status: "active",
+						waitingOnUser: false,
+						createdAt: 0,
+						history: [{ prompt: longPrompt }],
+					},
+				],
+				getActiveSessionId: () => "s1",
+				getActiveSession: () => null,
+			},
+		});
+
+		const summaries = getRemoteSessionSummaries(provider);
+		expect(summaries[0].history[0].prompt).toHaveLength(200);
+	});
+});
+
+describe("getRemoteState", () => {
+	it("includes sessions and activeSessionId", async () => {
+		const { getRemoteState } = await import("./remoteApiHandlers");
+		const sessions = [
+			{
+				id: "s1",
+				title: "Agent 1",
+				status: "active" as const,
+				waitingOnUser: false,
+				createdAt: 100,
+				history: [],
+			},
+		];
+		const provider = createProvider({
+			_currentToolCallId: null,
+			_promptQueue: [],
+			_queueVersion: 0,
+			_currentSessionCalls: [],
+			_sessionStartTime: null,
+			_sessionFrozenElapsed: null,
+			_aiTurnActive: false,
+			_lastKnownModel: "gpt-4",
+			_sessionManager: {
+				getAllSessions: () => sessions,
+				getActiveSession: () => sessions[0],
+				getActiveSessionId: () => "s1",
+			},
+		});
+
+		const state = getRemoteState(provider);
+
+		expect(state.sessions).toHaveLength(1);
+		expect(state.sessions[0].id).toBe("s1");
+		expect(state.activeSessionId).toBe("s1");
+	});
+});

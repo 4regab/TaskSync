@@ -40,6 +40,32 @@ import {
 	sessionHasQueuedItems,
 } from "./webviewUtils";
 
+/** Lightweight session summary for remote session list rendering. */
+export interface RemoteSessionSummary {
+	id: string;
+	title: string;
+	status: "active" | "archived";
+	waitingOnUser: boolean;
+	createdAt: number;
+	/** First history entry only (for preview snippet). */
+	history: Array<{ prompt: string }>;
+}
+
+/** Build lightweight session summaries for remote clients. */
+export function getRemoteSessionSummaries(p: P): RemoteSessionSummary[] {
+	return p._sessionManager.getAllSessions().map((s) => ({
+		id: s.id,
+		title: s.title,
+		status: s.status,
+		waitingOnUser: s.waitingOnUser,
+		createdAt: s.createdAt,
+		history:
+			s.history.length > 0
+				? [{ prompt: s.history[0].prompt.slice(0, 200) }]
+				: [],
+	}));
+}
+
 /**
  * Get current state for remote clients.
  */
@@ -71,6 +97,8 @@ export function getRemoteState(p: P): {
 	};
 	isProcessing: boolean;
 	model: string;
+	sessions: RemoteSessionSummary[];
+	activeSessionId: string | null;
 } {
 	const pendingEntry = p._currentToolCallId
 		? p._currentSessionCallsMap.get(p._currentToolCallId)
@@ -133,6 +161,8 @@ export function getRemoteState(p: P): {
 		// True when AI is actively working (between user response and next askUser call)
 		isProcessing: p._aiTurnActive,
 		model: p._lastKnownModel,
+		sessions: getRemoteSessionSummaries(p),
+		activeSessionId: p._sessionManager.getActiveSessionId(),
 	};
 
 	debugLog(

@@ -279,6 +279,19 @@ function mapToRemoteMessage(msg) {
 		case "searchContext":
 		case "selectContextReference":
 			return null;
+		// Multi-session operations — forward to server as-is
+		case "switchSession":
+			return { type: "switchSession", sessionId: msg.sessionId || "" };
+		case "deleteSession":
+			return { type: "deleteSession", sessionId: msg.sessionId || "" };
+		case "archiveSession":
+			return { type: "archiveSession", sessionId: msg.sessionId || "" };
+		case "updateSessionTitle":
+			return {
+				type: "updateSessionTitle",
+				sessionId: msg.sessionId || "",
+				title: msg.title || "",
+			};
 		default:
 			// Pass through unknown messages
 			return msg;
@@ -416,7 +429,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-				(msg.reason || "The remote server has been stopped."),
+					(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -427,9 +440,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-					msg.protocolVersion +
-					" client=" +
-					TASKSYNC_PROTOCOL_VERSION,
+						msg.protocolVersion +
+						" client=" +
+						TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",
@@ -576,6 +589,15 @@ function handleRemoteMessage(msg) {
 				msg.data ? Object.keys(msg.data) : "no data",
 			);
 			if (msg.data) applyServerState(msg.data);
+			break;
+		case "updateSessions":
+			if (msg.data) {
+				sessions = Array.isArray(msg.data.sessions) ? msg.data.sessions : [];
+				activeSessionId = msg.data.activeSessionId || null;
+				if (typeof renderSessionsList === "function") renderSessionsList();
+				if (typeof updateWelcomeSectionVisibility === "function")
+					updateWelcomeSectionVisibility();
+			}
 			break;
 		case "changes":
 			if (typeof applyChangesState === "function") {
@@ -745,6 +767,12 @@ function applyServerState(state) {
 	if (typeof updateCardSelection === "function") updateCardSelection();
 	if (typeof updateWelcomeSectionVisibility === "function")
 		updateWelcomeSectionVisibility();
+	// Multi-session state (sessions list + active session ID)
+	if (Array.isArray(state.sessions)) {
+		sessions = state.sessions;
+		activeSessionId = state.activeSessionId || null;
+		if (typeof renderSessionsList === "function") renderSessionsList();
+	}
 }
 
 function handlePendingToolCall(data) {

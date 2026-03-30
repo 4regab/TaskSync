@@ -645,6 +645,64 @@ export class RemoteServer {
 				debugLog("resetSession: clearing remote session state only");
 				this.provider.startNewSession();
 				break;
+			case "switchSession": {
+				const switchId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				if (!switchId) {
+					sendWsError(ws, "Missing sessionId", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "switchSession",
+					sessionId: switchId,
+				});
+				break;
+			}
+			case "deleteSession": {
+				const deleteId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				if (!deleteId) {
+					sendWsError(ws, "Missing sessionId", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "deleteSession",
+					sessionId: deleteId,
+				});
+				break;
+			}
+			case "archiveSession": {
+				const archiveId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				if (!archiveId) {
+					sendWsError(ws, "Missing sessionId", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "archiveSession",
+					sessionId: archiveId,
+				});
+				break;
+			}
+			case "updateSessionTitle": {
+				const renameId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				const newTitle = typeof msg.title === "string" ? msg.title.trim() : "";
+				if (!renameId || !newTitle) {
+					sendWsError(
+						ws,
+						"Missing sessionId or title",
+						ErrorCode.INVALID_INPUT,
+					);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "updateSessionTitle",
+					sessionId: renameId,
+					title: newTitle.slice(0, 100),
+				});
+				break;
+			}
 			default: {
 				const p = this.provider;
 				if (await dispatchSettingsMessage(ws, p, broadcastFn, msg)) break;

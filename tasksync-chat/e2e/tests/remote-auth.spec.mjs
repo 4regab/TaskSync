@@ -24,7 +24,9 @@ if (typeof Bun === "undefined") {
 		await expect(page.locator("#submit")).toBeVisible();
 	});
 
-	test("api auth behavior matches pin-mode expectation", async ({ request }) => {
+	test("api auth behavior matches pin-mode expectation", async ({
+		request,
+	}) => {
 		const response = await request.get("/api/files?query=readme");
 		const mode = parseExpectPinMode();
 
@@ -54,11 +56,8 @@ if (typeof Bun === "undefined") {
 		await page.locator("#submit").click();
 
 		await expect(page).toHaveURL(/\/app\.html$/i, { timeout: 15000 });
-		await expect(page.locator(".remote-header-title")).toHaveText(
-			/TaskSync/i,
-			{
-				timeout: 15000,
-			},
-		);
+		await expect(page.locator(".remote-header-title")).toHaveText(/TaskSync/i, {
+			timeout: 15000,
+		});
 	});
 }

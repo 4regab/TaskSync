@@ -1,408 +1,408 @@
 {
-  "name": "tasksync-chat",
-  "publisher": "4regab",
-  "displayName": "TaskSync",
-  "description": "Queue your prompts or tasks. Work uninterrupted.",
-  "icon": "media/Tasksync-logo.png",
-  "version": "3.0.7",
-  "engines": {
-    "vscode": "^1.90.0"
-  },
-  "categories": [
-    "AI",
-    "Chat",
-    "Other"
-  ],
-  "keywords": [
-    "tasksync",
-    "ai",
-    "chat",
-    "copilot",
-    "agent"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/4regab/TaskSync.git"
-  },
-  "license": "MIT",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "languageModelTools": [
-      {
-        "name": "ask_user",
-        "tags": [
-          "confirmation",
-          "user-interaction",
-          "tasksync",
-          "required",
-          "mandatory"
-        ],
-        "toolReferenceName": "askUser",
-        "displayName": "Ask User",
-        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable. session_id is REQUIRED on every call. On your FIRST ask_user call in a new chat, use session_id \"auto\" and TaskSync will assign a real session_id in the result. On all subsequent calls, reuse the exact session_id from the previous result.",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(question)",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "question": {
-              "type": "string",
-              "description": "The question or prompt to display to the user"
-            },
-            "session_id": {
-              "type": "string",
-              "description": "REQUIRED. The TaskSync conversation session_id. On your FIRST call, use \"auto\" to get a session_id assigned. On all subsequent calls, use the exact session_id from the previous result."
-            }
-          },
-          "required": [
-            "question",
-            "session_id"
-          ]
-        }
-      }
-    ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "taskSyncContainer",
-          "title": "TaskSync",
-          "icon": "media/TS-logo.svg"
-        }
-      ]
-    },
-    "views": {
-      "taskSyncContainer": [
-        {
-          "type": "webview",
-          "id": "taskSyncView",
-          "name": "TaskSync"
-        }
-      ]
-    },
-    "configuration": {
-      "title": "TaskSync",
-      "properties": {
-        "tasksync.remotePort": {
-          "type": "number",
-          "default": 3580,
-          "description": "Port for the remote access server."
-        },
-        "tasksync.remotePinEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Require PIN authentication for remote access. Recommended for LAN access."
-        },
-        "tasksync.remoteMaxDevices": {
-          "type": "integer",
-          "default": 1,
-          "minimum": 1,
-          "description": "Maximum number of devices that can be connected to the remote server simultaneously."
-        },
-        "tasksync.remoteTlsEnabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable HTTPS/TLS for the LAN remote server using a self-signed certificate. Browsers will show a certificate warning on first connection."
-        },
-        "tasksync.debugLogging": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable verbose debug logging for TaskSync (outputs to VS Code debug console)."
-        },
-        "tasksync.remoteDebugLogging": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable verbose debug logging for remote server (outputs to VS Code debug console)."
-        },
-        "tasksync.autopilot": {
-          "type": "boolean",
-          "default": false,
-          "scope": "window",
-          "description": "Deprecated legacy setting. Use Session Settings to configure Autopilot per session.",
-          "deprecationMessage": "Deprecated: configure Autopilot from TaskSync Session Settings instead of workspace settings."
-        },
-        "tasksync.autopilotText": {
-          "type": "string",
-          "default": "You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.",
-          "scope": "window",
-          "description": "Deprecated legacy setting. TaskSync now uses per-session Autopilot settings.",
-          "deprecationMessage": "Deprecated: configure Autopilot prompts per session from TaskSync Session Settings."
-        },
-        "tasksync.autopilotPrompts": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "scope": "window",
-          "description": "Deprecated legacy setting. TaskSync now uses per-session Autopilot prompts.",
-          "deprecationMessage": "Deprecated: configure Autopilot prompts per session from TaskSync Session Settings."
-        },
-        "tasksync.responseTimeout": {
-          "type": "string",
-          "default": "60",
-          "scope": "window",
-          "enum": [
-            "0",
-            "5",
-            "10",
-            "20",
-            "30",
-            "40",
-            "50",
-            "60",
-            "70",
-            "80",
-            "90",
-            "100",
-            "110",
-            "120",
-            "150",
-            "180",
-            "210",
-            "240",
-            "300",
-            "360",
-            "420",
-            "480"
-          ],
-          "enumDescriptions": [
-            "Disabled (no auto-response)",
-            "5 minutes",
-            "10 minutes",
-            "20 minutes",
-            "30 minutes",
-            "40 minutes",
-            "50 minutes",
-            "60 minutes",
-            "70 minutes",
-            "80 minutes",
-            "90 minutes (1.5 hours)",
-            "100 minutes",
-            "110 minutes",
-            "120 minutes (2 hours)",
-            "150 minutes (2.5 hours)",
-            "180 minutes (3 hours)",
-            "210 minutes (3.5 hours)",
-            "240 minutes (4 hours)",
-            "⚠️ 300 minutes (5 hours) — Extended timeout, use at own risk",
-            "⚠️ 360 minutes (6 hours) — Extended timeout, use at own risk",
-            "⚠️ 420 minutes (7 hours) — Extended timeout, use at own risk",
-            "⚠️ 480 minutes (8 hours) — Extended timeout, use at own risk"
-          ],
-          "description": "Auto-respond to pending tool calls if user doesn't respond within this time. When Autopilot is enabled, the Autopilot text is sent. When disabled, a session termination message is sent."
-        },
-        "tasksync.sessionWarningHours": {
-          "type": "number",
-          "default": 2,
-          "minimum": 0,
-          "maximum": 8,
-          "scope": "window",
-          "description": "Show a one-time warning after this many hours (0..8) in the same session. Set to 0 to disable session warning."
-        },
-        "tasksync.maxConsecutiveAutoResponses": {
-          "type": "number",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 100,
-          "scope": "window",
-          "description": "Maximum consecutive auto-responses (from Autopilot or timeout) before disabling Autopilot. Prevents infinite loops."
-        },
-        "tasksync.humanLikeDelay": {
-          "type": "boolean",
-          "default": true,
-          "scope": "window",
-          "description": "Add random human-like delays before auto-responses (Autopilot, Queue, Timeout). Simulates natural reading and typing time for a more realistic workflow."
-        },
-        "tasksync.humanLikeDelayMin": {
-          "type": "number",
-          "default": 2,
-          "minimum": 1,
-          "maximum": 30,
-          "scope": "window",
-          "description": "Minimum delay in seconds before auto-responses when human-like delay is enabled."
-        },
-        "tasksync.humanLikeDelayMax": {
-          "type": "number",
-          "default": 6,
-          "minimum": 2,
-          "maximum": 60,
-          "scope": "window",
-          "description": "Maximum delay in seconds before auto-responses when human-like delay is enabled."
-        },
-        "tasksync.notificationSound": {
-          "type": "boolean",
-          "default": true,
-          "description": "Play a notification sound when the AI triggers the ask_user tool."
-        },
-        "tasksync.interactiveApproval": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
-        },
-        "tasksync.autoAppendText": {
-          "type": "string",
-          "default": "",
-          "scope": "window",
-          "description": "Default Auto Append text for new sessions. Use 'Save as Workspace Default' in Session Settings to set."
-        },
-        "tasksync.alwaysAppendAskUserReminder": {
-          "type": "boolean",
-          "default": false,
-          "scope": "window",
-          "description": "AskUser Reminder: always append the built-in askUser reminder instruction to every response. Recommended for GPT 5.4 users."
-        },
-        "tasksync.askUserVerbosePayload": {
-          "type": "boolean",
-          "default": false,
-          "scope": "window",
-          "description": "Deprecated legacy setting. Use tasksync.autoAppendText instead.",
-          "deprecationMessage": "Deprecated: use 'Save as Workspace Default' in Session Settings to configure Auto Append text."
-        },
-        "tasksync.sendWithCtrlEnter": {
-          "type": "boolean",
-          "default": false,
-          "scope": "window",
-          "description": "Use Ctrl+Enter (Cmd+Enter on macOS) to send messages instead of Enter."
-        },
-        "tasksync.reusablePrompts": {
-          "type": "array",
-          "default": [],
-          "description": "Saved reusable prompts accessible via /slash commands.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "Short name for the prompt (used with /slash command)"
-              },
-              "prompt": {
-                "type": "string",
-                "description": "The full prompt text"
-              }
-            },
-            "required": [
-              "name",
-              "prompt"
-            ]
-          }
-        },
-        "tasksync.remoteChatCommand": {
-          "type": "string",
-          "default": "workbench.action.chat.open",
-          "description": "VS Code command used to open chat from remote sessions. Default opens the chat panel without forcing a mode. Use 'workbench.action.chat.openagent' to force Agent Mode, or any custom command ID."
-        }
-      }
-    },
-    "commands": [
-      {
-        "command": "tasksync.sendMessage",
-        "title": "TaskSync: Send Message"
-      },
-      {
-        "command": "tasksync.openHistory",
-        "title": "View History",
-        "icon": "$(history)"
-      },
-      {
-        "command": "tasksync.newSession",
-        "title": "New Session",
-        "icon": "$(add)"
-      },
-      {
-        "command": "tasksync.resetSession",
-        "title": "Reset Session",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "tasksync.toggleSplitView",
-        "title": "Toggle Split View",
-        "icon": "$(split-horizontal)"
-      },
-      {
-        "command": "tasksync.openSettings",
-        "title": "TaskSync Settings",
-        "icon": "$(gear)"
-      },
-      {
-        "command": "tasksync.startRemoteLan",
-        "title": "TaskSync: Start Remote Access (LAN)",
-        "icon": "$(broadcast)"
-      },
-      {
-        "command": "tasksync.stopRemote",
-        "title": "TaskSync: Stop Remote Access"
-      },
-      {
-        "command": "tasksync.goRemote",
-        "title": "Remote",
-        "icon": "$(broadcast)"
-      }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "tasksync.newSession",
-          "when": "view == taskSyncView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "tasksync.toggleSplitView",
-          "when": "view == taskSyncView",
-          "group": "navigation@1.1"
-        },
-        {
-          "command": "tasksync.openHistory",
-          "when": "view == taskSyncView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "tasksync.openSettings",
-          "when": "view == taskSyncView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "tasksync.goRemote",
-          "when": "view == taskSyncView",
-          "group": "navigation@4"
-        }
-      ]
-    }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run build",
-    "build": "node esbuild.js",
-    "compile": "tsc -p ./",
-    "watch": "node esbuild.js --watch",
-    "lint": "biome check src",
-    "check-duplicates": "node scripts/check-code-quality.js",
-    "check-code": "node scripts/check-code-quality.js",
-    "validate": "npm run build && npx tsc --noEmit && npm test && npm run lint && npm run check-code",
-    "prepare": "cd .. && git config core.hooksPath .githooks",
-    "e2e": "playwright test -c e2e/playwright.config.mjs",
-    "e2e:headed": "playwright test -c e2e/playwright.config.mjs --headed",
-    "e2e:ui": "playwright test -c e2e/playwright.config.mjs --ui",
-    "e2e:install": "playwright install chromium",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@vscode/codicons": "^0.0.36",
-    "mermaid": "^10.9.5",
-    "selfsigned": "^5.5.0",
-    "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.2",
-    "@playwright/test": "^1.55.0",
-    "@types/node": "20.x",
-    "@types/vscode": "^1.90.0",
-    "@types/ws": "^8.5.12",
-    "@vitest/coverage-v8": "^4.0.18",
-    "esbuild": "^0.27.2",
-    "typescript": "^5.3.3",
-    "vitest": "^4.0.18"
-  }
+	"name": "tasksync-chat",
+	"publisher": "4regab",
+	"displayName": "TaskSync",
+	"description": "Queue your prompts or tasks. Work uninterrupted.",
+	"icon": "media/Tasksync-logo.png",
+	"version": "3.0.7",
+	"engines": {
+		"vscode": "^1.90.0"
+	},
+	"categories": [
+		"AI",
+		"Chat",
+		"Other"
+	],
+	"keywords": [
+		"tasksync",
+		"ai",
+		"chat",
+		"copilot",
+		"agent"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/4regab/TaskSync.git"
+	},
+	"license": "MIT",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"languageModelTools": [
+			{
+				"name": "ask_user",
+				"tags": [
+					"confirmation",
+					"user-interaction",
+					"tasksync",
+					"required",
+					"mandatory"
+				],
+				"toolReferenceName": "askUser",
+				"displayName": "Ask User",
+				"modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable. session_id is REQUIRED on every call. On your FIRST ask_user call in a new chat, use session_id \"auto\" and TaskSync will assign a real session_id in the result. On all subsequent calls, reuse the exact session_id from the previous result.",
+				"canBeReferencedInPrompt": true,
+				"icon": "$(question)",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"question": {
+							"type": "string",
+							"description": "The question or prompt to display to the user"
+						},
+						"session_id": {
+							"type": "string",
+							"description": "REQUIRED. The TaskSync conversation session_id. On your FIRST call, use \"auto\" to get a session_id assigned. On all subsequent calls, use the exact session_id from the previous result."
+						}
+					},
+					"required": [
+						"question",
+						"session_id"
+					]
+				}
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "taskSyncContainer",
+					"title": "TaskSync",
+					"icon": "media/TS-logo.svg"
+				}
+			]
+		},
+		"views": {
+			"taskSyncContainer": [
+				{
+					"type": "webview",
+					"id": "taskSyncView",
+					"name": "TaskSync"
+				}
+			]
+		},
+		"configuration": {
+			"title": "TaskSync",
+			"properties": {
+				"tasksync.remotePort": {
+					"type": "number",
+					"default": 3580,
+					"description": "Port for the remote access server."
+				},
+				"tasksync.remotePinEnabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Require PIN authentication for remote access. Recommended for LAN access."
+				},
+				"tasksync.remoteMaxDevices": {
+					"type": "integer",
+					"default": 1,
+					"minimum": 1,
+					"description": "Maximum number of devices that can be connected to the remote server simultaneously."
+				},
+				"tasksync.remoteTlsEnabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable HTTPS/TLS for the LAN remote server using a self-signed certificate. Browsers will show a certificate warning on first connection."
+				},
+				"tasksync.debugLogging": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable verbose debug logging for TaskSync (outputs to VS Code debug console)."
+				},
+				"tasksync.remoteDebugLogging": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable verbose debug logging for remote server (outputs to VS Code debug console)."
+				},
+				"tasksync.autopilot": {
+					"type": "boolean",
+					"default": false,
+					"scope": "window",
+					"description": "Deprecated legacy setting. Use Session Settings to configure Autopilot per session.",
+					"deprecationMessage": "Deprecated: configure Autopilot from TaskSync Session Settings instead of workspace settings."
+				},
+				"tasksync.autopilotText": {
+					"type": "string",
+					"default": "You are temporarily in autonomous mode and must now make your own decision. If another question arises, be sure to ask it, as autonomous mode is temporary.",
+					"scope": "window",
+					"description": "Deprecated legacy setting. TaskSync now uses per-session Autopilot settings.",
+					"deprecationMessage": "Deprecated: configure Autopilot prompts per session from TaskSync Session Settings."
+				},
+				"tasksync.autopilotPrompts": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"scope": "window",
+					"description": "Deprecated legacy setting. TaskSync now uses per-session Autopilot prompts.",
+					"deprecationMessage": "Deprecated: configure Autopilot prompts per session from TaskSync Session Settings."
+				},
+				"tasksync.responseTimeout": {
+					"type": "string",
+					"default": "60",
+					"scope": "window",
+					"enum": [
+						"0",
+						"5",
+						"10",
+						"20",
+						"30",
+						"40",
+						"50",
+						"60",
+						"70",
+						"80",
+						"90",
+						"100",
+						"110",
+						"120",
+						"150",
+						"180",
+						"210",
+						"240",
+						"300",
+						"360",
+						"420",
+						"480"
+					],
+					"enumDescriptions": [
+						"Disabled (no auto-response)",
+						"5 minutes",
+						"10 minutes",
+						"20 minutes",
+						"30 minutes",
+						"40 minutes",
+						"50 minutes",
+						"60 minutes",
+						"70 minutes",
+						"80 minutes",
+						"90 minutes (1.5 hours)",
+						"100 minutes",
+						"110 minutes",
+						"120 minutes (2 hours)",
+						"150 minutes (2.5 hours)",
+						"180 minutes (3 hours)",
+						"210 minutes (3.5 hours)",
+						"240 minutes (4 hours)",
+						"⚠️ 300 minutes (5 hours) — Extended timeout, use at own risk",
+						"⚠️ 360 minutes (6 hours) — Extended timeout, use at own risk",
+						"⚠️ 420 minutes (7 hours) — Extended timeout, use at own risk",
+						"⚠️ 480 minutes (8 hours) — Extended timeout, use at own risk"
+					],
+					"description": "Auto-respond to pending tool calls if user doesn't respond within this time. When Autopilot is enabled, the Autopilot text is sent. When disabled, a session termination message is sent."
+				},
+				"tasksync.sessionWarningHours": {
+					"type": "number",
+					"default": 2,
+					"minimum": 0,
+					"maximum": 8,
+					"scope": "window",
+					"description": "Show a one-time warning after this many hours (0..8) in the same session. Set to 0 to disable session warning."
+				},
+				"tasksync.maxConsecutiveAutoResponses": {
+					"type": "number",
+					"default": 5,
+					"minimum": 1,
+					"maximum": 100,
+					"scope": "window",
+					"description": "Maximum consecutive auto-responses (from Autopilot or timeout) before disabling Autopilot. Prevents infinite loops."
+				},
+				"tasksync.humanLikeDelay": {
+					"type": "boolean",
+					"default": true,
+					"scope": "window",
+					"description": "Add random human-like delays before auto-responses (Autopilot, Queue, Timeout). Simulates natural reading and typing time for a more realistic workflow."
+				},
+				"tasksync.humanLikeDelayMin": {
+					"type": "number",
+					"default": 2,
+					"minimum": 1,
+					"maximum": 30,
+					"scope": "window",
+					"description": "Minimum delay in seconds before auto-responses when human-like delay is enabled."
+				},
+				"tasksync.humanLikeDelayMax": {
+					"type": "number",
+					"default": 6,
+					"minimum": 2,
+					"maximum": 60,
+					"scope": "window",
+					"description": "Maximum delay in seconds before auto-responses when human-like delay is enabled."
+				},
+				"tasksync.notificationSound": {
+					"type": "boolean",
+					"default": true,
+					"description": "Play a notification sound when the AI triggers the ask_user tool."
+				},
+				"tasksync.interactiveApproval": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
+				},
+				"tasksync.autoAppendText": {
+					"type": "string",
+					"default": "",
+					"scope": "window",
+					"description": "Default Auto Append text for new sessions. Use 'Save as Workspace Default' in Session Settings to set."
+				},
+				"tasksync.alwaysAppendAskUserReminder": {
+					"type": "boolean",
+					"default": false,
+					"scope": "window",
+					"description": "AskUser Reminder: always append the built-in askUser reminder instruction to every response. Recommended for GPT 5.4 users."
+				},
+				"tasksync.askUserVerbosePayload": {
+					"type": "boolean",
+					"default": false,
+					"scope": "window",
+					"description": "Deprecated legacy setting. Use tasksync.autoAppendText instead.",
+					"deprecationMessage": "Deprecated: use 'Save as Workspace Default' in Session Settings to configure Auto Append text."
+				},
+				"tasksync.sendWithCtrlEnter": {
+					"type": "boolean",
+					"default": false,
+					"scope": "window",
+					"description": "Use Ctrl+Enter (Cmd+Enter on macOS) to send messages instead of Enter."
+				},
+				"tasksync.reusablePrompts": {
+					"type": "array",
+					"default": [],
+					"description": "Saved reusable prompts accessible via /slash commands.",
+					"items": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Short name for the prompt (used with /slash command)"
+							},
+							"prompt": {
+								"type": "string",
+								"description": "The full prompt text"
+							}
+						},
+						"required": [
+							"name",
+							"prompt"
+						]
+					}
+				},
+				"tasksync.remoteChatCommand": {
+					"type": "string",
+					"default": "workbench.action.chat.open",
+					"description": "VS Code command used to open chat from remote sessions. Default opens the chat panel without forcing a mode. Use 'workbench.action.chat.openagent' to force Agent Mode, or any custom command ID."
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "tasksync.sendMessage",
+				"title": "TaskSync: Send Message"
+			},
+			{
+				"command": "tasksync.openHistory",
+				"title": "View History",
+				"icon": "$(history)"
+			},
+			{
+				"command": "tasksync.newSession",
+				"title": "New Session",
+				"icon": "$(add)"
+			},
+			{
+				"command": "tasksync.resetSession",
+				"title": "Reset Session",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "tasksync.toggleSplitView",
+				"title": "Toggle Split View",
+				"icon": "$(split-horizontal)"
+			},
+			{
+				"command": "tasksync.openSettings",
+				"title": "TaskSync Settings",
+				"icon": "$(gear)"
+			},
+			{
+				"command": "tasksync.startRemoteLan",
+				"title": "TaskSync: Start Remote Access (LAN)",
+				"icon": "$(broadcast)"
+			},
+			{
+				"command": "tasksync.stopRemote",
+				"title": "TaskSync: Stop Remote Access"
+			},
+			{
+				"command": "tasksync.goRemote",
+				"title": "Remote",
+				"icon": "$(broadcast)"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "tasksync.newSession",
+					"when": "view == taskSyncView",
+					"group": "navigation@1"
+				},
+				{
+					"command": "tasksync.toggleSplitView",
+					"when": "view == taskSyncView",
+					"group": "navigation@1.1"
+				},
+				{
+					"command": "tasksync.openHistory",
+					"when": "view == taskSyncView",
+					"group": "navigation@2"
+				},
+				{
+					"command": "tasksync.openSettings",
+					"when": "view == taskSyncView",
+					"group": "navigation@3"
+				},
+				{
+					"command": "tasksync.goRemote",
+					"when": "view == taskSyncView",
+					"group": "navigation@4"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run build",
+		"build": "node esbuild.js",
+		"compile": "tsc -p ./",
+		"watch": "node esbuild.js --watch",
+		"lint": "biome check src",
+		"check-duplicates": "node scripts/check-code-quality.js",
+		"check-code": "node scripts/check-code-quality.js",
+		"validate": "npm run build && npx tsc --noEmit && npm test && npm run lint && npm run check-code",
+		"prepare": "cd .. && git config core.hooksPath .githooks",
+		"e2e": "playwright test -c e2e/playwright.config.mjs",
+		"e2e:headed": "playwright test -c e2e/playwright.config.mjs --headed",
+		"e2e:ui": "playwright test -c e2e/playwright.config.mjs --ui",
+		"e2e:install": "playwright install chromium",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@vscode/codicons": "^0.0.36",
+		"mermaid": "^10.9.5",
+		"selfsigned": "^5.5.0",
+		"ws": "^8.18.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.2",
+		"@playwright/test": "^1.55.0",
+		"@types/node": "20.x",
+		"@types/vscode": "^1.90.0",
+		"@types/ws": "^8.5.12",
+		"@vitest/coverage-v8": "^4.0.18",
+		"esbuild": "^0.27.2",
+		"typescript": "^5.3.3",
+		"vitest": "^4.0.18"
+	}
 }

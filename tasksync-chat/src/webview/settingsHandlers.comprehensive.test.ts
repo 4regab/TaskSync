@@ -1636,8 +1636,188 @@ describe("per-session settings sync", () => {
 		});
 		await handleUpdateAutoAppendSetting(p, true);
 		expect(session.autoAppendEnabled).toBe(true);
-		expect(session.autoAppendText).toBeUndefined();
+		// Text is seeded from provider mirror when session has none
+		expect(session.autoAppendText).toBe("Custom append");
+		// Unrelated session fields are not touched
 		expect(session.autopilotText).toBeUndefined();
 		expect(session.autopilotPrompts).toBeUndefined();
+	});
+});
+
+// ─── FND-002 regression: cross-session auto-append isolation ─────────
+
+describe("FND-002 regression: auto-append session isolation", () => {
+	it("session-aware helper must not read provider mirror text", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active session text",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// Must NOT append "Active session text" from the provider mirror
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("legacy undefined fields produce no append", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active text",
+		});
+		const bgSession = {
+			autoAppendEnabled: undefined,
+			autoAppendText: undefined,
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("enabling auto-append persists session text from mirror", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "Persisted instructions",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(true);
+		expect(session.autoAppendText).toBe("Persisted instructions");
+	});
+
+	it("invalid enabled-without-text state is normalized to disabled", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Should not appear",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// enabled=true but no text → must not append anything
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("session with own text appends correctly", () => {
+		const p = createMockP({
+			_autoAppendEnabled: false,
+			_autoAppendText: "Wrong text",
+		});
+		const bgSession = {
+			autoAppendEnabled: true,
+			autoAppendText: "Correct session text",
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe(
+			"Answer\n\nCorrect session text",
+		);
+	});
+
+	it("enabling auto-append with no mirror text stays disabled", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(false);
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(session.autopilotText).toBeUndefined();
+		expect(session.autopilotPrompts).toBeUndefined();
+	});
+});
+
+// ─── FND-002 regression: cross-session auto-append isolation ─────────
+
+describe("FND-002 regression: auto-append session isolation", () => {
+	it("session-aware helper must not read provider mirror text", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active session text",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// Must NOT append "Active session text" from the provider mirror
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("legacy undefined fields produce no append", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active text",
+		});
+		const bgSession = {
+			autoAppendEnabled: undefined,
+			autoAppendText: undefined,
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("enabling auto-append persists session text from mirror", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "Persisted instructions",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(true);
+		expect(session.autoAppendText).toBe("Persisted instructions");
+	});
+
+	it("invalid enabled-without-text state is normalized to disabled", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Should not appear",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// enabled=true but no text → must not append anything
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("session with own text appends correctly", () => {
+		const p = createMockP({
+			_autoAppendEnabled: false,
+			_autoAppendText: "Wrong text",
+		});
+		const bgSession = {
+			autoAppendEnabled: true,
+			autoAppendText: "Correct session text",
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe(
+			"Answer\n\nCorrect session text",
+		);
+	});
+
+	it("enabling auto-append with no mirror text stays disabled", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(false);
+		expect(p._autoAppendEnabled).toBe(false);
 	});
 });

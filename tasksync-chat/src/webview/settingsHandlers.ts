@@ -84,10 +84,28 @@ export function applyAutoAppendToResponse(
 	response: string,
 	session?: { autoAppendEnabled?: boolean; autoAppendText?: string },
 ): string {
+	if (session) {
+		// Session-aware path: derive everything from the session itself.
+		// Never fall back to provider mirrors — they reflect the *active* session.
+		const enabled = session.autoAppendEnabled === true;
+		const text =
+			typeof session.autoAppendText === "string"
+				? normalizeAutoAppendText(session.autoAppendText)
+				: "";
+		// Normalize invalid state: enabled but no text → treat as disabled
+		const effectiveEnabled = enabled && text.length > 0;
+		return buildFinalResponseText(
+			response,
+			effectiveEnabled,
+			text,
+			p._alwaysAppendReminder,
+		);
+	}
+	// No session — use provider mirrors (active-session UI state)
 	return buildFinalResponseText(
 		response,
-		session ? session.autoAppendEnabled === true : p._autoAppendEnabled,
-		session?.autoAppendText ?? p._autoAppendText,
+		p._autoAppendEnabled,
+		p._autoAppendText,
 		p._alwaysAppendReminder,
 	);
 }
@@ -348,12 +366,18 @@ export async function handleUpdateAutoAppendSetting(
 	enabled: boolean,
 ): Promise<void> {
 	const activeSession = p._sessionManager?.getActiveSession?.();
+	// When enabling, use only the session's own text (persisted or freshly written).
+	// If the session has no text yet, seed it from the current provider mirror.
+	let sessionText = activeSession?.autoAppendText ?? "";
+	if (enabled && activeSession && !isAutoAppendTextPresent(sessionText)) {
+		const mirrorText = normalizeAutoAppendText(p._autoAppendText ?? "");
+		if (isAutoAppendTextPresent(mirrorText)) {
+			activeSession.autoAppendText = mirrorText;
+			sessionText = mirrorText;
+		}
+	}
 	// Auto-disable when text is empty — nothing to append
-	const effectiveEnabled =
-		enabled &&
-		isAutoAppendTextPresent(
-			activeSession?.autoAppendText ?? p._autoAppendText ?? "",
-		);
+	const effectiveEnabled = enabled && isAutoAppendTextPresent(sessionText);
 	p._autoAppendEnabled = effectiveEnabled;
 	if (activeSession) {
 		activeSession.autoAppendEnabled = effectiveEnabled;

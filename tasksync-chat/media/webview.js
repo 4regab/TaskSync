@@ -458,7 +458,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-				(msg.reason || "The remote server has been stopped."),
+					(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -469,9 +469,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-					msg.protocolVersion +
-					" client=" +
-					TASKSYNC_PROTOCOL_VERSION,
+						msg.protocolVersion +
+						" client=" +
+						TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",

@@ -64,6 +64,10 @@ export function startSessionTimerInterval(p: P): void {
 				elapsed >= warningThresholdMs
 			) {
 				p._sessionWarningShown = true;
+				const activeSession = p._sessionManager?.getActiveSession?.();
+				if (activeSession) {
+					activeSession.sessionWarningShown = true;
+				}
 				const callCount = p._currentSessionCalls.length;
 				const hoursLabel = p._sessionWarningHours === 1 ? "hour" : "hours";
 				vscode.window

@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 
 import * as fileH from "./fileHandlers";
+import * as persistence from "./persistence";
 import type { FromWebviewMessage, P, ToWebviewMessage } from "./webviewTypes";
 import { debugLog, getNonce } from "./webviewUtils";
 
@@ -198,6 +199,9 @@ export function disposeProvider(p: P): void {
 		clearTimeout(p._sessionSaveTimer);
 		p._sessionSaveTimer = null;
 	}
+	// Flush sessions to disk synchronously — async writes may not complete
+	// before the VS Code process exits during deactivation.
+	persistence.saveSessionsToDiskSync(p);
 	if (p._historySaveTimer) {
 		clearTimeout(p._historySaveTimer);
 		p._historySaveTimer = null;
@@ -229,6 +233,7 @@ export function disposeProvider(p: P): void {
 		clearTimeout(timer);
 	}
 	p._responseTimeoutTimers.clear();
+	p._toolCallSessionMap.clear();
 
 	p._stopSessionTimerInterval();
 	fileH.cleanupTempImagesFromEntries(p._currentSessionCalls);

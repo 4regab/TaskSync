@@ -28,6 +28,14 @@ export class ChatSessionManager {
 				maxSessionNumber = Math.max(maxSessionNumber, value);
 			}
 		}
+		// Also consider deleted IDs so tombstoned sessions are never resurrected.
+		for (const deletedId of this.deletedSessionIds) {
+			if (!/^\d+$/.test(deletedId)) continue;
+			const value = Number(deletedId);
+			if (Number.isFinite(value)) {
+				maxSessionNumber = Math.max(maxSessionNumber, value);
+			}
+		}
 		return String(maxSessionNumber + 1);
 	}
 

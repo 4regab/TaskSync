@@ -855,7 +855,10 @@ export class TaskSyncWebviewProvider
 		// Clear stale pending state: after a reload, Promise resolvers are gone
 		// so any persisted pendingToolCallId can never be resolved.
 		for (const session of this._sessionManager.getAllSessions()) {
-			if (session.pendingToolCallId) {
+			if (
+				session.pendingToolCallId &&
+				!this._pendingRequests.has(session.pendingToolCallId)
+			) {
 				session.pendingToolCallId = null;
 				session.waitingOnUser = false;
 				session.aiTurnActive = false;

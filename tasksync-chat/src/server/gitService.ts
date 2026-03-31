@@ -341,17 +341,28 @@ export class GitService {
 				const fileUri = vscode.Uri.file(fullPath);
 				const contentBytes = await vscode.workspace.fs.readFile(fileUri);
 				const content = Buffer.from(contentBytes).toString("utf8");
+				// Unified diff treats a trailing newline as a line terminator, not as
+				// an extra blank added line. Normalize CRLF first so hunk counts stay correct.
+				const normalizedContent = content.replace(/\r\n/g, "\n");
+				const lines =
+					normalizedContent === ""
+						? []
+						: normalizedContent.endsWith("\n")
+							? normalizedContent.slice(0, -1).split("\n")
+							: normalizedContent.split("\n");
 
 				// Format as unified diff with all additions
-				const lines = content.split("\n");
 				const diffLines = [
 					`diff --git a/${relativePath} b/${relativePath}`,
 					"new file mode 100644",
 					"--- /dev/null",
 					`+++ b/${relativePath}`,
-					`@@ -0,0 +1,${lines.length} @@`,
-					...lines.map((line) => `+${line}`),
 				];
+				if (lines.length > 0) {
+					const addedRange = lines.length === 1 ? "+1" : `+1,${lines.length}`;
+					diffLines.push(`@@ -0,0 ${addedRange} @@`);
+					diffLines.push(...lines.map((line) => `+${line}`));
+				}
 				return diffLines.join("\n");
 			} catch (err) {
 				console.error(

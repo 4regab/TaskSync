@@ -640,6 +640,11 @@ export class RemoteServer {
 				void this.provider
 					.startNewSessionAndResetCopilotChat({
 						stopCurrentSession: msg.stopCurrentSession === true,
+						initialPrompt:
+							typeof msg.initialPrompt === "string"
+								? msg.initialPrompt
+								: undefined,
+						useQueuedPrompt: msg.useQueuedPrompt === true,
 					})
 					.catch((e) =>
 						console.error("[TaskSync Remote] newSession error:", e),

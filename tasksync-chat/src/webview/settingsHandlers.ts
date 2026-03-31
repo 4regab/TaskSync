@@ -86,7 +86,7 @@ export function applyAutoAppendToResponse(
 ): string {
 	return buildFinalResponseText(
 		response,
-		session?.autoAppendEnabled ?? p._autoAppendEnabled,
+		session ? session.autoAppendEnabled === true : p._autoAppendEnabled,
 		session?.autoAppendText ?? p._autoAppendText,
 		p._alwaysAppendReminder,
 	);

@@ -108,6 +108,8 @@ describe("RemoteServer session actions", () => {
 
 		expect(provider.startNewSessionAndResetCopilotChat).toHaveBeenCalledWith({
 			stopCurrentSession: true,
+			initialPrompt: undefined,
+			useQueuedPrompt: false,
 		});
 		expect(provider.startNewSession).not.toHaveBeenCalled();
 	});

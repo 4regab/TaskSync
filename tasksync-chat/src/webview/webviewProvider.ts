@@ -9,7 +9,7 @@ import {
 	DEFAULT_SESSION_WARNING_HOURS,
 	MAX_QUEUE_PROMPT_LENGTH,
 } from "../constants/remoteConstants";
-import { ContextManager, ContextReferenceType } from "../context";
+import type { ContextManager, ContextReferenceType } from "../context";
 import type { RemoteServer } from "../server/remoteServer";
 import { startNewSessionChat } from "../utils/chatSessionUtils";
 import { ChatSessionManager } from "./chatSessionManager";
@@ -856,8 +856,13 @@ export class TaskSyncWebviewProvider
 		// Clear stale pending state: after a reload, Promise resolvers are gone
 		// so any persisted pendingToolCallId can never be resolved.
 		for (const session of this._sessionManager.getAllSessions()) {
+			// Keep truly live in-flight requests intact when async disk rehydrate
+			// finishes after ask_user has already created a pending resolver.
+			const hasLivePendingRequest =
+				typeof session.pendingToolCallId === "string" &&
+				this._pendingRequests.has(session.pendingToolCallId);
 			let clearedStalePending = false;
-			if (session.pendingToolCallId) {
+			if (session.pendingToolCallId && !hasLivePendingRequest) {
 				session.pendingToolCallId = null;
 				session.waitingOnUser = false;
 				session.aiTurnActive = false;
@@ -865,11 +870,13 @@ export class TaskSyncWebviewProvider
 			}
 			// Transition stale "pending" history entries to "completed" —
 			// their tool-call Promises are gone so they can never resolve.
-			for (const entry of session.history) {
-				if (entry.status === "pending") {
-					entry.status = "completed";
-					entry.response ??= "[Session interrupted]";
-					clearedStalePending = true;
+			if (!hasLivePendingRequest) {
+				for (const entry of session.history) {
+					if (entry.status === "pending") {
+						entry.status = "completed";
+						entry.response ??= "[Session interrupted]";
+						clearedStalePending = true;
+					}
 				}
 			}
 			if (clearedStalePending) {

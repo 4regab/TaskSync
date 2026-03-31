@@ -55,6 +55,24 @@ function isSessionActive(p: P, sessionId: string): boolean {
 	return p._sessionManager.getActiveSessionId() === sessionId;
 }
 
+/**
+ * SSOT: Resolve the effective autopilot text from a session, cycling through
+ * prompts when configured. Mutates `session.autopilotIndex` on each call.
+ * Used by both the normal autopilot path and the response-timeout path.
+ */
+function resolveAutopilotText(p: P, session: ChatSession): string {
+	const prompts = Array.isArray(session.autopilotPrompts)
+		? session.autopilotPrompts
+		: [];
+	if (prompts.length > 0) {
+		const text = prompts[session.autopilotIndex] ?? prompts[0];
+		session.autopilotIndex = (session.autopilotIndex + 1) % prompts.length;
+		return text;
+	}
+	const text = session.autopilotText ?? "";
+	return settingsH.normalizeAutopilotText(p, text);
+}
+
 function replacePendingToolCallForSession(p: P, session: ChatSession): void {
 	const previousToolCallId = session.pendingToolCallId;
 	if (!previousToolCallId) return;
@@ -205,20 +223,7 @@ export async function waitForUserResponse(
 			await p._applyHumanLikeDelay("Autopilot");
 
 			if (session.autopilotEnabled) {
-				let effectiveText: string;
-				// Use session-level prompts/text only — never fall back to provider mirrors
-				// which reflect the active session and leak across sessions.
-				const prompts = Array.isArray(session.autopilotPrompts)
-					? session.autopilotPrompts
-					: [];
-				if (prompts.length > 0) {
-					effectiveText = prompts[session.autopilotIndex] ?? prompts[0];
-					session.autopilotIndex =
-						(session.autopilotIndex + 1) % prompts.length;
-				} else {
-					const text = session.autopilotText ?? "";
-					effectiveText = settingsH.normalizeAutopilotText(p, text);
-				}
+				const effectiveText = resolveAutopilotText(p, session);
 				debugLog(
 					`[TaskSync] waitForUserResponse — autopilot auto-responding for session ${session.id} with: "${effectiveText.slice(0, 60)}" (${session.consecutiveAutoResponses}/${maxConsecutive})`,
 				);
@@ -278,16 +283,32 @@ export async function waitForUserResponse(
 
 			await p._applyHumanLikeDelay("Queue");
 
-			if (!session.queueEnabled || session.pendingToolCallId !== toolCallId) {
+			if (session.pendingToolCallId !== toolCallId) {
+				// Superseded by a newer ask_user during the delay — re-queue and abandon.
 				debugLog(
-					`[TaskSync] waitForUserResponse — session ${session.id} queue disabled or toolCallId changed during delay, re-queuing`,
+					`[TaskSync] waitForUserResponse — session ${session.id} superseded (pendingToolCallId changed), re-queuing`,
 				);
 				session.queue.unshift(queuedPrompt);
 				p._toolCallSessionMap.delete(toolCallId);
-				if (session.pendingToolCallId === toolCallId) {
-					session.pendingToolCallId = null;
-					session.waitingOnUser = false;
+				if (activeSession) {
+					notifyQueueChanged(p);
+				} else {
+					p._updateSessionsUI();
+					p._saveSessionsToDisk();
 				}
+				return {
+					value: "[Superseded by newer request]",
+					queue: sessionHasQueuedItems(session),
+					attachments: [],
+				};
+			} else if (!session.queueEnabled) {
+				// Queue disabled during delay — re-queue the prompt and fall through
+				// to present the question to the user interactively.
+				// pendingToolCallId and _toolCallSessionMap remain set.
+				debugLog(
+					`[TaskSync] waitForUserResponse — session ${session.id} queue disabled during delay, re-queuing and presenting to user`,
+				);
+				session.queue.unshift(queuedPrompt);
 				if (activeSession) {
 					notifyQueueChanged(p);
 				} else {
@@ -493,8 +514,7 @@ export async function handleResponseTimeout(
 			`TaskSync: Auto-response limit (${maxConsecutive}) reached. Session terminated after ${timeoutMinutes} min idle.`,
 		);
 	} else if (session.autopilotEnabled) {
-		const text = session.autopilotText ?? "";
-		responseText = settingsH.normalizeAutopilotText(p, text);
+		responseText = resolveAutopilotText(p, session);
 		debugLog(
 			`[TaskSync] handleResponseTimeout — session ${session.id} autopilot auto-responding with: "${responseText.slice(0, 60)}"`,
 		);

@@ -35,6 +35,8 @@ export interface AskUserToolResult {
 	response: string;
 	attachments: string[];
 	queue: boolean;
+	autoAppendEnabled: boolean;
+	autoAppendText: string;
 }
 
 function buildAssignedSessionInstruction(sessionId: string): string {
@@ -145,6 +147,8 @@ export async function askUser(
 				response: cancelledResponse,
 				attachments: [],
 				queue: result.queue,
+				autoAppendEnabled: false,
+				autoAppendText: "",
 			};
 		}
 		debugLog(
@@ -194,10 +198,19 @@ export async function askUser(
 			validAttachments.length,
 			") — AI should call askUser again next",
 		);
+		// Carry the responding session's auto-append settings so invoke()
+		// applies the correct session's settings — not the active session mirrors.
+		const respondingSession =
+			provider._sessionManager?.getSession?.(effectiveSessionId);
 		return {
 			response: responseText,
 			attachments: validAttachments,
 			queue: result.queue,
+			autoAppendEnabled: respondingSession?.autoAppendEnabled === true,
+			autoAppendText:
+				typeof respondingSession?.autoAppendText === "string"
+					? respondingSession.autoAppendText
+					: "",
 		};
 	} catch (error) {
 		// Re-throw cancellation errors without logging (they're expected)
@@ -217,6 +230,8 @@ export async function askUser(
 			response: "",
 			attachments: [],
 			queue: false,
+			autoAppendEnabled: false,
+			autoAppendText: "",
 		};
 	} finally {
 		// Always clean up the cancellation listener to prevent memory leaks
@@ -268,13 +283,14 @@ export function registerTools(
 					token,
 				);
 
-				// Build response with auto-append logic
-				// Read from provider's in-memory state (set by loadSettings/webview toggles)
-				// instead of config.get() — avoids stale defaults when config writes fail
+				// Build response with auto-append logic.
+				// Use the responding session's auto-append settings (carried through
+				// AskUserToolResult) — not provider mirrors which reflect the *active*
+				// session and would leak across sessions.
 				const finalResponse = buildFinalResponse(
 					result.response,
-					provider._autoAppendEnabled,
-					provider._autoAppendText,
+					result.autoAppendEnabled,
+					result.autoAppendText,
 					provider._alwaysAppendReminder,
 				);
 

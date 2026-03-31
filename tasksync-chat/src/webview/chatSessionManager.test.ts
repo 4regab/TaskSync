@@ -296,4 +296,37 @@ describe("ChatSessionManager", () => {
 		expect(manager.renameSession("1", "  New Title  ")).toBe(true);
 		expect(manager.getSession("1")?.title).toBe("New Title");
 	});
+
+	test("getNextSessionId skips deleted session IDs", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // id "1"
+		manager.createSession("Agent 2"); // id "2"
+		manager.createSession("Agent 3"); // id "3"
+		manager.deleteSession("3");
+		// With the fix, getNextSessionId must skip "3" (tombstoned) → return "4"
+		expect(manager.getNextSessionId()).toBe("4");
+	});
+
+	test("getNextSessionId skips multiple deleted IDs", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("A"); // "1"
+		manager.createSession("B"); // "2"
+		manager.createSession("C"); // "3"
+		manager.createSession("D"); // "4"
+		manager.deleteSession("3");
+		manager.deleteSession("4");
+		// Max of live {1,2} and deleted {3,4} is 4 → next is "5"
+		expect(manager.getNextSessionId()).toBe("5");
+	});
+
+	test("ensureSession with deleted ID creates session with fresh ID", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1"
+		manager.createSession("Agent 2"); // "2"
+		manager.deleteSession("2");
+		// Trying to ensure deleted "2" should not resurrect it
+		const session = manager.ensureSession("2", "Ghost");
+		expect(session.id).not.toBe("2");
+		expect(session.id).toBe("3");
+	});
 });

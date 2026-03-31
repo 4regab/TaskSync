@@ -35,6 +35,7 @@ export interface AskUserToolResult {
 	response: string;
 	attachments: string[];
 	queue: boolean;
+	sessionId: string;
 }
 
 function buildAssignedSessionInstruction(sessionId: string): string {
@@ -145,6 +146,7 @@ export async function askUser(
 				response: cancelledResponse,
 				attachments: [],
 				queue: result.queue,
+				sessionId: effectiveSessionId,
 			};
 		}
 		debugLog(
@@ -198,6 +200,7 @@ export async function askUser(
 			response: responseText,
 			attachments: validAttachments,
 			queue: result.queue,
+			sessionId: effectiveSessionId,
 		};
 	} catch (error) {
 		// Re-throw cancellation errors without logging (they're expected)
@@ -217,6 +220,7 @@ export async function askUser(
 			response: "",
 			attachments: [],
 			queue: false,
+			sessionId: effectiveSessionId,
 		};
 	} finally {
 		// Always clean up the cancellation listener to prevent memory leaks
@@ -269,12 +273,13 @@ export function registerTools(
 				);
 
 				// Build response with auto-append logic
-				// Read from provider's in-memory state (set by loadSettings/webview toggles)
-				// instead of config.get() — avoids stale defaults when config writes fail
+				// Resolve the session that handled this tool call so we use
+				// its auto-append settings, not the active-session mirrors
+				const session = provider._getSession(result.sessionId);
 				const finalResponse = buildFinalResponse(
 					result.response,
-					provider._autoAppendEnabled,
-					provider._autoAppendText,
+					session?.autoAppendEnabled ?? provider._autoAppendEnabled,
+					session?.autoAppendText ?? provider._autoAppendText,
 					provider._alwaysAppendReminder,
 				);
 

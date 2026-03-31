@@ -225,6 +225,10 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 							isApproval,
 							choices: choices.length > 0 ? choices : undefined,
 						} satisfies ToWebviewMessage);
+					} else {
+						p._view?.webview.postMessage({
+							type: "clearPendingState",
+						} satisfies ToWebviewMessage);
 					}
 				} else {
 					p._view?.webview.postMessage({

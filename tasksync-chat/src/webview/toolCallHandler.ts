@@ -489,8 +489,16 @@ export async function handleResponseTimeout(
 			`TaskSync: Auto-response limit (${maxConsecutive}) reached. Session terminated after ${timeoutMinutes} min idle.`,
 		);
 	} else if (session.autopilotEnabled) {
-		const text = session.autopilotText ?? "";
-		responseText = settingsH.normalizeAutopilotText(p, text);
+		const prompts = Array.isArray(session.autopilotPrompts)
+			? session.autopilotPrompts
+			: [];
+		if (prompts.length > 0) {
+			responseText = prompts[session.autopilotIndex] ?? prompts[0];
+			session.autopilotIndex = (session.autopilotIndex + 1) % prompts.length;
+		} else {
+			const text = session.autopilotText ?? "";
+			responseText = settingsH.normalizeAutopilotText(p, text);
+		}
 		debugLog(
 			`[TaskSync] handleResponseTimeout — session ${session.id} autopilot auto-responding with: "${responseText.slice(0, 60)}"`,
 		);

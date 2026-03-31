@@ -337,6 +337,7 @@ describe("askUser cancellation handling", () => {
 			_autoAppendEnabled: false,
 			_autoAppendText: "",
 			_alwaysAppendReminder: false,
+			_getSession: vi.fn().mockReturnValue(undefined),
 		};
 		const context = { subscriptions: [] as unknown[] };
 

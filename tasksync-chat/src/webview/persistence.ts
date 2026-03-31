@@ -270,3 +270,30 @@ export async function saveSessionsToDiskAsync(p: P): Promise<void> {
 		console.error("[TaskSync] Failed to save sessions:", error);
 	}
 }
+
+/**
+ * Synchronous save sessions (only for deactivate).
+ */
+export function saveSessionsToDiskSync(p: P): void {
+	try {
+		const storagePath = getStorageUri(p).fsPath;
+		const sessionsPath = path.join(storagePath, "sessions.json");
+
+		// biome-ignore format: inline suppression required by code quality scanner
+		if (!fs.existsSync(storagePath)) { // sync-io-allowed: deactivation hook must complete before process exits
+			fs.mkdirSync(storagePath, { recursive: true }); // sync-io-allowed
+		}
+
+		const data = JSON.stringify(
+			{
+				version: 2,
+				...p._sessionManager.toJSON(),
+			},
+			null,
+			2,
+		);
+		fs.writeFileSync(sessionsPath, data, "utf8"); // sync-io-allowed
+	} catch (error) {
+		console.error("[TaskSync] Failed to save sessions (sync):", error);
+	}
+}

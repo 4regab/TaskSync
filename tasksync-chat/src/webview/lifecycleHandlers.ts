@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 
 import * as fileH from "./fileHandlers";
+import * as persistence from "./persistence";
 import type { FromWebviewMessage, P, ToWebviewMessage } from "./webviewTypes";
 import { debugLog, getNonce } from "./webviewUtils";
 
@@ -198,6 +199,7 @@ export function disposeProvider(p: P): void {
 		clearTimeout(p._sessionSaveTimer);
 		p._sessionSaveTimer = null;
 	}
+	persistence.saveSessionsToDiskSync(p);
 	if (p._historySaveTimer) {
 		clearTimeout(p._historySaveTimer);
 		p._historySaveTimer = null;

@@ -333,10 +333,14 @@ export class ChatSessionManager {
 	public toJSON(): {
 		sessions: ChatSession[];
 		activeSessionId: string | null;
+		deletedSessionIds?: string[];
 	} {
 		return {
 			sessions: this.getAllSessions(),
 			activeSessionId: this.activeSessionId,
+			...(this.deletedSessionIds.size > 0
+				? { deletedSessionIds: [...this.deletedSessionIds] }
+				: {}),
 		};
 	}
 
@@ -346,6 +350,7 @@ export class ChatSessionManager {
 	public fromJSON(data: {
 		sessions: ChatSession[];
 		activeSessionId: string | null;
+		deletedSessionIds?: string[];
 	}): void {
 		// Preserve in-flight sessions (with pending tool calls) that were created
 		// before disk load finished — avoids race where async loadSessionsFromDisk
@@ -368,6 +373,13 @@ export class ChatSessionManager {
 		// Restore in-flight sessions
 		for (const [id, session] of inFlight) {
 			this.sessions.set(id, session);
+		}
+
+		// Restore deleted-session tombstones so stale IDs stay rejected across reloads
+		if (Array.isArray(data.deletedSessionIds)) {
+			for (const id of data.deletedSessionIds) {
+				if (typeof id === "string") this.deletedSessionIds.add(id);
+			}
 		}
 
 		this.activeSessionId = data.activeSessionId;

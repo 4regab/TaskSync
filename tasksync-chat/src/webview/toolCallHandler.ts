@@ -205,16 +205,17 @@ export async function waitForUserResponse(
 
 			if (session.autopilotEnabled) {
 				let effectiveText: string;
-				// Use session-level prompts/text to avoid race with provider state during session switches.
+				// Use session-level prompts/text only — never fall back to provider mirrors
+				// which reflect the active session and leak across sessions.
 				const prompts = Array.isArray(session.autopilotPrompts)
 					? session.autopilotPrompts
-					: p._autopilotPrompts;
+					: [];
 				if (prompts.length > 0) {
 					effectiveText = prompts[session.autopilotIndex] ?? prompts[0];
 					session.autopilotIndex =
 						(session.autopilotIndex + 1) % prompts.length;
 				} else {
-					const text = session.autopilotText || p._autopilotText;
+					const text = session.autopilotText ?? "";
 					effectiveText = settingsH.normalizeAutopilotText(p, text);
 				}
 				debugLog(
@@ -223,6 +224,7 @@ export async function waitForUserResponse(
 				const effectiveResponse = settingsH.applyAutoAppendToResponse(
 					p,
 					effectiveText,
+					session,
 				);
 				vscode.window.showInformationMessage(
 					`TaskSync: Autopilot auto-responded. (${session.consecutiveAutoResponses}/${maxConsecutive})`,
@@ -298,6 +300,7 @@ export async function waitForUserResponse(
 				const effectiveResponse = settingsH.applyAutoAppendToResponse(
 					p,
 					queuedPrompt.prompt,
+					session,
 				);
 				const entry: ToolCallEntry = {
 					id: toolCallId,
@@ -486,7 +489,7 @@ export async function handleResponseTimeout(
 			`TaskSync: Auto-response limit (${maxConsecutive}) reached. Session terminated after ${timeoutMinutes} min idle.`,
 		);
 	} else if (session.autopilotEnabled) {
-		const text = session.autopilotText || p._autopilotText;
+		const text = session.autopilotText ?? "";
 		responseText = settingsH.normalizeAutopilotText(p, text);
 		debugLog(
 			`[TaskSync] handleResponseTimeout — session ${session.id} autopilot auto-responding with: "${responseText.slice(0, 60)}"`,
@@ -510,6 +513,7 @@ export async function handleResponseTimeout(
 		const effectiveResponse = settingsH.applyAutoAppendToResponse(
 			p,
 			responseText,
+			session,
 		);
 		const pendingEntry = p._currentSessionCallsMap.get(toolCallId);
 		if (pendingEntry && pendingEntry.status === "pending") {

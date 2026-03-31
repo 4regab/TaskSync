@@ -228,6 +228,8 @@ function mapToRemoteMessage(msg) {
 			return {
 				type: "newSession",
 				stopCurrentSession: msg.stopCurrentSession === true,
+				initialPrompt: msg.initialPrompt,
+				useQueuedPrompt: msg.useQueuedPrompt === true,
 			};
 		case "resetSession":
 			return { type: "resetSession" };

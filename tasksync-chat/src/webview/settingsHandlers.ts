@@ -79,11 +79,15 @@ export function isAutoAppendTextPresent(text: string): boolean {
 	return normalizeAutoAppendText(text).length > 0;
 }
 
-export function applyAutoAppendToResponse(p: P, response: string): string {
+export function applyAutoAppendToResponse(
+	p: P,
+	response: string,
+	session?: { autoAppendEnabled?: boolean; autoAppendText?: string },
+): string {
 	return buildFinalResponseText(
 		response,
-		p._autoAppendEnabled,
-		p._autoAppendText,
+		session?.autoAppendEnabled ?? p._autoAppendEnabled,
+		session?.autoAppendText ?? p._autoAppendText,
 		p._alwaysAppendReminder,
 	);
 }

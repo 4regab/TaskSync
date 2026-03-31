@@ -56,6 +56,9 @@ export async function handleAddAttachment(p: P): Promise<void> {
 		});
 
 		if (selected && selected.length > 0) {
+			// Re-resolve active session after async picker — session may have switched
+			const currentSession = p._sessionManager.getActiveSession();
+			if (!currentSession) return;
 			for (const item of selected) {
 				const labelMatch = item.label.match(/\$\([^)]+\)\s*(.+)/);
 				const cleanName = labelMatch ? labelMatch[1] : item.label;
@@ -66,7 +69,7 @@ export async function handleAddAttachment(p: P): Promise<void> {
 				};
 				p._attachments.push(attachment);
 			}
-			activeSession.attachments = p._attachments;
+			currentSession.attachments = p._attachments;
 			p._saveSessionsToDisk();
 			updateAttachmentsUI(p);
 		}

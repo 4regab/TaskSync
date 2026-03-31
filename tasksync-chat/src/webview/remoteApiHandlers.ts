@@ -269,7 +269,11 @@ export function cancelPendingToolCall(
 		(sessionId
 			? p._getSession?.(sessionId)
 			: p._sessionManager?.getActiveSession?.()) ?? undefined;
-	const toolCallId = session?.pendingToolCallId ?? p._currentToolCallId ?? null;
+	// When a specific sessionId is provided, only cancel that session's tool call —
+	// never fall back to the active session's _currentToolCallId (cross-session leak).
+	const toolCallId = sessionId
+		? (session?.pendingToolCallId ?? null)
+		: (session?.pendingToolCallId ?? p._currentToolCallId ?? null);
 	if (!toolCallId) return false;
 
 	const resolver = p._pendingRequests.get(toolCallId);

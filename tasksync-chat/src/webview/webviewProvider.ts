@@ -400,6 +400,7 @@ export class TaskSyncWebviewProvider
 		const activeSession = this._sessionManager.getActiveSession();
 
 		if (activeSession) {
+			activeSession.unread = false;
 			for (const entry of activeSession.history) {
 				entry.sessionId ??= activeSession.id;
 				this._currentSessionCallsMap.set(entry.id, entry);
@@ -855,10 +856,12 @@ export class TaskSyncWebviewProvider
 		// Clear stale pending state: after a reload, Promise resolvers are gone
 		// so any persisted pendingToolCallId can never be resolved.
 		for (const session of this._sessionManager.getAllSessions()) {
+			let clearedStalePending = false;
 			if (session.pendingToolCallId) {
 				session.pendingToolCallId = null;
 				session.waitingOnUser = false;
 				session.aiTurnActive = false;
+				clearedStalePending = true;
 			}
 			// Transition stale "pending" history entries to "completed" —
 			// their tool-call Promises are gone so they can never resolve.
@@ -866,7 +869,11 @@ export class TaskSyncWebviewProvider
 				if (entry.status === "pending") {
 					entry.status = "completed";
 					entry.response ??= "[Session interrupted]";
+					clearedStalePending = true;
 				}
+			}
+			if (clearedStalePending) {
+				session.unread = false;
 			}
 		}
 		this._syncActiveSessionState();

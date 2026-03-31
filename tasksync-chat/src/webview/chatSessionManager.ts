@@ -59,6 +59,7 @@ export class ChatSessionManager {
 			attachments: [],
 			autopilotEnabled: false,
 			waitingOnUser: false,
+			unread: false,
 			createdAt: Date.now(),
 			pendingToolCallId: null,
 			sessionStartTime: null,
@@ -114,6 +115,7 @@ export class ChatSessionManager {
 				? { autoAppendText: raw.autoAppendText }
 				: {}),
 			waitingOnUser: raw.waitingOnUser === true,
+			unread: raw.unread === true,
 			createdAt:
 				typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt)
 					? raw.createdAt
@@ -348,7 +350,7 @@ export class ChatSessionManager {
 	 * Restore sessions from persisted data.
 	 */
 	public fromJSON(data: {
-		sessions: ChatSession[];
+		sessions: Array<Partial<ChatSession> & Pick<ChatSession, "id">>;
 		activeSessionId: string | null;
 		deletedSessionIds?: string[];
 	}): void {

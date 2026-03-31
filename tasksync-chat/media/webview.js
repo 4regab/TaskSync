@@ -458,7 +458,7 @@ function handleRemoteMessage(msg) {
 			// Show user-friendly message
 			alert(
 				"Server stopped: " +
-				(msg.reason || "The remote server has been stopped."),
+					(msg.reason || "The remote server has been stopped."),
 			);
 			return;
 		case "connected":
@@ -469,9 +469,9 @@ function handleRemoteMessage(msg) {
 			)
 				console.error(
 					"[TaskSync Remote] Protocol version mismatch: server=" +
-					msg.protocolVersion +
-					" client=" +
-					TASKSYNC_PROTOCOL_VERSION,
+						msg.protocolVersion +
+						" client=" +
+						TASKSYNC_PROTOCOL_VERSION,
 				);
 			debugLog(
 				"Auth success, hasState:",
@@ -1276,6 +1276,7 @@ function init() {
 				}
 			}
 			lastNarrowState = isNarrow;
+			updateWelcomeSectionVisibility();
 		});
 
 		// Bind collapse bar for narrow split-view sessions panel
@@ -4698,6 +4699,47 @@ function applyVertSplitRatio(pct) {
 	threadEl.style.flex = "1 1 0";
 }
 
+/**
+ * Keep hidden-list unread indicators derived from shared session summaries.
+ */
+function syncHiddenListUnreadIndicators() {
+	var backBtn = document.getElementById("thread-back-btn");
+	var collapseBar = document.getElementById("sessions-collapse-bar");
+	var hubEl = document.getElementById("workspace-hub");
+	var hasOpenSession = !!activeSessionId;
+	var hasUnreadOtherSession = (sessions || []).some(function (session) {
+		return session.id !== activeSessionId && session.unread === true;
+	});
+	var showBackIndicator =
+		hasOpenSession && !isSplitViewLayoutActive() && hasUnreadOtherSession;
+	var showCollapsedBarIndicator =
+		hasOpenSession &&
+		isSplitViewLayoutActive() &&
+		window.innerWidth <= 480 &&
+		!!hubEl &&
+		hubEl.classList.contains("collapsed") &&
+		hasUnreadOtherSession;
+
+	if (backBtn) {
+		backBtn.classList.toggle("has-unread-indicator", showBackIndicator);
+		backBtn.title = showBackIndicator
+			? "Back to Sessions (unread sessions)"
+			: "Back to Sessions";
+		backBtn.setAttribute("aria-label", backBtn.title);
+	}
+
+	if (collapseBar) {
+		collapseBar.classList.toggle(
+			"has-unread-indicator",
+			showCollapsedBarIndicator,
+		);
+		collapseBar.title = showCollapsedBarIndicator
+			? "Sessions (unread sessions)"
+			: "Sessions";
+		collapseBar.setAttribute("aria-label", collapseBar.title);
+	}
+}
+
 function syncSplitViewLayout() {
 	var effectiveSplitView = isSplitViewLayoutActive();
 	var container = document.querySelector(".main-container.orch");
@@ -4721,6 +4763,7 @@ function syncSplitViewLayout() {
 		if (window.innerWidth <= 480 && vertSplitRatio) {
 			applyVertSplitRatio(vertSplitRatio);
 		}
+		syncHiddenListUnreadIndicators();
 		return;
 	}
 
@@ -4731,6 +4774,8 @@ function syncSplitViewLayout() {
 	if (threadEl) {
 		threadEl.style.flex = "";
 	}
+
+	syncHiddenListUnreadIndicators();
 }
 
 /**
@@ -4828,6 +4873,7 @@ function renderSessionsList() {
 		sessionsListEl.innerHTML = "";
 		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
 		if (welcomeSection) welcomeSection.classList.remove("hidden");
+		syncHiddenListUnreadIndicators();
 		return;
 	}
 
@@ -4846,12 +4892,14 @@ function renderSessionsList() {
 		.map(function (session) {
 			var isActive = session.id === activeSessionId;
 			var isWaiting = session.waitingOnUser;
+			var isUnread = session.unread === true;
 			var isArchived = session.status === "archived";
 
 			var rowClass =
 				"chat-row" +
 				(isActive ? " active" : "") +
 				(isWaiting ? " waiting" : "") +
+				(isUnread ? " unread" : "") +
 				(isArchived ? " archived" : "");
 
 			// Preview snippet from latest history entry (history is newest-first via unshift)
@@ -4921,6 +4969,8 @@ function renderSessionsList() {
 				}
 			});
 		});
+
+	syncHiddenListUnreadIndicators();
 }
 
 /**
@@ -4930,6 +4980,7 @@ function toggleHubCollapse() {
 	var hub = document.getElementById("workspace-hub");
 	if (!hub) return;
 	hub.classList.toggle("collapsed");
+	syncHiddenListUnreadIndicators();
 }
 // ==================== Queue Management ====================
 

@@ -24,6 +24,7 @@ function createMockP(overrides: Partial<any> = {}) {
 		queue: [],
 		queueEnabled: true,
 		attachments,
+		unread: overrides._unread ?? false,
 		pendingToolCallId: overrides._currentToolCallId ?? null,
 		waitingOnUser: Boolean(overrides._currentToolCallId),
 		sessionStartTime: overrides._sessionStartTime ?? 123,
@@ -123,9 +124,12 @@ describe("startNewSession clear payload", () => {
 	/**
 	 * Plain reset must cancel pending ask_user work and clear all visible session state.
 	 */
-	it("cancels pending work, clears state, and broadcasts resetSession", () => {
+	it("cancels pending work, clears state, and broadcasts resetSession", async () => {
+		const { cancelPendingToolCall } = await import("./remoteApiHandlers");
+		const resolve = vi.fn();
 		const p = createMockP({
 			_currentToolCallId: "tc_1",
+			_unread: true,
 			_currentSessionCalls: [
 				{
 					id: "tc_1",
@@ -149,13 +153,20 @@ describe("startNewSession clear payload", () => {
 					},
 				],
 			]),
+			_pendingRequests: new Map([["tc_1", resolve]]),
+			_toolCallSessionMap: new Map([["tc_1", "1"]]),
 			_aiTurnActive: true,
 			_sessionTerminated: true,
 		});
+		const cancelPendingToolCallSpy = vi.fn(
+			(reason: string, sessionId?: string) =>
+				cancelPendingToolCall(p, reason, sessionId),
+		);
+		p.cancelPendingToolCall = cancelPendingToolCallSpy;
 
 		startNewSession(p);
 
-		expect(p.cancelPendingToolCall).toHaveBeenCalledWith(
+		expect(cancelPendingToolCallSpy).toHaveBeenCalledWith(
 			"[Session reset by user]",
 		);
 		expect(p._currentSessionCalls).toEqual([]);
@@ -165,6 +176,7 @@ describe("startNewSession clear payload", () => {
 		expect(p._sessionTerminated).toBe(false);
 		expect(p._sessionWarningShown).toBe(false);
 		expect(p._aiTurnActive).toBe(false);
+		expect(p._sessionManager.getActiveSession().unread).toBe(false);
 		expect(p._consecutiveAutoResponses).toBe(0);
 		expect(p._autopilotIndex).toBe(0);
 		expect(p._view.badge).toBeUndefined();

@@ -46,6 +46,7 @@ export interface RemoteSessionSummary {
 	title: string;
 	status: "active" | "archived";
 	waitingOnUser: boolean;
+	unread: boolean;
 	createdAt: number;
 	/** First history entry only (for preview snippet). */
 	history: Array<{ prompt: string }>;
@@ -58,6 +59,7 @@ export function getRemoteSessionSummaries(p: P): RemoteSessionSummary[] {
 		title: s.title,
 		status: s.status,
 		waitingOnUser: s.waitingOnUser,
+		unread: s.unread,
 		createdAt: s.createdAt,
 		history:
 			s.history.length > 0
@@ -240,6 +242,7 @@ export function resolveRemoteResponse(
 
 	session.pendingToolCallId = null;
 	session.waitingOnUser = false;
+	session.unread = false;
 	session.aiTurnActive = true;
 	debugLog(
 		`[TaskSync] resolveRemoteResponse — resolved for session ${session.id}, aiTurnActive: true`,
@@ -298,6 +301,7 @@ export function cancelPendingToolCall(
 	if (session) {
 		session.pendingToolCallId = null;
 		session.waitingOnUser = false;
+		session.unread = false;
 		session.aiTurnActive = false;
 	} else {
 		p._currentToolCallId = null;

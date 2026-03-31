@@ -91,6 +91,8 @@ export interface ChatSession {
 	/** Per-session Auto Append text. */
 	autoAppendText?: string;
 	waitingOnUser: boolean;
+	/** True while a non-open session has an unseen actionable pending prompt. */
+	unread: boolean;
 	createdAt: number;
 	/** The toolCallId currently pending for THIS session (null if not waiting) */
 	pendingToolCallId: string | null;

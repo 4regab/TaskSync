@@ -392,6 +392,7 @@ describe("markSessionTerminated", () => {
 		markSessionTerminated(p, session);
 
 		expect(session.sessionTerminated).toBe(true);
+		expect(session.unread).toBe(false);
 		expect(session.sessionFrozenElapsed).toBeGreaterThanOrEqual(4900);
 		expect(session.sessionFrozenElapsed).toBeLessThanOrEqual(6000);
 		expect(p._sessionFrozenElapsed).toBeGreaterThanOrEqual(4900);
@@ -413,12 +414,14 @@ describe("markSessionTerminated", () => {
 			sessionTerminated: false,
 			aiTurnActive: true,
 			waitingOnUser: true,
+			unread: true,
 			pendingToolCallId: "tc_2",
 		} as any;
 
 		markSessionTerminated(p, session);
 
 		expect(session.sessionTerminated).toBe(true);
+		expect(session.unread).toBe(false);
 		expect(session.sessionFrozenElapsed).toBe(0);
 		expect(p._stopSessionTimerInterval).not.toHaveBeenCalled();
 		expect(p._updateViewTitle).not.toHaveBeenCalled();

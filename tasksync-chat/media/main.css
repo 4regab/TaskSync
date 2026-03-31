@@ -165,6 +165,31 @@ body {
     color: var(--vscode-descriptionForeground);
 }
 
+.sessions-collapse-bar.has-unread-indicator {
+    position: relative;
+}
+
+.sessions-collapse-bar.has-unread-indicator::after {
+    content: "New";
+    position: absolute;
+    top: 6px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 16px;
+    padding: 0 5px;
+    border: 1px solid var(--vscode-focusBorder, currentColor);
+    border-radius: 999px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 /* Split view placeholder -- shown when no session is selected */
 .split-placeholder {
     grid-row: 1 / -1;
@@ -349,6 +374,31 @@ body {
     white-space: nowrap;
 }
 
+.chat-row-top-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.chat-row.unread .chat-row-top-actions::before {
+    content: "New";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 16px;
+    padding: 0 5px;
+    border: 1px solid var(--vscode-focusBorder, currentColor);
+    border-radius: 999px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .chat-row-top span,
 .chat-row-preview,
 .msg-meta,
@@ -394,6 +444,34 @@ body {
 
 .back:hover {
     background: var(--vscode-toolbar-hoverBackground);
+}
+
+.back.has-unread-indicator {
+    position: relative;
+    overflow: visible;
+    margin-right: 30px;
+}
+
+.back.has-unread-indicator::after {
+    content: "New";
+    position: absolute;
+    top: -3px;
+    left: calc(100% - 2px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 16px;
+    padding: 0 5px;
+    border: 1px solid var(--vscode-focusBorder, currentColor);
+    border-radius: 999px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    pointer-events: none;
 }
 
 .thread-head-left strong {
@@ -3910,6 +3988,7 @@ button#send-btn:disabled {
     display: flex;
     gap: 8px;
 }
+
 .new-session-btn-row .form-btn {
     flex: 1 1 auto;
     text-align: center;

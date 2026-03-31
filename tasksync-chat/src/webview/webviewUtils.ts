@@ -184,6 +184,7 @@ export function markSessionTerminated(
 		| "sessionTerminated"
 		| "aiTurnActive"
 		| "waitingOnUser"
+		| "unread"
 		| "pendingToolCallId"
 	>,
 ): void {
@@ -193,6 +194,7 @@ export function markSessionTerminated(
 	session.sessionTerminated = true;
 	session.aiTurnActive = false;
 	session.waitingOnUser = false;
+	session.unread = false;
 	session.pendingToolCallId = null;
 	if (session.sessionStartTime !== null) {
 		session.sessionFrozenElapsed = Date.now() - session.sessionStartTime;

@@ -4,14 +4,18 @@ import "../__mocks__/vscode";
 const broadcastToolCallCompletedMock = vi.fn();
 const sessionHasQueuedItemsMock = vi.fn(() => false);
 
-vi.mock("./webviewUtils", () => ({
-	broadcastToolCallCompleted: broadcastToolCallCompletedMock,
-	debugLog: vi.fn(),
-	generateId: vi.fn(),
-	getFileIcon: vi.fn(),
-	sessionHasQueuedItems: sessionHasQueuedItemsMock,
-	notifyQueueChanged: vi.fn(),
-}));
+vi.mock("./webviewUtils", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./webviewUtils")>();
+	return {
+		...actual,
+		broadcastToolCallCompleted: broadcastToolCallCompletedMock,
+		debugLog: vi.fn(),
+		generateId: vi.fn(),
+		getFileIcon: vi.fn(),
+		sessionHasQueuedItems: sessionHasQueuedItemsMock,
+		notifyQueueChanged: vi.fn(),
+	};
+});
 
 function createProvider(overrides: Partial<any> = {}) {
 	const activeSession = {
@@ -98,6 +102,7 @@ describe("cancelPendingToolCall", () => {
 			id: "sess_2",
 			pendingToolCallId: "tc_2",
 			waitingOnUser: true,
+			unread: true,
 			aiTurnActive: true,
 			consecutiveAutoResponses: 0,
 			queue: [],
@@ -132,6 +137,7 @@ describe("cancelPendingToolCall", () => {
 		);
 		expect(result).toBe(true);
 		expect(targetSession.pendingToolCallId).toBeNull();
+		expect(targetSession.unread).toBe(false);
 		expect(targetSession.aiTurnActive).toBe(false);
 		// Active session (tc_1) should NOT have been touched
 		expect(provider._currentToolCallId).toBe("tc_1");
@@ -149,6 +155,7 @@ describe("getRemoteSessionSummaries", () => {
 						title: "Agent 1",
 						status: "active",
 						waitingOnUser: true,
+						unread: true,
 						createdAt: 1000,
 						history: [{ prompt: "first question" }, { prompt: "second" }],
 					},
@@ -157,6 +164,7 @@ describe("getRemoteSessionSummaries", () => {
 						title: "Agent 2",
 						status: "archived",
 						waitingOnUser: false,
+						unread: false,
 						createdAt: 2000,
 						history: [],
 					},
@@ -174,6 +182,7 @@ describe("getRemoteSessionSummaries", () => {
 			title: "Agent 1",
 			status: "active",
 			waitingOnUser: true,
+			unread: true,
 			createdAt: 1000,
 			history: [{ prompt: "first question" }],
 		});
@@ -182,6 +191,7 @@ describe("getRemoteSessionSummaries", () => {
 			title: "Agent 2",
 			status: "archived",
 			waitingOnUser: false,
+			unread: false,
 			createdAt: 2000,
 			history: [],
 		});
@@ -198,6 +208,7 @@ describe("getRemoteSessionSummaries", () => {
 						title: "T",
 						status: "active",
 						waitingOnUser: false,
+						unread: true,
 						createdAt: 0,
 						history: [{ prompt: longPrompt }],
 					},
@@ -221,6 +232,7 @@ describe("getRemoteState", () => {
 				title: "Agent 1",
 				status: "active" as const,
 				waitingOnUser: false,
+				unread: true,
 				createdAt: 100,
 				history: [],
 			},
@@ -245,6 +257,57 @@ describe("getRemoteState", () => {
 
 		expect(state.sessions).toHaveLength(1);
 		expect(state.sessions[0].id).toBe("s1");
+		expect((state.sessions[0] as any).unread).toBe(true);
 		expect(state.activeSessionId).toBe("s1");
+	});
+
+	it("clears unread when a remote response resolves a pending ask_user", async () => {
+		const { resolveRemoteResponse } = await import("./remoteApiHandlers");
+		const resolver = vi.fn();
+		const session = {
+			id: "sess_2",
+			pendingToolCallId: "tc_2",
+			waitingOnUser: true,
+			unread: true,
+			aiTurnActive: false,
+			consecutiveAutoResponses: 1,
+			queue: [],
+		};
+		const provider = createProvider({
+			_getSession: vi.fn((id: string) =>
+				id === "sess_2" ? session : undefined,
+			),
+			_pendingRequests: new Map([["tc_2", resolver]]),
+			_toolCallSessionMap: new Map([["tc_2", "sess_2"]]),
+			_currentSessionCallsMap: new Map([
+				[
+					"tc_2",
+					{
+						id: "tc_2",
+						sessionId: "sess_2",
+						prompt: "Q2",
+						response: "",
+						status: "pending",
+						timestamp: 1,
+						attachments: [],
+					},
+				],
+			]),
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+			},
+		});
+
+		const result = resolveRemoteResponse(
+			provider,
+			"sess_2",
+			"tc_2",
+			"Remote answer",
+			[],
+		);
+
+		expect(result).toBe(true);
+		expect(session.unread).toBe(false);
+		expect(session.pendingToolCallId).toBeNull();
 	});
 });

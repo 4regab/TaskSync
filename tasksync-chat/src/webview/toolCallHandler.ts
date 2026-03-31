@@ -75,6 +75,7 @@ function replacePendingToolCallForSession(p: P, session: ChatSession): void {
 
 	session.pendingToolCallId = null;
 	session.waitingOnUser = false;
+	session.unread = false;
 
 	if (previousResolve) {
 		previousResolve({
@@ -332,12 +333,14 @@ export async function waitForUserResponse(
 		}
 	}
 
-	if (activeSession) {
+	const activeSessionAtPendingCreation = isSessionActive(p, session.id);
+
+	if (activeSessionAtPendingCreation) {
 		p._view?.show(true);
 	}
 
 	debugLog(
-		`[TaskSync] waitForUserResponse — creating pending entry, session: ${session.id}, toolCallId: ${toolCallId}, webviewReady: ${p._webviewReady}, isActiveSession: ${activeSession}`,
+		`[TaskSync] waitForUserResponse — creating pending entry, session: ${session.id}, toolCallId: ${toolCallId}, webviewReady: ${p._webviewReady}, isActiveSession: ${activeSessionAtPendingCreation}`,
 	);
 	const pendingEntry: ToolCallEntry = {
 		id: toolCallId,
@@ -348,6 +351,7 @@ export async function waitForUserResponse(
 		isFromQueue: false,
 		status: "pending",
 	};
+	session.unread = !activeSessionAtPendingCreation;
 	session.history.unshift(pendingEntry);
 	p._currentSessionCallsMap.set(toolCallId, pendingEntry);
 
@@ -362,7 +366,7 @@ export async function waitForUserResponse(
 		}
 	}
 
-	if (activeSession) {
+	if (activeSessionAtPendingCreation) {
 		postPendingToActiveWebview(p, session, pendingEntry);
 	}
 
@@ -370,7 +374,7 @@ export async function waitForUserResponse(
 		p.playNotificationSound();
 	}
 
-	if (activeSession) {
+	if (activeSessionAtPendingCreation) {
 		const choices = parseChoices(question);
 		const isApproval = choices.length === 0 && isApprovalQuestion(question);
 		p._remoteServer?.broadcast("toolCallPending", {
@@ -534,6 +538,7 @@ export async function handleResponseTimeout(
 
 		session.pendingToolCallId = null;
 		session.waitingOnUser = false;
+		session.unread = false;
 		session.aiTurnActive = true;
 		resolve({
 			value: responseText,

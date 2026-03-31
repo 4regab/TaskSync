@@ -13,6 +13,7 @@ describe("ChatSessionManager", () => {
 		expect(session.history).toEqual([]);
 		expect(session.autopilotEnabled).toBe(false);
 		expect(session.waitingOnUser).toBe(false);
+		expect((session as any).unread).toBe(false);
 		expect(session.createdAt).toBeGreaterThan(0);
 		expect(manager.getActiveSession()?.id).toBe(session.id);
 		expect(manager.getAllSessions().length).toBe(1);
@@ -151,6 +152,7 @@ describe("ChatSessionManager", () => {
 		const s1 = manager.createSession("Session A");
 		const s2 = manager.createSession("Session B");
 		s1.waitingOnUser = true;
+		(s1 as any).unread = true;
 		s2.autopilotEnabled = true;
 
 		const json = manager.toJSON();
@@ -163,10 +165,12 @@ describe("ChatSessionManager", () => {
 		expect(manager2.getAllSessions().length).toBe(2);
 		expect(manager2.getActiveSession()?.id).toBe(s2.id);
 		expect(manager2.getSession(s1.id)?.waitingOnUser).toBe(true);
+		expect((manager2.getSession(s1.id) as any)?.unread).toBe(true);
+		expect((manager2.getSession(s2.id) as any)?.unread).toBe(false);
 		expect(manager2.getSession(s2.id)?.autopilotEnabled).toBe(true);
 	});
 
-	test("fromJSON leaves per-session fields undefined for legacy sessions", () => {
+	test("fromJSON defaults unread to false when legacy data omits the unread field", () => {
 		const manager = new ChatSessionManager();
 		// Simulate old session data that never had per-session fields
 		manager.fromJSON({
@@ -200,6 +204,7 @@ describe("ChatSessionManager", () => {
 		expect(session?.autopilotPrompts).toBeUndefined();
 		expect(session?.autoAppendEnabled).toBeUndefined();
 		expect(session?.autoAppendText).toBeUndefined();
+		expect((session as any)?.unread).toBe(false);
 	});
 
 	test("fromJSON handles invalid activeSessionId gracefully", () => {
@@ -248,6 +253,7 @@ describe("ChatSessionManager", () => {
 					autoAppendEnabled: false,
 					autoAppendText: "",
 					waitingOnUser: false,
+					unread: false,
 					createdAt: Date.now(),
 					pendingToolCallId: null,
 					sessionStartTime: null,

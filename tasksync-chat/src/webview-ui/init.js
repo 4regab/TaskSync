@@ -76,6 +76,7 @@ function init() {
 				}
 			}
 			lastNarrowState = isNarrow;
+			updateWelcomeSectionVisibility();
 		});
 
 		// Bind collapse bar for narrow split-view sessions panel

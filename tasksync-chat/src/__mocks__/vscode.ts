@@ -38,6 +38,10 @@ export const window = {
 	activeTextEditor: undefined as any,
 };
 
+export const commands = {
+	executeCommand: async () => undefined,
+};
+
 export const extensions = {
 	getExtension: () => undefined as any,
 };
@@ -54,6 +58,7 @@ const vscodeMock = {
 	Uri,
 	workspace,
 	window,
+	commands,
 	extensions,
 	ConfigurationTarget,
 	ExtensionContext,

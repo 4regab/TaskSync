@@ -81,6 +81,7 @@ export function handleAddQueuePrompt(
 			const effectiveResponse = settingsH.applyAutoAppendToResponse(
 				p,
 				queuedPrompt.prompt,
+				activeSession,
 			);
 			const pendingEntry = p._currentSessionCallsMap.get(currentCallId);
 

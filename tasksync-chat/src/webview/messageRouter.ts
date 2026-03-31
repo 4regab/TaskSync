@@ -404,7 +404,11 @@ export function handleSubmit(
 		p._clearResponseTimeoutTimer(currentPendingId);
 		const resolve = p._pendingRequests.get(currentPendingId);
 		if (resolve) {
-			const effectiveResponse = settingsH.applyAutoAppendToResponse(p, value);
+			const effectiveResponse = settingsH.applyAutoAppendToResponse(
+				p,
+				value,
+				activeSession,
+			);
 			debugLog(
 				"[TaskSync] handleSubmit — resolving toolCallId:",
 				currentPendingId,

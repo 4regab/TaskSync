@@ -232,7 +232,7 @@ export function resolveRemoteResponse(
 
 	const entry = p._currentSessionCallsMap.get(toolCallId);
 	if (entry) {
-		entry.response = settingsH.applyAutoAppendToResponse(p, value);
+		entry.response = settingsH.applyAutoAppendToResponse(p, value, session);
 		entry.status = "completed";
 		entry.attachments = attachments;
 		entry.timestamp = Date.now();

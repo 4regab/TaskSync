@@ -154,9 +154,9 @@ These principles are mandatory for all changes:
 
 ---
 
-## Changelog & Versioning
+##  Versioning
 
-- Update `CHANGELOG.md` with every user-facing change using the existing format: `## TaskSync vX.Y.Z (MM-DD-YY)` (two-digit year, e.g. `02-25-26`).
+- Update package.json and package-lock.json version for the VS Code extension (e.g., `0.5.0` → `0.5.1`).
 
 ---
 

@@ -141,7 +141,8 @@ export async function waitForUserResponse(
 	question: string,
 	sessionId?: string,
 ): Promise<UserResponseResult> {
-	const normalizedSessionId = sessionId?.trim();
+	const normalizedSessionId =
+		typeof sessionId === "string" ? sessionId.trim() : undefined;
 	debugLog(
 		"[TaskSync] waitForUserResponse — question:",
 		question.slice(0, 80),
@@ -153,6 +154,15 @@ export async function waitForUserResponse(
 		return buildRejectedResult(
 			undefined,
 			"TaskSync rejected ask_user because session_id is required. Start a TaskSync conversation and pass that exact session_id on every ask_user call.",
+		);
+	}
+
+	// Reject stale deleted session IDs at the boundary — before creating
+	// any session object — so tombstoned IDs never leak into the session pool.
+	if (p._sessionManager.isDeletedSessionId(normalizedSessionId)) {
+		return buildRejectedResult(
+			undefined,
+			`TaskSync rejected ask_user for session_id ${normalizedSessionId} because this session was deleted. Start a new Copilot chat that uses a new session_id instead of reusing this one.`,
 		);
 	}
 

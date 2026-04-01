@@ -52,6 +52,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map([["tc_old", oldResolve]]),
 			_toolCallSessionMap: new Map([["tc_old", "1"]]),
@@ -166,6 +167,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => activeSessionId.current,
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map([["tc_old", oldResolve]]),
 			_toolCallSessionMap: new Map([["tc_old", "2"]]),
@@ -275,6 +277,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map(),
 			_toolCallSessionMap: new Map(),
@@ -348,6 +351,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map(),
 			_toolCallSessionMap: new Map(),
@@ -426,6 +430,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map(),
 			_toolCallSessionMap: new Map(),
@@ -502,6 +507,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map(),
 			_toolCallSessionMap: new Map(),
@@ -577,6 +583,7 @@ describe("waitForUserResponse", () => {
 			_bindSession: vi.fn(() => session),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map(),
 			_toolCallSessionMap: new Map(),
@@ -669,7 +676,10 @@ describe("handleResponseTimeout", () => {
 			_currentSessionCallsMap: new Map([["tc_timeout", pendingEntry]]),
 			_toolCallSessionMap: new Map([["tc_timeout", "2"]]),
 			_applyHumanLikeDelay: vi.fn(),
-			_sessionManager: { getActiveSessionId: () => "1" },
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
+			},
 			_view: { webview: { postMessage: vi.fn() } },
 			_syncActiveSessionState: vi.fn(),
 			_updateSessionsUI: vi.fn(),
@@ -685,5 +695,100 @@ describe("handleResponseTimeout", () => {
 		expect(resolve).toHaveBeenCalledWith(
 			expect.objectContaining({ value: "Autopilot timeout answer" }),
 		);
+	});
+});
+
+describe("waitForUserResponse — session_id defensive validation", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("rejects with missing session_id when sessionId is undefined", async () => {
+		const p = {} as any;
+		const result = await waitForUserResponse(p, "Test?", undefined);
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain("session_id is required");
+	});
+
+	it("rejects when sessionId is a number (defensive — should be coerced upstream)", async () => {
+		const p = {} as any;
+		const result = await waitForUserResponse(
+			p,
+			"Test?",
+			42 as unknown as string,
+		);
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain("session_id is required");
+	});
+
+	it("rejects when sessionId is null", async () => {
+		const p = {} as any;
+		const result = await waitForUserResponse(
+			p,
+			"Test?",
+			null as unknown as string,
+		);
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain("session_id is required");
+	});
+
+	it("rejects with terminated message when session is terminated", async () => {
+		const terminatedSession = {
+			id: "5",
+			sessionTerminated: true,
+			pendingToolCallId: null,
+			queue: [],
+			queueEnabled: false,
+		};
+		const p = {
+			_bindSession: vi.fn(() => terminatedSession),
+			_sessionManager: {
+				getActiveSessionId: () => "5",
+				isDeletedSessionId: () => false,
+			},
+		} as any;
+
+		const result = await waitForUserResponse(p, "Test?", "5");
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain("already terminated");
+	});
+
+	it("rejects at boundary when session ID is tombstoned (before creating session)", async () => {
+		const p = {
+			_bindSession: vi.fn(),
+			_sessionManager: {
+				isDeletedSessionId: vi.fn((id: string) => id === "deleted-99"),
+			},
+		} as any;
+
+		const result = await waitForUserResponse(p, "Test?", "deleted-99");
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain("session was deleted");
+		// _bindSession must NOT have been called — no session object created
+		expect(p._bindSession).not.toHaveBeenCalled();
+	});
+
+	it("repeated stale ask_user calls with deleted ID never create sessions", async () => {
+		const bindCalls: string[] = [];
+		const p = {
+			_bindSession: vi.fn((id: string) => {
+				bindCalls.push(id);
+				return { id, sessionTerminated: false };
+			}),
+			_sessionManager: {
+				isDeletedSessionId: vi.fn((id: string) => id === "7"),
+			},
+		} as any;
+
+		// Simulate 3 rapid calls from stale LLM context
+		const r1 = await waitForUserResponse(p, "Q1", "7");
+		const r2 = await waitForUserResponse(p, "Q2", "7");
+		const r3 = await waitForUserResponse(p, "Q3", "7");
+
+		// All rejected, none created sessions
+		expect(r1.cancelled).toBe(true);
+		expect(r2.cancelled).toBe(true);
+		expect(r3.cancelled).toBe(true);
+		expect(bindCalls).toHaveLength(0);
 	});
 });

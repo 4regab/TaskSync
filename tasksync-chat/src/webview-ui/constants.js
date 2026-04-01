@@ -34,3 +34,10 @@ const AUTO_APPEND_DEFAULT_TEXT =
 		: "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
 
 const PROCESSING_POLL_INTERVAL_MS = 5000; // Delay before polling server for state after tool call
+
+// Shared toggle helper — single source of truth for toggle + aria-checked updates
+function setToggle(el, active) {
+	if (!el) return;
+	el.classList.toggle("active", active);
+	el.setAttribute("aria-checked", active ? "true" : "false");
+}

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "../__mocks__/vscode";
 import {
-	AUTO_APPEND_DEFAULT_TEXT,
 	DEFAULT_HUMAN_LIKE_DELAY_MAX,
 	DEFAULT_HUMAN_LIKE_DELAY_MIN,
 	DEFAULT_REMOTE_MAX_DEVICES,
@@ -54,11 +53,16 @@ import {
 // ─── Mock P factory ─────────────────────────────────────────
 
 function createMockP(overrides: Partial<any> = {}) {
+	const activeSession = {
+		id: "1",
+		autopilotEnabled: overrides._autopilotEnabled ?? false,
+		consecutiveAutoResponses: overrides._consecutiveAutoResponses ?? 0,
+	};
 	return {
 		_soundEnabled: true,
 		_interactiveApprovalEnabled: true,
 		_autoAppendEnabled: false,
-		_autoAppendText: AUTO_APPEND_DEFAULT_TEXT,
+		_autoAppendText: "",
 		_sendWithCtrlEnter: false,
 		_autopilotEnabled: false,
 		_autopilotText: "Continue",
@@ -79,6 +83,10 @@ function createMockP(overrides: Partial<any> = {}) {
 			},
 		},
 		_remoteServer: null as any,
+		_saveSessionsToDisk: vi.fn(),
+		_sessionManager: {
+			getActiveSession: () => activeSession,
+		},
 		...overrides,
 	} as any;
 }
@@ -217,8 +225,6 @@ describe("loadSettings", () => {
 		const config = createMockConfig({
 			notificationSound: false,
 			interactiveApproval: false,
-			autoAppendEnabled: true,
-			autoAppendText: "Use the askUser loop.",
 			sendWithCtrlEnter: true,
 			humanLikeDelay: false,
 			humanLikeDelayMin: 5,
@@ -235,15 +241,17 @@ describe("loadSettings", () => {
 
 		expect(p._soundEnabled).toBe(false);
 		expect(p._interactiveApprovalEnabled).toBe(false);
-		expect(p._autoAppendEnabled).toBe(true);
-		expect(p._autoAppendText).toBe("Use the askUser loop.");
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
 		expect(p._sendWithCtrlEnter).toBe(true);
 		expect(p._humanLikeDelayEnabled).toBe(false);
 	});
 
-	it("falls back to legacy askUserVerbosePayload when autoAppendEnabled is not set", () => {
+	it("ignores deprecated workspace autoAppend settings", () => {
 		const config = createMockConfig({
 			askUserVerbosePayload: true,
+			autoAppendEnabled: true,
+			autoAppendText: "Legacy append text",
 		});
 		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
@@ -252,23 +260,20 @@ describe("loadSettings", () => {
 
 		const p = createMockP();
 		loadSettings(p);
-		expect(p._autoAppendEnabled).toBe(true);
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
 	});
 
-	it("uses new autopilot key when set", () => {
+	it("ignores deprecated workspace autopilot toggle", () => {
 		const config = createMockConfig({ autopilot: true });
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: true };
-			if (key === "autopilotText") return undefined;
-			return undefined;
-		});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
-		const p = createMockP();
+		const p = createMockP({ _sessionManager: undefined });
 		loadSettings(p);
-		expect(p._autopilotEnabled).toBe(true);
+		expect(p._autopilotEnabled).toBe(false);
 	});
 
 	it("defaults autopilotEnabled to false when no keys are set", () => {
@@ -283,34 +288,23 @@ describe("loadSettings", () => {
 		expect(p._autopilotEnabled).toBe(false);
 	});
 
-	it("loads autopilotPrompts from config", () => {
+	it("does not load autopilot prompts from workspace config", () => {
 		const config = createMockConfig({
 			autopilotPrompts: ["prompt1", "prompt2", ""],
 		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: false };
-			if (key === "autopilotText") return { workspaceValue: "text" };
-			return undefined;
-		});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
 		const p = createMockP();
 		loadSettings(p);
-		// Empty strings should be filtered out
-		expect(p._autopilotPrompts).toEqual(["prompt1", "prompt2"]);
+		expect(p._autopilotPrompts).toEqual([]);
 	});
 
 	it("clamps autopilotIndex when prompts array shrinks", () => {
-		const config = createMockConfig({
-			autopilotPrompts: ["only-one"],
-		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: false };
-			if (key === "autopilotText") return { workspaceValue: "text" };
-			return undefined;
-		});
+		const config = createMockConfig({});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
@@ -382,23 +376,20 @@ describe("loadSettings", () => {
 		expect(p._sessionWarningHours).toBe(DEFAULT_SESSION_WARNING_HOURS);
 	});
 
-	it("falls back autopilotPrompts to autopilotText when no saved prompts", () => {
+	it("keeps autopilot prompts empty when a session has none configured", () => {
 		const config = createMockConfig({
 			autopilotPrompts: [],
 			autopilotText: "Custom text",
 		});
-		config.inspect.mockImplementation((key: string) => {
-			if (key === "autopilot") return { workspaceValue: false };
-			if (key === "autopilotText") return { workspaceValue: "Custom text" };
-			return undefined;
-		});
+		config.inspect.mockReturnValue(undefined);
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
 
 		const p = createMockP({ _AUTOPILOT_DEFAULT_TEXT: "Continue" });
 		loadSettings(p);
-		expect(p._autopilotPrompts).toEqual(["Custom text"]);
+		expect(p._autopilotPrompts).toEqual([]);
+		expect(p._autopilotText).toBe("Continue");
 	});
 });
 
@@ -431,7 +422,7 @@ describe("buildSettingsPayload", () => {
 		const payload = buildSettingsPayload(p);
 		expect(payload.soundEnabled).toBe(false);
 		expect(payload.autoAppendEnabled).toBe(false);
-		expect(payload.autoAppendText).toBe(AUTO_APPEND_DEFAULT_TEXT);
+		expect(payload.autoAppendText).toBe("");
 		expect(payload.autopilotEnabled).toBe(true);
 		expect(payload.autopilotText).toBe("Go ahead");
 		expect(payload.autopilotPrompts).toEqual(["p1"]);
@@ -541,7 +532,19 @@ describe("handleUpdateAutoAppendSetting", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("updates autoAppendEnabled setting", async () => {
+	it("updates autoAppendEnabled setting when text is present", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP({ _autoAppendText: "Always use tools" });
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(p._autoAppendEnabled).toBe(true);
+		expect(config.update).not.toHaveBeenCalled();
+	});
+
+	it("forces autoAppendEnabled=false when text is empty", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
@@ -549,12 +552,7 @@ describe("handleUpdateAutoAppendSetting", () => {
 
 		const p = createMockP();
 		await handleUpdateAutoAppendSetting(p, true);
-		expect(p._autoAppendEnabled).toBe(true);
-		expect(config.update).toHaveBeenCalledWith(
-			"autoAppendEnabled",
-			true,
-			vscode.ConfigurationTarget.Workspace,
-		);
+		expect(p._autoAppendEnabled).toBe(false);
 	});
 });
 
@@ -572,14 +570,10 @@ describe("handleUpdateAutoAppendText", () => {
 		const p = createMockP();
 		await handleUpdateAutoAppendText(p, "Always call askUser at the end.");
 		expect(p._autoAppendText).toBe("Always call askUser at the end.");
-		expect(config.update).toHaveBeenCalledWith(
-			"autoAppendText",
-			"Always call askUser at the end.",
-			vscode.ConfigurationTarget.Workspace,
-		);
+		expect(config.update).not.toHaveBeenCalled();
 	});
 
-	it("normalizes empty text to default", async () => {
+	it("normalizes empty text to blank", async () => {
 		const config = createMockConfig({});
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
@@ -587,7 +581,7 @@ describe("handleUpdateAutoAppendText", () => {
 
 		const p = createMockP();
 		await handleUpdateAutoAppendText(p, "   ");
-		expect(p._autoAppendText).toBe(AUTO_APPEND_DEFAULT_TEXT);
+		expect(p._autoAppendText).toBe("");
 	});
 });
 
@@ -624,11 +618,7 @@ describe("handleUpdateAutopilotText", () => {
 		const p = createMockP();
 		await handleUpdateAutopilotText(p, "New text");
 		expect(p._autopilotText).toBe("New text");
-		expect(config.update).toHaveBeenCalledWith(
-			"autopilotText",
-			"New text",
-			vscode.ConfigurationTarget.Workspace,
-		);
+		expect(config.update).not.toHaveBeenCalled();
 	});
 });
 
@@ -1407,13 +1397,15 @@ describe("saveAutopilotPrompts", () => {
 			config as any,
 		);
 
-		const p = createMockP({ _autopilotPrompts: ["a", "b"] });
+		const session: Record<string, unknown> = { id: "s1" };
+		const p = createMockP({
+			_autopilotPrompts: ["a", "b"],
+			_sessionManager: { getActiveSession: () => session },
+		});
 		await saveAutopilotPrompts(p);
-		expect(config.update).toHaveBeenCalledWith(
-			"autopilotPrompts",
-			["a", "b"],
-			vscode.ConfigurationTarget.Global,
-		);
+		expect(config.update).not.toHaveBeenCalled();
+		expect(session.autopilotPrompts).toEqual(["a", "b"]);
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
 	});
 });
 
@@ -1441,5 +1433,391 @@ describe("config guard error handling", () => {
 		);
 		// _isUpdatingConfig should be reset (finally block)
 		expect(p._isUpdatingConfig).toBe(false);
+	});
+});
+
+describe("per-session settings sync", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("handleUpdateAutoAppendSetting saves to active session", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session = {
+			id: "s1",
+			autopilotEnabled: false,
+			autopilotText: "",
+			autopilotPrompts: [] as string[],
+			autoAppendEnabled: false,
+			autoAppendText: "some instructions",
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(true);
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
+	});
+
+	it("handleUpdateAutoAppendText saves to active session", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session = {
+			id: "s1",
+			autopilotEnabled: false,
+			autopilotText: "",
+			autopilotPrompts: [] as string[],
+			autoAppendEnabled: false,
+			autoAppendText: "",
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendText(p, "Custom text");
+		expect(session.autoAppendText).toBe("Custom text");
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
+	});
+
+	it("handleUpdateAutopilotText saves to active session", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session = {
+			id: "s1",
+			autopilotEnabled: false,
+			autopilotText: "",
+			autopilotPrompts: [] as string[],
+			autoAppendEnabled: false,
+			autoAppendText: "",
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutopilotText(p, "Do the thing");
+		expect(session.autopilotText).toBe("Do the thing");
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
+	});
+
+	it("handleAddAutopilotPrompt saves prompts to active session", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session = {
+			id: "s1",
+			autopilotEnabled: false,
+			autopilotText: "",
+			autopilotPrompts: [] as string[],
+			autoAppendEnabled: false,
+			autoAppendText: "",
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleAddAutopilotPrompt(p, "new prompt");
+		expect(session.autopilotPrompts).toEqual(["new prompt"]);
+		expect(p._saveSessionsToDisk).toHaveBeenCalled();
+	});
+
+	it("loadSettings restores per-session autopilotText from active session", () => {
+		const config = createMockConfig({
+			autopilotText: "Config text",
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session = {
+			id: "s1",
+			autopilotEnabled: true,
+			autopilotText: "Session text",
+			autopilotPrompts: ["Prompt A", "Prompt B"],
+			autoAppendEnabled: true,
+			autoAppendText: "Session auto-append",
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		loadSettings(p);
+		expect(p._autopilotText).toBe("Session text");
+		expect(p._autopilotPrompts).toEqual(["Prompt A", "Prompt B"]);
+		expect(p._autoAppendEnabled).toBe(true);
+		expect(p._autoAppendText).toBe("Session auto-append");
+	});
+
+	it("loadSettings uses TaskSync defaults when session fields are empty", () => {
+		const config = createMockConfig({
+			autopilotText: "Config text",
+			autoAppendEnabled: true,
+			autoAppendText: "Config auto-append",
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session = {
+			id: "s1",
+			autopilotEnabled: false,
+			autopilotText: "",
+			autopilotPrompts: [],
+			autoAppendEnabled: undefined,
+			autoAppendText: "",
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		loadSettings(p);
+		expect(p._autopilotText).toBe("Continue");
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
+	});
+
+	it("loadSettings uses TaskSync defaults when session fields are undefined", () => {
+		const config = createMockConfig({
+			autopilotText: "Config text",
+			autoAppendEnabled: true,
+			autoAppendText: "Config auto-append",
+			autopilotPrompts: ["Config prompt"],
+		});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		// Old session without per-session fields — all undefined
+		const session = {
+			id: "s1",
+			autopilotEnabled: false,
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_sessionManager: { getActiveSession: () => session },
+		});
+		loadSettings(p);
+		expect(p._autopilotText).toBe("Continue");
+		expect(p._autopilotPrompts).toEqual([]);
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(p._autoAppendText).toBe("");
+	});
+
+	it("auto append updates only the active session fields it owns", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		// Start with old session — no per-session fields
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autopilotEnabled: false,
+			consecutiveAutoResponses: 0,
+		};
+		const p = createMockP({
+			_autopilotText: "Custom text",
+			_autopilotPrompts: ["A", "B"],
+			_autoAppendEnabled: true,
+			_autoAppendText: "Custom append",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(true);
+		// Text is seeded from provider mirror when session has none
+		expect(session.autoAppendText).toBe("Custom append");
+		// Unrelated session fields are not touched
+		expect(session.autopilotText).toBeUndefined();
+		expect(session.autopilotPrompts).toBeUndefined();
+	});
+});
+
+// ─── FND-002 regression: cross-session auto-append isolation ─────────
+
+describe("FND-002 regression: auto-append session isolation", () => {
+	it("session-aware helper must not read provider mirror text", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active session text",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// Must NOT append "Active session text" from the provider mirror
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("legacy undefined fields produce no append", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active text",
+		});
+		const bgSession = {
+			autoAppendEnabled: undefined,
+			autoAppendText: undefined,
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("enabling auto-append persists session text from mirror", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "Persisted instructions",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(true);
+		expect(session.autoAppendText).toBe("Persisted instructions");
+	});
+
+	it("invalid enabled-without-text state is normalized to disabled", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Should not appear",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// enabled=true but no text → must not append anything
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("session with own text appends correctly", () => {
+		const p = createMockP({
+			_autoAppendEnabled: false,
+			_autoAppendText: "Wrong text",
+		});
+		const bgSession = {
+			autoAppendEnabled: true,
+			autoAppendText: "Correct session text",
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe(
+			"Answer\n\nCorrect session text",
+		);
+	});
+
+	it("enabling auto-append with no mirror text stays disabled", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(false);
+		expect(p._autoAppendEnabled).toBe(false);
+		expect(session.autopilotText).toBeUndefined();
+		expect(session.autopilotPrompts).toBeUndefined();
+	});
+});
+
+// ─── FND-002 regression: cross-session auto-append isolation ─────────
+
+describe("FND-002 regression: auto-append session isolation", () => {
+	it("session-aware helper must not read provider mirror text", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active session text",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// Must NOT append "Active session text" from the provider mirror
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("legacy undefined fields produce no append", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Active text",
+		});
+		const bgSession = {
+			autoAppendEnabled: undefined,
+			autoAppendText: undefined,
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("enabling auto-append persists session text from mirror", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "Persisted instructions",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(true);
+		expect(session.autoAppendText).toBe("Persisted instructions");
+	});
+
+	it("invalid enabled-without-text state is normalized to disabled", () => {
+		const p = createMockP({
+			_autoAppendEnabled: true,
+			_autoAppendText: "Should not appear",
+		});
+		const bgSession = { autoAppendEnabled: true, autoAppendText: undefined };
+		// enabled=true but no text → must not append anything
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe("Answer");
+	});
+
+	it("session with own text appends correctly", () => {
+		const p = createMockP({
+			_autoAppendEnabled: false,
+			_autoAppendText: "Wrong text",
+		});
+		const bgSession = {
+			autoAppendEnabled: true,
+			autoAppendText: "Correct session text",
+		};
+		expect(applyAutoAppendToResponse(p, "Answer", bgSession)).toBe(
+			"Answer\n\nCorrect session text",
+		);
+	});
+
+	it("enabling auto-append with no mirror text stays disabled", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const session: Record<string, unknown> = {
+			id: "s1",
+			autoAppendEnabled: false,
+		};
+		const p = createMockP({
+			_autoAppendText: "",
+			_sessionManager: { getActiveSession: () => session },
+		});
+		await handleUpdateAutoAppendSetting(p, true);
+		expect(session.autoAppendEnabled).toBe(false);
+		expect(p._autoAppendEnabled).toBe(false);
 	});
 });

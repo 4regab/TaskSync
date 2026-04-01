@@ -49,6 +49,7 @@ export interface UserResponseResult {
 // Tool call history entry
 export interface ToolCallEntry {
 	id: string;
+	sessionId?: string;
 	prompt: string;
 	response: string;
 	timestamp: number;
@@ -71,12 +72,46 @@ export interface ReusablePrompt {
 	prompt: string; // Full prompt text
 }
 
+// Chat session for multi-session orchestration
+export interface ChatSession {
+	id: string;
+	title: string;
+	status: "active" | "archived";
+	queue: QueuedPrompt[];
+	queueEnabled: boolean;
+	history: ToolCallEntry[];
+	attachments: AttachmentInfo[];
+	autopilotEnabled: boolean;
+	/** Per-session fallback text when Autopilot is enabled without prompts. */
+	autopilotText?: string;
+	/** Per-session Autopilot prompt cycle. */
+	autopilotPrompts?: string[];
+	/** Per-session Auto Append toggle. */
+	autoAppendEnabled?: boolean;
+	/** Per-session Auto Append text. */
+	autoAppendText?: string;
+	waitingOnUser: boolean;
+	/** True while a non-open session has an unseen actionable pending prompt. */
+	unread: boolean;
+	createdAt: number;
+	/** The toolCallId currently pending for THIS session (null if not waiting) */
+	pendingToolCallId: string | null;
+	sessionStartTime: number | null;
+	sessionFrozenElapsed: number | null;
+	sessionTerminated: boolean;
+	sessionWarningShown: boolean;
+	aiTurnActive: boolean;
+	consecutiveAutoResponses: number;
+	autopilotIndex: number;
+}
+
 // Message types sent from extension to webview
 export type ToWebviewMessage =
 	| { type: "updateQueue"; queue: QueuedPrompt[]; enabled: boolean }
 	| {
 			type: "toolCallPending";
 			id: string;
+			sessionId: string;
 			prompt: string;
 			isApproval: boolean;
 			choices?: ParsedChoice[];
@@ -136,11 +171,35 @@ export type ToWebviewMessage =
 	| { type: "triggerSendFromShortcut" }
 	| { type: "openHistoryModal" }
 	| { type: "openNewSessionModal" }
-	| { type: "openResetSessionModal" };
+	| { type: "openResetSessionModal" }
+	| { type: "toggleSplitView" }
+	| { type: "clearPendingState" }
+	| {
+			type: "updateSessions";
+			sessions: ChatSession[];
+			activeSessionId: string | null;
+	  }
+	| {
+			type: "sessionSettingsState";
+			autopilotEnabled: boolean;
+			autopilotPrompts: string[];
+			autoAppendEnabled: boolean;
+			autoAppendText: string;
+			/** Workspace-level default text for auto-append (for dirty-check in UI). */
+			workspaceDefaultAutoAppendText: string;
+			/** True when all values match TaskSync's per-session defaults. */
+			isDefault: boolean;
+	  };
 
 // Message types sent from webview to extension
 export type FromWebviewMessage =
-	| { type: "submit"; value: string; attachments: AttachmentInfo[] }
+	| {
+			type: "submit";
+			sessionId: string | null;
+			toolCallId?: string | null;
+			value: string;
+			attachments: AttachmentInfo[];
+	  }
 	| {
 			type: "addQueuePrompt";
 			prompt: string;
@@ -157,7 +216,12 @@ export type FromWebviewMessage =
 	| { type: "removeHistoryItem"; callId: string }
 	| { type: "clearPersistedHistory" }
 	| { type: "openHistoryModal" }
-	| { type: "newSession"; initialPrompt?: string; useQueuedPrompt?: boolean }
+	| {
+			type: "newSession";
+			initialPrompt?: string;
+			useQueuedPrompt?: boolean;
+			stopCurrentSession?: boolean;
+	  }
 	| { type: "resetSession" }
 	| { type: "searchFiles"; query: string }
 	| { type: "saveImage"; data: string; mimeType: string }
@@ -175,6 +239,7 @@ export type FromWebviewMessage =
 	| { type: "editAutopilotPrompt"; index: number; prompt: string }
 	| { type: "removeAutopilotPrompt"; index: number }
 	| { type: "reorderAutopilotPrompts"; fromIndex: number; toIndex: number }
+	| { type: "saveAutopilotPrompts"; prompts: string[] }
 	| { type: "addReusablePrompt"; name: string; prompt: string }
 	| { type: "editReusablePrompt"; id: string; name: string; prompt: string }
 	| { type: "removeReusablePrompt"; id: string }
@@ -195,4 +260,18 @@ export type FromWebviewMessage =
 			contextType: string;
 			options?: Record<string, unknown>;
 	  }
-	| { type: "copyToClipboard"; text: string };
+	| { type: "copyToClipboard"; text: string }
+	| { type: "switchSession"; sessionId: string | null }
+	| { type: "archiveSession"; sessionId: string }
+	| { type: "deleteSession"; sessionId: string }
+	| { type: "updateSessionTitle"; sessionId: string; title: string }
+	| {
+			type: "updateSessionSettings";
+			autopilotEnabled?: boolean;
+			autopilotPrompts?: string[];
+			autoAppendEnabled?: boolean;
+			autoAppendText?: string;
+	  }
+	| { type: "resetSessionSettings" }
+	| { type: "requestSessionSettings" }
+	| { type: "saveAutoAppendAsWorkspaceDefault" };

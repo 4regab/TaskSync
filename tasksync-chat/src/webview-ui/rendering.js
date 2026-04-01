@@ -30,7 +30,7 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 			let newSessionBtn = document.getElementById("new-session-btn");
 			if (newSessionBtn) {
 				newSessionBtn.addEventListener("click", function () {
-					vscode.postMessage({ type: "newSession" });
+					openNewSessionModal();
 				});
 			}
 		} else {
@@ -45,6 +45,12 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 
 function renderCurrentSession() {
 	if (!toolHistoryArea) return;
+
+	// Clear old chat stream bubbles when switching/re-rendering session
+	if (chatStreamArea) {
+		chatStreamArea.innerHTML = "";
+		chatStreamArea.classList.add("hidden");
+	}
 
 	let completedCalls = currentSessionCalls.filter(function (tc) {
 		return tc.status === "completed";
@@ -508,19 +514,298 @@ function renderMermaidDiagrams() {
 }
 
 /**
- * Update welcome section visibility based on current session state
- * Hide welcome when there are completed tool calls or a pending call
+ * Toggle split view mode (sessions list + thread side by side).
+ * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
+ */
+function toggleSplitView() {
+	splitViewEnabled = !splitViewEnabled;
+	syncSplitViewLayout();
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+}
+
+/**
+ * Apply the split ratio to the hub panel width
+ */
+function applySplitRatio(ratio) {
+	ratio = Math.min(60, Math.max(20, ratio));
+	var hubEl = document.getElementById("workspace-hub");
+	if (hubEl) {
+		hubEl.style.flex = "0 0 " + ratio + "%";
+	}
+}
+
+/**
+ * Initialise the split-view drag resizer.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ */
+function initSplitResizer() {
+	var resizer = document.getElementById("split-resizer");
+	if (!resizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	if (!container) return;
+
+	var dragging = false;
+
+	resizer.addEventListener("mousedown", function (e) {
+		if (!isSplitViewLayoutActive()) return;
+		e.preventDefault();
+		dragging = true;
+		resizer.classList.add("active");
+		document.body.style.cursor = "col-resize";
+		document.body.style.userSelect = "none";
+	});
+
+	document.addEventListener("mousemove", function (e) {
+		if (!dragging) return;
+		var rect = container.getBoundingClientRect();
+		var offset = e.clientX - rect.left;
+		var pct = (offset / rect.width) * 100;
+		// Clamp between 20% and 60%
+		pct = Math.min(60, Math.max(20, pct));
+		splitRatio = Math.round(pct);
+		applySplitRatio(splitRatio);
+	});
+
+	document.addEventListener("mouseup", function () {
+		if (!dragging) return;
+		dragging = false;
+		resizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	});
+
+	// Restore persisted ratio on init
+	if (isSplitViewLayoutActive()) {
+		resizer.classList.remove("hidden");
+		applySplitRatio(splitRatio);
+	}
+}
+
+/**
+ * Initialise the vertical resizer for narrow split-view mode.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ * Works when split-view is enabled AND viewport is narrow (<=480px).
+ */
+function initVertResizer() {
+	var vertResizer = document.getElementById("vert-resizer");
+	if (!vertResizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	var hubEl = document.getElementById("workspace-hub");
+	if (!container || !hubEl) return;
+
+	var dragging = false;
+
+	function isNarrowSplitView() {
+		return isSplitViewLayoutActive() && window.innerWidth <= 480;
+	}
+
+	function startDrag(e) {
+		if (!isNarrowSplitView()) return;
+		e.preventDefault();
+		dragging = true;
+		vertResizer.classList.add("active");
+		document.body.style.cursor = "row-resize";
+		document.body.style.userSelect = "none";
+	}
+
+	function onDrag(e) {
+		if (!dragging) return;
+		var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+		var rect = container.getBoundingClientRect();
+		var offset = clientY - rect.top;
+		var pct = (offset / rect.height) * 100;
+		// Clamp between 15% and 70%
+		pct = Math.min(70, Math.max(15, pct));
+		vertSplitRatio = Math.round(pct);
+		applyVertSplitRatio(vertSplitRatio);
+	}
+
+	function endDrag() {
+		if (!dragging) return;
+		dragging = false;
+		vertResizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	}
+
+	// Mouse events
+	vertResizer.addEventListener("mousedown", startDrag);
+	document.addEventListener("mousemove", onDrag);
+	document.addEventListener("mouseup", endDrag);
+
+	// Touch events for mobile
+	vertResizer.addEventListener("touchstart", startDrag, { passive: false });
+	document.addEventListener("touchmove", onDrag, { passive: false });
+	document.addEventListener("touchend", endDrag);
+
+	// Apply initial ratio if in narrow split-view mode
+	if (isNarrowSplitView() && vertSplitRatio) {
+		applyVertSplitRatio(vertSplitRatio);
+	}
+}
+
+/**
+ * Apply vertical split ratio to panels in narrow split-view mode.
+ * Sets hub max-height percentage to resize the stacked layout.
+ */
+function applyVertSplitRatio(pct) {
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+	if (!hubEl || !threadEl) return;
+
+	// Only apply in narrow split-view mode
+	if (!isSplitViewLayoutActive() || window.innerWidth > 480) return;
+
+	hubEl.style.maxHeight = pct + "%";
+	hubEl.style.flex = "0 0 auto";
+	threadEl.style.flex = "1 1 0";
+}
+
+/**
+ * Keep hidden-list unread indicators derived from shared session summaries.
+ */
+function syncHiddenListUnreadIndicators() {
+	var backBtn = document.getElementById("thread-back-btn");
+	var collapseBar = document.getElementById("sessions-collapse-bar");
+	var hubEl = document.getElementById("workspace-hub");
+	var hasOpenSession = !!activeSessionId;
+	var hasUnreadOtherSession = (sessions || []).some(function (session) {
+		return session.id !== activeSessionId && session.unread === true;
+	});
+	var showBackIndicator =
+		hasOpenSession && !isSplitViewLayoutActive() && hasUnreadOtherSession;
+	var showCollapsedBarIndicator =
+		hasOpenSession &&
+		isSplitViewLayoutActive() &&
+		window.innerWidth <= 480 &&
+		!!hubEl &&
+		hubEl.classList.contains("collapsed") &&
+		hasUnreadOtherSession;
+
+	if (backBtn) {
+		backBtn.classList.toggle("has-unread-indicator", showBackIndicator);
+		backBtn.title = showBackIndicator
+			? "Back to Sessions (unread sessions)"
+			: "Back to Sessions";
+		backBtn.setAttribute("aria-label", backBtn.title);
+	}
+
+	if (collapseBar) {
+		collapseBar.classList.toggle(
+			"has-unread-indicator",
+			showCollapsedBarIndicator,
+		);
+		collapseBar.title = showCollapsedBarIndicator
+			? "Sessions (unread sessions)"
+			: "Sessions";
+		collapseBar.setAttribute("aria-label", collapseBar.title);
+	}
+}
+
+function syncSplitViewLayout() {
+	var effectiveSplitView = isSplitViewLayoutActive();
+	var container = document.querySelector(".main-container.orch");
+	var resizer = document.getElementById("split-resizer");
+	var remoteSplitBtn = document.getElementById("remote-split-btn");
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+
+	if (container) {
+		container.classList.toggle("split-view", effectiveSplitView);
+	}
+	if (resizer) {
+		resizer.classList.toggle("hidden", !effectiveSplitView);
+	}
+	if (remoteSplitBtn) {
+		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+	}
+
+	if (effectiveSplitView) {
+		applySplitRatio(splitRatio);
+		if (window.innerWidth <= 480 && vertSplitRatio) {
+			applyVertSplitRatio(vertSplitRatio);
+		}
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (hubEl) {
+		hubEl.style.flex = "";
+		hubEl.style.maxHeight = "";
+	}
+	if (threadEl) {
+		threadEl.style.flex = "";
+	}
+
+	syncHiddenListUnreadIndicators();
+}
+
+/**
+ * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {
-	if (!welcomeSection) return;
-	let hasCompletedCalls = currentSessionCalls.some(function (tc) {
-		return tc.status === "completed";
-	});
-	let hasPendingMessage =
-		pendingMessage && !pendingMessage.classList.contains("hidden");
-	let shouldHide =
-		hasCompletedCalls || pendingToolCall !== null || hasPendingMessage;
-	welcomeSection.classList.toggle("hidden", shouldHide);
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+	var placeholderEl = document.getElementById("split-placeholder");
+	var threadHeadEl = document.getElementById("thread-head");
+	var composerEl = document.getElementById("input-area-container");
+
+	syncSplitViewLayout();
+
+	if (isSplitViewLayoutActive()) {
+		// Split view: always show hub, always show thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		if (activeSessionId) {
+			// Session selected: show thread content, hide placeholder
+			if (placeholderEl) placeholderEl.classList.add("hidden");
+			if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+			if (composerEl) composerEl.classList.remove("hidden");
+			var activeSession = (sessions || []).find(function (s) {
+				return s.id === activeSessionId;
+			});
+			var threadTitle = document.getElementById("thread-title");
+			if (activeSession && threadTitle) {
+				threadTitle.textContent = activeSession.title;
+			}
+		} else {
+			// No session: show placeholder, hide thread head + composer
+			if (placeholderEl) placeholderEl.classList.remove("hidden");
+			if (threadHeadEl) threadHeadEl.classList.add("hidden");
+			if (composerEl) composerEl.classList.add("hidden");
+		}
+		return;
+	}
+
+	// Single view (default): hide placeholder, restore thread head + composer
+	if (placeholderEl) placeholderEl.classList.add("hidden");
+	if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+	if (composerEl) composerEl.classList.remove("hidden");
+
+	// Toggle between hub and thread
+	if (activeSessionId) {
+		if (hubEl) hubEl.classList.add("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		// Update thread head title
+		var activeSession = (sessions || []).find(function (s) {
+			return s.id === activeSessionId;
+		});
+		var threadTitle = document.getElementById("thread-title");
+		if (activeSession) {
+			if (threadTitle) threadTitle.textContent = activeSession.title;
+		}
+	} else {
+		// No active session: show the hub, hide the thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.add("hidden");
+	}
 }
 
 /**
@@ -531,4 +816,136 @@ function scrollToBottom() {
 	requestAnimationFrame(function () {
 		chatContainer.scrollTop = chatContainer.scrollHeight;
 	});
+}
+
+// ==================== Multi-Session Rendering ====================
+
+/**
+ * Render the sessions list in the workspace-hub.
+ * Displays each session as a clickable row.
+ */
+function renderSessionsList() {
+	var sessionsListEl = document.getElementById("sessions-list");
+	var sessionsPanelEl = document.getElementById("sessions-panel");
+	if (!sessionsListEl) return;
+
+	// Update collapse bar session count
+	var countEl = document.getElementById("sessions-collapse-count");
+	if (countEl) {
+		countEl.textContent =
+			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+	}
+
+	if (!sessions || sessions.length === 0) {
+		sessionsListEl.innerHTML = "";
+		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) welcomeSection.classList.remove("hidden");
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (sessionsPanelEl) sessionsPanelEl.classList.remove("hidden");
+	if (welcomeSection) welcomeSection.classList.add("hidden");
+
+	// Sort: active sessions first (newest first), then archived
+	var sorted = sessions.slice().sort(function (a, b) {
+		if (a.status !== b.status) {
+			return a.status === "active" ? -1 : 1;
+		}
+		return b.createdAt - a.createdAt;
+	});
+
+	var html = sorted
+		.map(function (session) {
+			var isActive = session.id === activeSessionId;
+			var isWaiting = session.waitingOnUser;
+			var isUnread = session.unread === true;
+			var isArchived = session.status === "archived";
+
+			var rowClass =
+				"chat-row" +
+				(isActive ? " active" : "") +
+				(isWaiting ? " waiting" : "") +
+				(isUnread ? " unread" : "") +
+				(isArchived ? " archived" : "");
+
+			// Preview snippet from latest history entry (history is newest-first via unshift)
+			var promptPreview = "Tap to view thread...";
+			if (session.history && session.history.length > 0) {
+				promptPreview = session.history[0].prompt || promptPreview;
+			}
+			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
+
+			var formatTime = function (ts) {
+				if (!ts) return "";
+				var d = new Date(ts);
+				return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+			};
+			var timeStr = formatTime(session.createdAt);
+
+			return (
+				'<div class="' +
+				rowClass +
+				'" data-session-id="' +
+				escapeHtml(session.id) +
+				'">' +
+				'<div class="chat-row-main">' +
+				'<div class="chat-row-top">' +
+				'<strong class="session-title">' +
+				escapeHtml(session.title) +
+				"</strong>" +
+				'<span class="chat-row-top-actions">' +
+				escapeHtml(timeStr) +
+				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
+				escapeHtml(session.id) +
+				'" title="Delete session" aria-label="Delete session ' +
+				escapeHtml(session.title) +
+				'"><span class="codicon codicon-trash"></span></button>' +
+				"</span>" +
+				"</div>" +
+				'<div class="chat-row-preview">' +
+				escapeHtml(promptPreview).substring(0, 200) +
+				"</div>" +
+				"</div>" +
+				"</div>"
+			);
+		})
+		.join("");
+
+	sessionsListEl.innerHTML = html;
+
+	// Bind click handlers for session switching
+	sessionsListEl.querySelectorAll(".chat-row").forEach(function (item) {
+		item.addEventListener("click", function () {
+			var sessionId = item.getAttribute("data-session-id");
+			if (sessionId) {
+				requestFollowServerActiveSession();
+				vscode.postMessage({ type: "switchSession", sessionId: sessionId });
+			}
+		});
+	});
+
+	sessionsListEl
+		.querySelectorAll(".session-delete-btn")
+		.forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				var sessionId = btn.getAttribute("data-delete-session-id");
+				if (sessionId) {
+					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
+				}
+			});
+		});
+
+	syncHiddenListUnreadIndicators();
+}
+
+/**
+ * Toggle the sessions hub panel between expanded and collapsed in split view.
+ */
+function toggleHubCollapse() {
+	var hub = document.getElementById("workspace-hub");
+	if (!hub) return;
+	hub.classList.toggle("collapsed");
+	syncHiddenListUnreadIndicators();
 }

@@ -134,13 +134,13 @@ body.remote-mode {
 .remote-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
-.remote-header-title {
-    font-weight: 600;
-    font-size: 14px;
-    color: #fff;
+.remote-header-logo {
+    width: 22px;
+    height: 22px;
+    filter: brightness(0) invert(1);
 }
 
 .remote-status {
@@ -156,23 +156,6 @@ body.remote-mode {
 
 .remote-status.disconnected {
     background: #f14c4c;
-}
-
-.remote-session-timer {
-    min-width: 52px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    color: #8a8a8a;
-}
-
-.remote-session-timer.active {
-    color: #d4d4d4;
-}
-
-.remote-session-timer.frozen {
-    color: #d7ba7d;
 }
 
 .remote-header-right {
@@ -226,17 +209,32 @@ body.remote-mode {
         padding: 0 12px;
     }
 
-    .remote-session-timer {
-        min-width: 46px;
-        font-size: 11px;
-    }
-
     .main-container {
         padding: 8px;
     }
 
     .input-container {
         padding: 8px;
+    }
+
+    /* Prevent horizontal overflow on mobile - constrain chat content */
+    .chat-container {
+        overflow-x: hidden;
+    }
+
+    .chat-stream-area {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    .tool-call-card {
+        max-width: 100%;
+    }
+
+    .tool-call-ai-response,
+    .tool-call-user-response {
+        word-break: break-word;
+        overflow-wrap: anywhere;
     }
 }
 

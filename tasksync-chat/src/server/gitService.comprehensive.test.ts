@@ -11,6 +11,7 @@ function createMockRepo(overrides: Partial<any> = {}) {
 			...overrides.state,
 		},
 		diffWithHEAD: vi.fn().mockResolvedValue("diff output"),
+		status: vi.fn().mockResolvedValue(undefined),
 		...overrides,
 	};
 }
@@ -208,6 +209,58 @@ describe("GitService.getDiff", () => {
 		await expect(service.getDiff("file.ts")).rejects.toThrow(
 			"No workspace folder",
 		);
+	});
+
+	it("does not add a phantom line for an empty untracked file", async () => {
+		repo.state.untrackedChanges = [
+			{ uri: { fsPath: path.resolve(workspaceRoot, "empty.txt") }, status: 7 },
+		];
+		(vscode.workspace as any).fs = {
+			readFile: vi.fn().mockResolvedValue(new Uint8Array()),
+		};
+
+		const diff = await service.getDiff("empty.txt");
+		const addedLines = diff
+			.split("\n")
+			.filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+
+		expect(diff).not.toContain("@@");
+		expect(addedLines).toEqual([]);
+	});
+
+	it("does not add an extra blank line for an untracked file with trailing newline", async () => {
+		repo.state.untrackedChanges = [
+			{
+				uri: { fsPath: path.resolve(workspaceRoot, "trailing.txt") },
+				status: 7,
+			},
+		];
+		(vscode.workspace as any).fs = {
+			readFile: vi.fn().mockResolvedValue(Buffer.from("a\n", "utf8")),
+		};
+
+		const diff = await service.getDiff("trailing.txt");
+		const addedLines = diff
+			.split("\n")
+			.filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+
+		expect(addedLines).toEqual(["+a"]);
+	});
+
+	it("normalizes CRLF line endings for untracked file diffs", async () => {
+		repo.state.untrackedChanges = [
+			{ uri: { fsPath: path.resolve(workspaceRoot, "crlf.txt") }, status: 7 },
+		];
+		(vscode.workspace as any).fs = {
+			readFile: vi.fn().mockResolvedValue(Buffer.from("a\r\nb\r\n", "utf8")),
+		};
+
+		const diff = await service.getDiff("crlf.txt");
+		const addedLines = diff
+			.split("\n")
+			.filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+
+		expect(addedLines).toEqual(["+a", "+b"]);
 	});
 });
 

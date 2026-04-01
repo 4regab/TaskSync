@@ -136,14 +136,14 @@ describe("buildFinalResponse", () => {
 
 	// ── Case 5: alwaysAppendReminder ON but autoAppend OFF ───────
 	describe("Case 5: alwaysAppendReminder ON, autoAppend OFF", () => {
-		it("returns response unchanged (reminder only applies when autoAppend is ON)", () => {
+		it("appends the reminder even when autoAppend is disabled", () => {
 			const result = buildFinalResponse(userResponse, false, customText, true);
-			expect(result).toBe(userResponse);
+			expect(result).toBe(`${userResponse}\n\n${AUTO_APPEND_DEFAULT_TEXT}`);
 		});
 
-		it("returns empty when response is empty", () => {
+		it("returns the reminder when response is empty", () => {
 			const result = buildFinalResponse("", false, customText, true);
-			expect(result).toBe("");
+			expect(result).toBe(AUTO_APPEND_DEFAULT_TEXT);
 		});
 	});
 
@@ -230,11 +230,10 @@ describe("buildFinalResponse", () => {
 			expect(result).toBe(`${emojiResponse}\n\n${emojiAppend}`);
 		});
 
-		it("handles unicode with alwaysAppendReminder (no effect when autoAppend OFF)", () => {
+		it("handles unicode with alwaysAppendReminder when autoAppend is OFF", () => {
 			const emojiResponse = "Réponse complète ✅";
 			const result = buildFinalResponse(emojiResponse, false, "", true);
-			// alwaysAppendReminder has no effect when autoAppend is OFF
-			expect(result).toBe(emojiResponse);
+			expect(result).toBe(`${emojiResponse}\n\n${AUTO_APPEND_DEFAULT_TEXT}`);
 		});
 
 		it("handles response that already contains append text (no dedup)", () => {
@@ -313,7 +312,7 @@ describe("askUser cancellation handling", () => {
 		};
 
 		const result = await askUser(
-			{ question: "Reset?" },
+			{ question: "Reset?", session_id: "1" },
 			provider as any,
 			createToken() as any,
 		);
@@ -347,7 +346,7 @@ describe("askUser cancellation handling", () => {
 		expect(toolDefinition).toBeTruthy();
 
 		const result = await toolDefinition.invoke(
-			{ input: { question: "Reset?" } },
+			{ input: { question: "Reset?", session_id: "1" } },
 			createToken() as any,
 		);
 		// Should return a result, not throw
@@ -378,7 +377,11 @@ describe("askUser cancellation handling", () => {
 		};
 
 		await expect(
-			askUser({ question: "Test?" }, provider as any, cancelledToken as any),
+			askUser(
+				{ question: "Test?", session_id: "1" },
+				provider as any,
+				cancelledToken as any,
+			),
 		).rejects.toBeInstanceOf(MockCancellationError);
 	});
 
@@ -405,7 +408,7 @@ describe("askUser cancellation handling", () => {
 		};
 
 		const promise = askUser(
-			{ question: "Pending?" },
+			{ question: "Pending?", session_id: "1" },
 			provider as any,
 			token as any,
 		);
@@ -415,5 +418,33 @@ describe("askUser cancellation handling", () => {
 		cancelCallback!();
 
 		await expect(promise).rejects.toBeInstanceOf(MockCancellationError);
+	});
+
+	it("auto-assigns a session_id when the tool is invoked without one", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "7" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Handled",
+				attachments: [],
+				queue: false,
+			}),
+		};
+
+		const result = await askUser(
+			{ question: "Start from Copilot chat", session_id: "auto" },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith(
+			"Start from Copilot chat",
+			"7",
+		);
+		expect(result.response).toContain('TaskSync auto-assigned session_id "7"');
+		expect(result.response).toContain(
+			"Use this exact session_id on every future ask_user call in this chat.",
+		);
 	});
 });

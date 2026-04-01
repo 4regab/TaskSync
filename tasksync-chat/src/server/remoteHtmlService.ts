@@ -367,22 +367,24 @@ export class RemoteHtmlService {
     <!-- Remote Header -->
     <div class="remote-header">
         <div class="remote-header-left">
-            <span class="remote-header-title">TaskSync</span>
+            <img src="/media/TS-logo.svg" alt="TaskSync" width="22" height="22" class="remote-header-logo">
             <span class="remote-status" id="remote-connection-status" title="Connecting..." role="status" aria-live="polite"><span class="sr-only">Connecting</span></span>
-			<span class="remote-session-timer inactive" id="remote-session-timer" title="Session timer (idle)" aria-live="polite">0s</span>
         </div>
-        <div class="remote-header-right">
+		<div class="remote-header-right">
 			<button class="remote-btn remote-btn-icon" id="remote-new-session-btn" title="New Session" aria-label="New Session">
 				<span class="codicon codicon-add"></span>
 			</button>
-			<button class="remote-btn remote-btn-icon" id="remote-reset-session-btn" title="Reset Session" aria-label="Reset Session">
-				<span class="codicon codicon-refresh"></span>
+			<button class="remote-btn remote-btn-icon" id="remote-split-btn" title="Toggle Split View" aria-label="Toggle Split View">
+				<span class="codicon codicon-split-horizontal"></span>
 			</button>
-			<button class="remote-btn remote-btn-icon" id="remote-changes-btn" title="Code Review" aria-label="Code Review">
-				<span class="codicon codicon-source-control"></span>
-            </button>
+			<button class="remote-btn remote-btn-icon" id="remote-history-btn" title="View History" aria-label="View History">
+				<span class="codicon codicon-history"></span>
+			</button>
 			<button class="remote-btn remote-btn-icon" id="remote-settings-btn" title="Settings" aria-label="Settings">
                 <span class="codicon codicon-gear"></span>
+            </button>
+			<button class="remote-btn remote-btn-icon" id="remote-changes-btn" title="Code Review" aria-label="Code Review">
+				<span class="codicon codicon-source-control"></span>
             </button>
         </div>
     </div>

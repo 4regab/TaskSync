@@ -1,12 +1,16 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { AUTO_APPEND_DEFAULT_TEXT } from "./constants/remoteConstants";
 import { getImageMimeType } from "./utils/imageUtils";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
-import { appendAutoAppendText, debugLog } from "./webview/webviewUtils";
+import {
+	appendAutoAppendText,
+	buildFinalResponseText,
+	debugLog,
+} from "./webview/webviewUtils";
 
 export interface Input {
 	question: string;
+	session_id: string;
 }
 
 /**
@@ -19,25 +23,24 @@ export function buildFinalResponse(
 	autoAppendText: string,
 	alwaysAppendReminder: boolean,
 ): string {
-	let finalResponse = response;
-	if (autoAppendEnabled) {
-		finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
-		// alwaysAppendReminder only applies when autoAppendEnabled is true
-		// (UI hides this toggle when autoAppendEnabled is off)
-		if (alwaysAppendReminder) {
-			finalResponse = appendAutoAppendText(
-				finalResponse,
-				AUTO_APPEND_DEFAULT_TEXT,
-			);
-		}
-	}
-	return finalResponse;
+	return buildFinalResponseText(
+		response,
+		autoAppendEnabled,
+		autoAppendText,
+		alwaysAppendReminder,
+	);
 }
 
 export interface AskUserToolResult {
 	response: string;
 	attachments: string[];
 	queue: boolean;
+	autoAppendEnabled: boolean;
+	autoAppendText: string;
+}
+
+function buildAssignedSessionInstruction(sessionId: string): string {
+	return `TaskSync auto-assigned session_id "${sessionId}" for this Copilot chat because it was omitted. Use this exact session_id on every future ask_user call in this chat.`;
 }
 
 /**
@@ -83,8 +86,16 @@ export async function askUser(
 	provider: TaskSyncWebviewProvider,
 	token: vscode.CancellationToken,
 ): Promise<AskUserToolResult> {
+	let effectiveSessionId = params.session_id?.trim() || "";
+	// Treat "auto" as a bootstrap signal — same as missing
+	if (effectiveSessionId.toLowerCase() === "auto") {
+		effectiveSessionId = "";
+	}
+	let autoAssignedSessionId: string | undefined;
 	debugLog(
-		"[TaskSync] askUser invoked — question:",
+		"[TaskSync] askUser invoked — session_id:",
+		effectiveSessionId || "<missing>",
+		"question:",
 		params.question.slice(0, 80),
 	);
 	// Check if already cancelled before starting
@@ -93,13 +104,23 @@ export async function askUser(
 		throw new vscode.CancellationError();
 	}
 
+	if (!effectiveSessionId) {
+		const assignedSession = provider.createSessionForMissingId();
+		autoAssignedSessionId = assignedSession.id;
+		effectiveSessionId = assignedSession.id;
+		debugLog(
+			"[TaskSync] askUser — auto-assigned missing session_id:",
+			autoAssignedSessionId,
+		);
+	}
+
 	// Create cancellation promise with cleanup capability
 	const cancellation = createCancellationPromise(token);
 
 	try {
 		// Race the user response against cancellation
 		const result = await Promise.race([
-			provider.waitForUserResponse(params.question),
+			provider.waitForUserResponse(params.question, effectiveSessionId),
 			cancellation.promise,
 		]);
 
@@ -111,14 +132,23 @@ export async function askUser(
 		// and can call ask_user again. Real user cancellation (Stop button) is handled
 		// by the CancellationToken/createCancellationPromise path which correctly throws.
 		if (result.cancelled) {
+			let cancelledResponse = result.value;
+			if (autoAssignedSessionId) {
+				cancelledResponse = appendAutoAppendText(
+					cancelledResponse,
+					buildAssignedSessionInstruction(autoAssignedSessionId),
+				);
+			}
 			debugLog(
 				"[TaskSync] askUser — superseded/cancelled, response:",
-				result.value.slice(0, 80),
+				cancelledResponse.slice(0, 80),
 			);
 			return {
-				response: result.value,
+				response: cancelledResponse,
 				attachments: [],
 				queue: result.queue,
+				autoAppendEnabled: false,
+				autoAppendText: "",
 			};
 		}
 		debugLog(
@@ -154,6 +184,13 @@ export async function askUser(
 			}
 		}
 
+		if (autoAssignedSessionId) {
+			responseText = appendAutoAppendText(
+				responseText,
+				buildAssignedSessionInstruction(autoAssignedSessionId),
+			);
+		}
+
 		debugLog(
 			"[TaskSync] askUser — returning result to AI (response length:",
 			responseText.length,
@@ -161,10 +198,19 @@ export async function askUser(
 			validAttachments.length,
 			") — AI should call askUser again next",
 		);
+		// Carry the responding session's auto-append settings so invoke()
+		// applies the correct session's settings — not the active session mirrors.
+		const respondingSession =
+			provider._sessionManager?.getSession?.(effectiveSessionId);
 		return {
 			response: responseText,
 			attachments: validAttachments,
 			queue: result.queue,
+			autoAppendEnabled: respondingSession?.autoAppendEnabled === true,
+			autoAppendText:
+				typeof respondingSession?.autoAppendText === "string"
+					? respondingSession.autoAppendText
+					: "",
 		};
 	} catch (error) {
 		// Re-throw cancellation errors without logging (they're expected)
@@ -184,6 +230,8 @@ export async function askUser(
 			response: "",
 			attachments: [],
 			queue: false,
+			autoAppendEnabled: false,
+			autoAppendText: "",
 		};
 	} finally {
 		// Always clean up the cancellation listener to prevent memory leaks
@@ -230,18 +278,19 @@ export function registerTools(
 			);
 			try {
 				const result = await askUser(
-					{ question: safeQuestion },
+					{ question: safeQuestion, session_id: params?.session_id },
 					provider,
 					token,
 				);
 
-				// Build response with auto-append logic
-				// Read from provider's in-memory state (set by loadSettings/webview toggles)
-				// instead of config.get() — avoids stale defaults when config writes fail
+				// Build response with auto-append logic.
+				// Use the responding session's auto-append settings (carried through
+				// AskUserToolResult) — not provider mirrors which reflect the *active*
+				// session and would leak across sessions.
 				const finalResponse = buildFinalResponse(
 					result.response,
-					provider._autoAppendEnabled,
-					provider._autoAppendText,
+					result.autoAppendEnabled,
+					result.autoAppendText,
 					provider._alwaysAppendReminder,
 				);
 

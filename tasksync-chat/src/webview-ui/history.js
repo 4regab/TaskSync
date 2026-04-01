@@ -2,8 +2,17 @@
 
 function openHistoryModal() {
 	if (!historyModalOverlay) return;
-	// Request persisted history from extension
-	vscode.postMessage({ type: "openHistoryModal" });
+
+	if (isRemoteMode) {
+		// Remote mode: use currentSessionCalls as history source (already available)
+		// Map to persistedHistory format for renderHistoryModal
+		persistedHistory = (currentSessionCalls || []).slice().reverse();
+		renderHistoryModal();
+	} else {
+		// VS Code mode: request persisted history from extension
+		vscode.postMessage({ type: "openHistoryModal" });
+	}
+
 	historyModalOverlay.classList.remove("hidden");
 }
 

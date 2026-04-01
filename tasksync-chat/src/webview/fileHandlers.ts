@@ -17,6 +17,13 @@ import type {
 import { generateId, getFileIcon } from "./webviewUtils";
 
 export async function handleAddAttachment(p: P): Promise<void> {
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession) {
+		vscode.window.showInformationMessage(
+			"Open a conversation before adding attachments.",
+		);
+		return;
+	}
 	try {
 		const excludePattern = formatExcludePattern(FILE_EXCLUSION_PATTERNS);
 		const files = await vscode.workspace.findFiles(
@@ -49,6 +56,9 @@ export async function handleAddAttachment(p: P): Promise<void> {
 		});
 
 		if (selected && selected.length > 0) {
+			// Re-resolve active session after async picker — session may have switched
+			const currentSession = p._sessionManager.getActiveSession();
+			if (!currentSession) return;
 			for (const item of selected) {
 				const labelMatch = item.label.match(/\$\([^)]+\)\s*(.+)/);
 				const cleanName = labelMatch ? labelMatch[1] : item.label;
@@ -59,6 +69,8 @@ export async function handleAddAttachment(p: P): Promise<void> {
 				};
 				p._attachments.push(attachment);
 			}
+			currentSession.attachments = p._attachments;
+			p._saveSessionsToDisk();
 			updateAttachmentsUI(p);
 		}
 	} catch (e) {
@@ -71,9 +83,14 @@ export async function handleAddAttachment(p: P): Promise<void> {
  * Handle removing attachment.
  */
 export function handleRemoveAttachment(p: P, attachmentId: string): void {
+	const activeSession = p._sessionManager.getActiveSession();
 	p._attachments = p._attachments.filter(
 		(a: AttachmentInfo) => a.id !== attachmentId,
 	);
+	if (activeSession) {
+		activeSession.attachments = p._attachments;
+		p._saveSessionsToDisk();
+	}
 	updateAttachmentsUI(p);
 }
 

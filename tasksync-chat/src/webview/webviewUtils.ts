@@ -2,9 +2,12 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type * as vscodeTypes from "vscode";
-import { CONFIG_SECTION } from "../constants/remoteConstants";
+import {
+	AUTO_APPEND_DEFAULT_TEXT,
+	CONFIG_SECTION,
+} from "../constants/remoteConstants";
 import { generateId } from "../utils/generateId";
-import type { P, ToolCallEntry } from "./webviewTypes";
+import type { ChatSession, P, ToolCallEntry } from "./webviewTypes";
 
 let vscode: typeof vscodeTypes;
 try {
@@ -39,6 +42,13 @@ export function hasQueuedItems(p: P): boolean {
 	return p._queueEnabled && p._promptQueue.length > 0;
 }
 
+/** Returns true when a specific session has queue mode enabled and pending items. */
+export function sessionHasQueuedItems(
+	session: Pick<ChatSession, "queueEnabled" | "queue">,
+): boolean {
+	return session.queueEnabled && session.queue.length > 0;
+}
+
 /**
  * Append configured follow-up text to a response when both are non-empty.
  */
@@ -71,6 +81,29 @@ export function applyAutoAppendText(
 }
 
 /**
+ * Build the final ask_user response with session auto-append text and the
+ * global askUser reminder toggle applied in one shared place.
+ */
+export function buildFinalResponseText(
+	response: string,
+	autoAppendEnabled: boolean,
+	autoAppendText: string,
+	alwaysAppendReminder: boolean,
+): string {
+	let finalResponse = response;
+	if (autoAppendEnabled) {
+		finalResponse = appendAutoAppendText(finalResponse, autoAppendText);
+	}
+	if (alwaysAppendReminder) {
+		finalResponse = appendAutoAppendText(
+			finalResponse,
+			AUTO_APPEND_DEFAULT_TEXT,
+		);
+	}
+	return finalResponse;
+}
+
+/**
  * Merge two ToolCallEntry arrays, deduplicate by ID (first occurrence wins),
  * sort by timestamp descending, and cap at maxEntries.
  */
@@ -98,7 +131,8 @@ export function notifyQueueChanged(p: P): void {
 	debugLog(
 		`[TaskSync] notifyQueueChanged — queueVersion: ${p._queueVersion}, queueSize: ${p._promptQueue.length}, queueEnabled: ${p._queueEnabled}`,
 	);
-	p._saveQueueToDisk();
+	p._saveSessionsToDisk?.();
+	p._saveQueueToDisk?.();
 	p._updateQueueUI();
 	p._remoteServer?.broadcast("queueChanged", {
 		queue: p._promptQueue.map((q) => ({
@@ -121,9 +155,11 @@ export function broadcastToolCallCompleted(
 		`[TaskSync] broadcastToolCallCompleted — id: ${entry.id}, status: ${entry.status}, response: "${(entry.response || "").slice(0, 60)}", sessionTerminated: ${!!sessionTerminated}`,
 	);
 	p._remoteServer?.broadcast("toolCallCompleted", {
+		sessionId: entry.sessionId,
 		id: entry.id,
 		entry: {
 			id: entry.id,
+			sessionId: entry.sessionId,
 			prompt: entry.prompt,
 			response: entry.response,
 			timestamp: entry.timestamp,
@@ -138,16 +174,35 @@ export function broadcastToolCallCompleted(
 /**
  * Mark the current session as terminated and freeze the timer.
  */
-export function markSessionTerminated(p: P): void {
+export function markSessionTerminated(
+	p: P,
+	session: Pick<
+		ChatSession,
+		| "id"
+		| "sessionStartTime"
+		| "sessionFrozenElapsed"
+		| "sessionTerminated"
+		| "aiTurnActive"
+		| "waitingOnUser"
+		| "unread"
+		| "pendingToolCallId"
+	>,
+): void {
 	debugLog(
-		`[TaskSync] markSessionTerminated — sessionStartTime: ${p._sessionStartTime}, aiTurnActive was: ${p._aiTurnActive}`,
+		`[TaskSync] markSessionTerminated — sessionId: ${session.id}, sessionStartTime: ${session.sessionStartTime}, aiTurnActive was: ${session.aiTurnActive}`,
 	);
-	p._sessionTerminated = true;
-	p._aiTurnActive = false;
-	if (p._sessionStartTime !== null) {
-		p._sessionFrozenElapsed = Date.now() - p._sessionStartTime;
-		p._stopSessionTimerInterval();
-		p._updateViewTitle();
+	session.sessionTerminated = true;
+	session.aiTurnActive = false;
+	session.waitingOnUser = false;
+	session.unread = false;
+	session.pendingToolCallId = null;
+	if (session.sessionStartTime !== null) {
+		session.sessionFrozenElapsed = Date.now() - session.sessionStartTime;
+		if (p._sessionManager.getActiveSessionId() === session.id) {
+			p._sessionFrozenElapsed = session.sessionFrozenElapsed;
+			p._stopSessionTimerInterval();
+			p._updateViewTitle();
+		}
 	}
 }
 

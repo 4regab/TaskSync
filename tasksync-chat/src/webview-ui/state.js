@@ -91,6 +91,13 @@ let remoteSessionFrozenElapsed = null;
 let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
+let sessions = []; // Multi-session orchestration: all sessions
+let activeSessionId = null; // Currently opened thread in the UI
+let serverActiveSessionId = null; // Backend-selected session used for routing
+let followServerActiveSessionOnce = false; // Opt into opening the next server-selected session
+let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
+let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
+let vertSplitRatio = previousState.vertSplitRatio || 35; // Vertical split: hub height percentage in single-column mode (default 35%)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -102,9 +109,9 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let autoAppendEnabled = true;
-let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
-let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
+let autoAppendEnabled = false;
+let autoAppendText = ""; // Custom text appended to responses for the active session
+let alwaysAppendReminder = false; // Global AskUser reminder toggle
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -123,6 +130,7 @@ const CONTEXT_MENU_COPY_MAX_AGE_MS = 30000;
 // Tracks local edits to prevent stale settings overwriting user input mid-typing.
 let reusablePrompts = [];
 let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
+let sessionComposerState = previousState.sessionComposerState || {};
 
 // Slash command autocomplete state
 let slashDropdownVisible = false;
@@ -161,10 +169,14 @@ let chatContainer,
 	autocompleteEmpty;
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
-let changesSection,
+let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
+let threadBackBtn, threadHistoryBtn, threadResetBtn, threadSettingsBtn;
+let changesModalOverlay,
+	changesSection,
 	changesRefreshBtn,
 	changesCloseBtn,
 	changesSummary,
+	changesLoadingSpinner,
 	changesStatus,
 	changesUnstagedGroup,
 	changesUnstagedList,
@@ -192,6 +204,8 @@ let slashDropdown, slashList, slashEmpty;
 // Timeout warning modal for extended timeouts (>4h)
 let timeoutWarningModalOverlay = null;
 let pendingTimeoutValue = null;
+// Simple alert modal (reusable for info messages)
+let simpleAlertModalOverlay = null;
 // Settings modal elements
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
@@ -216,3 +230,65 @@ let humanDelayToggle,
 	humanDelayRangeContainer,
 	humanDelayMinInput,
 	humanDelayMaxInput;
+// Session settings mini-modal elements
+let sessionSettingsOverlay,
+	sessionSettingsModal,
+	ssAutopilotToggle,
+	ssAutoAppendToggle,
+	ssAutoAppendTextInput,
+	ssAutoAppendError,
+	ssSaveAsDefaultBtn,
+	ssAutopilotPromptsList,
+	ssAddAutopilotPromptBtn,
+	ssAddAutopilotPromptForm,
+	ssAutopilotPromptInput,
+	ssSaveAutopilotPromptBtn,
+	ssCancelAutopilotPromptBtn;
+
+function sessionExists(sessionId) {
+	return (
+		!!sessionId &&
+		Array.isArray(sessions) &&
+		sessions.some(function (session) {
+			return session.id === sessionId;
+		})
+	);
+}
+
+function requestFollowServerActiveSession() {
+	followServerActiveSessionOnce = true;
+}
+
+function syncClientSessionSelection(nextServerActiveSessionId) {
+	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	if (pendingToolCall && sessionExists(pendingToolCall.sessionId)) {
+		activeSessionId = pendingToolCall.sessionId;
+	} else if (
+		followServerActiveSessionOnce &&
+		sessionExists(serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	followServerActiveSessionOnce = false;
+}
+
+function getSubmitSessionId() {
+	if (pendingToolCall && pendingToolCall.sessionId) {
+		return pendingToolCall.sessionId;
+	}
+	return activeSessionId || serverActiveSessionId || null;
+}
+
+function isSplitViewLayoutActive() {
+	return splitViewEnabled && sessionExists(activeSessionId);
+}

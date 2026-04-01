@@ -19,9 +19,9 @@ import {
 	broadcastToolCallCompleted,
 	debugLog,
 	generateId,
-	hasQueuedItems,
 	markSessionTerminated,
 	notifyQueueChanged,
+	sessionHasQueuedItems,
 } from "./webviewUtils";
 
 /**
@@ -31,7 +31,13 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 	debugLog(`[TaskSync] handleWebviewMessage — type: ${message.type}`);
 	switch (message.type) {
 		case "submit":
-			handleSubmit(p, message.value, message.attachments || []);
+			handleSubmit(
+				p,
+				message.sessionId,
+				message.toolCallId,
+				message.value,
+				message.attachments || [],
+			);
 			break;
 		case "addQueuePrompt":
 			queueH.handleAddQueuePrompt(
@@ -73,10 +79,11 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 			break;
 		case "newSession":
 			void p
-				.startNewSessionAndResetCopilotChat(
-					message.initialPrompt,
-					message.useQueuedPrompt,
-				)
+				.startNewSessionAndResetCopilotChat({
+					initialPrompt: message.initialPrompt,
+					useQueuedPrompt: message.useQueuedPrompt,
+					stopCurrentSession: message.stopCurrentSession,
+				})
 				.catch((err: unknown) => {
 					console.error("[TaskSync] Failed to start fresh Copilot chat:", err);
 				});
@@ -135,6 +142,9 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 				message.fromIndex,
 				message.toIndex,
 			);
+			break;
+		case "saveAutopilotPrompts":
+			settingsH.handleSaveAutopilotPrompts(p, message.prompts);
 			break;
 		case "addReusablePrompt":
 			settingsH.handleAddReusablePrompt(p, message.name, message.prompt);
@@ -196,6 +206,93 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 		case "copyToClipboard":
 			void fileH.handleCopyToClipboard(message.text);
 			break;
+		case "switchSession":
+			if (p._setActiveSession(message.sessionId)) {
+				const activeSession = p._sessionManager.getActiveSession();
+				if (activeSession?.pendingToolCallId) {
+					const pendingEntry = p._currentSessionCallsMap.get(
+						activeSession.pendingToolCallId,
+					);
+					if (pendingEntry && pendingEntry.status === "pending") {
+						const choices = parseChoices(pendingEntry.prompt);
+						const isApproval =
+							choices.length === 0 && isApprovalQuestion(pendingEntry.prompt);
+						p._view?.webview.postMessage({
+							type: "toolCallPending",
+							id: pendingEntry.id,
+							sessionId: activeSession.id,
+							prompt: pendingEntry.prompt,
+							isApproval,
+							choices: choices.length > 0 ? choices : undefined,
+						} satisfies ToWebviewMessage);
+					}
+				} else {
+					p._view?.webview.postMessage({
+						type: "clearPendingState",
+					} satisfies ToWebviewMessage);
+				}
+				p._saveSessionsToDisk();
+				p._updateSessionsUI();
+				settingsH.sendSessionSettingsToWebview(p);
+			}
+
+			break;
+		case "archiveSession": {
+			const sessionToArchive = p._getSession(message.sessionId);
+			if (sessionToArchive?.pendingToolCallId) {
+				p.cancelPendingToolCall(
+					"[Session archived by user]",
+					message.sessionId,
+				);
+			}
+			if (sessionToArchive) {
+				for (const entry of sessionToArchive.history) {
+					p._currentSessionCallsMap.delete(entry.id);
+					p._toolCallSessionMap.delete(entry.id);
+				}
+			}
+			if (p._sessionManager.archiveSession(message.sessionId)) {
+				p._syncActiveSessionState();
+				p._saveSessionsToDisk();
+				p._updateSessionsUI();
+			}
+			break;
+		}
+		case "deleteSession":
+			const sessionToDelete = p._getSession(message.sessionId);
+			if (sessionToDelete?.pendingToolCallId) {
+				p.cancelPendingToolCall("[Session deleted by user]", message.sessionId);
+			}
+			if (sessionToDelete) {
+				for (const entry of sessionToDelete.history) {
+					p._currentSessionCallsMap.delete(entry.id);
+					p._toolCallSessionMap.delete(entry.id);
+				}
+			}
+			if (p._sessionManager.deleteSession(message.sessionId)) {
+				p._syncActiveSessionState();
+				p._saveSessionsToDisk();
+				p._updateSessionsUI();
+			}
+			break;
+		case "updateSessionTitle":
+			if (p._sessionManager.renameSession(message.sessionId, message.title)) {
+				p._saveSessionsToDisk();
+				p._updateSessionsUI();
+			}
+			break;
+		case "updateSessionSettings":
+			settingsH.handleUpdateSessionSettings(p, message);
+			break;
+		case "resetSessionSettings":
+			settingsH.handleResetSessionSettings(p);
+			break;
+		case "requestSessionSettings":
+			settingsH.sendSessionSettingsToWebview(p);
+			break;
+		case "saveAutoAppendAsWorkspaceDefault":
+			settingsH.handleSaveAutoAppendAsWorkspaceDefault(p);
+			break;
 		default: {
 			const _exhaustiveCheck: never = message;
 			console.error(
@@ -216,10 +313,14 @@ export function handleWebviewReady(p: P): void {
 
 	// Send settings
 	p._updateSettingsUI();
+	// Send session-level overrides (gear indicator)
+	settingsH.sendSessionSettingsToWebview(p);
 	// Send initial queue state and current session history
 	p._updateQueueUI();
 	p._updateCurrentSessionUI();
 	p._updatePersistedHistoryUI();
+	// Send multi-session state
+	p._updateSessionsUI();
 
 	// If there's a pending tool call message that was never sent, send it now
 	if (p._pendingToolCallMessage) {
@@ -232,10 +333,12 @@ export function handleWebviewReady(p: P): void {
 		p._view?.webview.postMessage({
 			type: "toolCallPending",
 			id: p._pendingToolCallMessage.id,
+			sessionId: p._pendingToolCallMessage.sessionId,
 			prompt: prompt,
 			isApproval,
 			choices: choices.length > 0 ? choices : undefined,
 		} satisfies ToWebviewMessage);
+		p.playNotificationSound?.();
 		p._pendingToolCallMessage = null;
 	}
 	// If there's an active pending request (webview was hidden/recreated while waiting),
@@ -256,10 +359,15 @@ export function handleWebviewReady(p: P): void {
 			p._view?.webview.postMessage({
 				type: "toolCallPending",
 				id: p._currentToolCallId,
+				sessionId:
+					pendingEntry.sessionId ??
+					p._sessionManager.getActiveSessionId() ??
+					"",
 				prompt: prompt,
 				isApproval,
 				choices: choices.length > 0 ? choices : undefined,
 			} satisfies ToWebviewMessage);
+			p.playNotificationSound?.();
 		}
 	}
 }
@@ -269,30 +377,46 @@ export function handleWebviewReady(p: P): void {
  */
 export function handleSubmit(
 	p: P,
+	sessionId: string | null,
+	toolCallId: string | null | undefined,
 	value: string,
 	attachments: AttachmentInfo[],
 ): void {
-	// Cancel response timeout timer (user responded)
-	if (p._responseTimeoutTimer) {
-		debugLog("[TaskSync] handleSubmit — cancelling response timeout timer");
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
+	const activeSession = p._sessionManager.getActiveSession();
+	if (!activeSession || !sessionId || activeSession.id !== sessionId) {
+		debugLog(
+			`[TaskSync] handleSubmit — rejected due to active session mismatch. active=${activeSession?.id ?? "none"} incoming=${sessionId ?? "none"}`,
+		);
+		return;
 	}
-	// Reset consecutive auto-responses counter on manual response
-	p._consecutiveAutoResponses = 0;
+	activeSession.consecutiveAutoResponses = 0;
+	const currentPendingId = activeSession.pendingToolCallId;
+	const resolvedToolCallId =
+		typeof toolCallId === "string" && toolCallId.length > 0
+			? toolCallId
+			: currentPendingId;
 
-	if (p._pendingRequests.size > 0 && p._currentToolCallId) {
-		const resolve = p._pendingRequests.get(p._currentToolCallId);
+	if (
+		currentPendingId &&
+		resolvedToolCallId === currentPendingId &&
+		p._pendingRequests.size > 0
+	) {
+		p._clearResponseTimeoutTimer(currentPendingId);
+		const resolve = p._pendingRequests.get(currentPendingId);
 		if (resolve) {
-			const effectiveResponse = settingsH.applyAutoAppendToResponse(p, value);
+			const effectiveResponse = settingsH.applyAutoAppendToResponse(
+				p,
+				value,
+				activeSession,
+			);
 			debugLog(
 				"[TaskSync] handleSubmit — resolving toolCallId:",
-				p._currentToolCallId,
+				currentPendingId,
 				"response:",
 				value.slice(0, 80),
 			);
 			// O(1) lookup using Map instead of O(n) findIndex
-			const pendingEntry = p._currentSessionCallsMap.get(p._currentToolCallId);
+			const pendingEntry = p._currentSessionCallsMap.get(currentPendingId);
 
 			let completedEntry: ToolCallEntry;
 			if (pendingEntry && pendingEntry.status === "pending") {
@@ -305,7 +429,8 @@ export function handleSubmit(
 			} else {
 				// Create new completed entry (shouldn't happen normally)
 				completedEntry = {
-					id: p._currentToolCallId,
+					id: currentPendingId,
+					sessionId: activeSession.id,
 					prompt: "Tool call",
 					response: effectiveResponse,
 					attachments: attachments,
@@ -313,7 +438,7 @@ export function handleSubmit(
 					isFromQueue: false,
 					status: "completed",
 				};
-				p._currentSessionCalls.unshift(completedEntry);
+				activeSession.history.unshift(completedEntry);
 				p._currentSessionCallsMap.set(completedEntry.id, completedEntry);
 			}
 
@@ -333,12 +458,14 @@ export function handleSubmit(
 			p._updateCurrentSessionUI();
 			resolve({
 				value,
-				queue: hasQueuedItems(p),
+				queue: sessionHasQueuedItems(activeSession),
 				attachments,
 			});
-			p._pendingRequests.delete(p._currentToolCallId);
-			p._currentToolCallId = null;
-			p._aiTurnActive = true; // AI is now processing the response
+			p._pendingRequests.delete(currentPendingId);
+			p._toolCallSessionMap.delete(currentPendingId);
+			activeSession.pendingToolCallId = null;
+			activeSession.waitingOnUser = false;
+			activeSession.aiTurnActive = true; // AI is now processing the response
 			debugLog(
 				`[TaskSync] handleSubmit — resolved, aiTurnActive: true, isTermination: ${isTermination}`,
 			);
@@ -346,24 +473,31 @@ export function handleSubmit(
 			// Mark session as terminated if termination text was submitted
 			if (isTermination) {
 				debugLog("[TaskSync] handleSubmit — marking session terminated");
-				markSessionTerminated(p);
+				markSessionTerminated(p, activeSession);
 			}
+			p._syncActiveSessionState();
+			p._saveSessionsToDisk();
 		} else {
 			debugLog(
-				`[TaskSync] handleSubmit — no resolve found for toolCallId: ${p._currentToolCallId}, adding to queue`,
+				`[TaskSync] handleSubmit — no resolve found for toolCallId: ${currentPendingId}, stale state — queueing message instead of dropping it`,
 			);
-			// No pending tool call - add message to queue for later use
+			// Resolver is gone (e.g. after reload) — queue the message so the user's input isn't lost
 			if (value && value.trim()) {
 				const queuedPrompt: QueuedPrompt = {
 					id: generateId("q"),
 					prompt: value.trim(),
 					attachments: attachments.length > 0 ? [...attachments] : undefined,
 				};
-				p._promptQueue.push(queuedPrompt);
-				// Auto-switch to queue mode so user sees their message went to queue
+				activeSession.queue.push(queuedPrompt);
+				activeSession.queueEnabled = true;
 				p._queueEnabled = true;
 				notifyQueueChanged(p);
 			}
+			// Clean up the stale pending state
+			activeSession.pendingToolCallId = null;
+			activeSession.waitingOnUser = false;
+			p._syncActiveSessionState();
+			p._saveSessionsToDisk();
 		}
 	} else {
 		debugLog(
@@ -376,8 +510,9 @@ export function handleSubmit(
 				prompt: value.trim(),
 				attachments: attachments.length > 0 ? [...attachments] : undefined,
 			};
-			p._promptQueue.push(queuedPrompt);
+			activeSession.queue.push(queuedPrompt);
 			// Auto-switch to queue mode so user sees their message went to queue
+			activeSession.queueEnabled = true;
 			p._queueEnabled = true;
 			notifyQueueChanged(p);
 		}
@@ -389,6 +524,7 @@ export function handleSubmit(
 	// 2. dispose() is called (extension deactivation)
 
 	// Clear attachments after submit and sync with webview
-	p._attachments = [];
+	activeSession.attachments = [];
+	p._attachments = activeSession.attachments;
 	p._updateAttachmentsUI();
 }

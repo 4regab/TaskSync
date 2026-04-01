@@ -374,35 +374,55 @@ describe("markSessionTerminated", () => {
 	it("sets terminated flag and freezes elapsed time", () => {
 		const now = Date.now();
 		const p = {
-			_sessionTerminated: false,
-			_sessionStartTime: now - 5000,
+			_sessionManager: { getActiveSessionId: () => "1" },
 			_sessionFrozenElapsed: 0,
 			_stopSessionTimerInterval: vi.fn(),
 			_updateViewTitle: vi.fn(),
 		} as any;
+		const session = {
+			id: "1",
+			sessionStartTime: now - 5000,
+			sessionFrozenElapsed: 0,
+			sessionTerminated: false,
+			aiTurnActive: true,
+			waitingOnUser: true,
+			pendingToolCallId: "tc_1",
+		} as any;
 
-		markSessionTerminated(p);
+		markSessionTerminated(p, session);
 
-		expect(p._sessionTerminated).toBe(true);
+		expect(session.sessionTerminated).toBe(true);
+		expect(session.unread).toBe(false);
+		expect(session.sessionFrozenElapsed).toBeGreaterThanOrEqual(4900);
+		expect(session.sessionFrozenElapsed).toBeLessThanOrEqual(6000);
 		expect(p._sessionFrozenElapsed).toBeGreaterThanOrEqual(4900);
-		expect(p._sessionFrozenElapsed).toBeLessThanOrEqual(6000);
 		expect(p._stopSessionTimerInterval).toHaveBeenCalled();
 		expect(p._updateViewTitle).toHaveBeenCalled();
 	});
 
 	it("handles null sessionStartTime (no active session)", () => {
 		const p = {
-			_sessionTerminated: false,
-			_sessionStartTime: null,
+			_sessionManager: { getActiveSessionId: () => null },
 			_sessionFrozenElapsed: 0,
 			_stopSessionTimerInterval: vi.fn(),
 			_updateViewTitle: vi.fn(),
 		} as any;
+		const session = {
+			id: "2",
+			sessionStartTime: null,
+			sessionFrozenElapsed: 0,
+			sessionTerminated: false,
+			aiTurnActive: true,
+			waitingOnUser: true,
+			unread: true,
+			pendingToolCallId: "tc_2",
+		} as any;
 
-		markSessionTerminated(p);
+		markSessionTerminated(p, session);
 
-		expect(p._sessionTerminated).toBe(true);
-		expect(p._sessionFrozenElapsed).toBe(0);
+		expect(session.sessionTerminated).toBe(true);
+		expect(session.unread).toBe(false);
+		expect(session.sessionFrozenElapsed).toBe(0);
 		expect(p._stopSessionTimerInterval).not.toHaveBeenCalled();
 		expect(p._updateViewTitle).not.toHaveBeenCalled();
 	});

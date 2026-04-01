@@ -172,7 +172,13 @@ function handleChoicesSend() {
 	hideChoicesBar();
 
 	// Send the response
-	vscode.postMessage({ type: "submit", value: responseValue, attachments: [] });
+	vscode.postMessage({
+		type: "submit",
+		sessionId: getSubmitSessionId(),
+		toolCallId: pendingToolCall ? pendingToolCall.id : null,
+		value: responseValue,
+		attachments: [],
+	});
 	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;

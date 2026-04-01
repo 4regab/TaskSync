@@ -5,12 +5,10 @@ import * as vscode from "vscode";
 import { WebSocket, WebSocketServer } from "ws";
 import {
 	buildAskUserFollowUpQuery,
-	buildAskUserRequestQuery,
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_CHAT_COMMAND,
 	DEFAULT_REMOTE_MAX_DEVICES,
 	DEFAULT_REMOTE_PORT,
-	DEFAULT_REMOTE_SESSION_QUERY,
 	ErrorCode,
 	isValidQueueId,
 	MAX_QUEUE_PROMPT_LENGTH,
@@ -19,7 +17,6 @@ import {
 	WS_MAX_PAYLOAD,
 	WS_PROTOCOL_VERSION,
 } from "../constants/remoteConstants";
-import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
 import type { TaskSyncWebviewProvider } from "../webview/webviewProvider";
 import { GitService } from "./gitService";
 import { RemoteAuthService } from "./remoteAuthService";
@@ -52,15 +49,6 @@ function getRemoteChatCommand(): string {
 	return vscode.workspace
 		.getConfiguration(CONFIG_SECTION)
 		.get<string>("remoteChatCommand", DEFAULT_REMOTE_CHAT_COMMAND);
-}
-
-/** Start a fresh chat session and send a query via the configured chat command. */
-async function openNewChatWithQuery(query: string): Promise<void> {
-	await startFreshCopilotChatWithQuery(
-		getRemoteChatCommand(),
-		query,
-		DEFAULT_REMOTE_CHAT_COMMAND,
-	);
 }
 
 export interface RemoteServerUrls {
@@ -469,9 +457,15 @@ export class RemoteServer {
 		switch (msg.type) {
 			case "respond": {
 				const id = typeof msg.id === "string" ? msg.id : "";
+				const sessionId =
+					typeof msg.sessionId === "string" ? msg.sessionId : "";
 				debugLog("respond: id=", id);
-				if (!id) {
-					sendWsError(ws, "Missing tool call ID", ErrorCode.INVALID_INPUT);
+				if (!id || !sessionId) {
+					sendWsError(
+						ws,
+						"Missing session or tool call ID",
+						ErrorCode.INVALID_INPUT,
+					);
 					return;
 				}
 				const value = typeof msg.value === "string" ? msg.value : "";
@@ -481,6 +475,7 @@ export class RemoteServer {
 				}
 				const attachments = normalizeAttachments(msg.attachments);
 				const accepted = this.provider.resolveRemoteResponse(
+					sessionId,
 					id,
 					value,
 					attachments,
@@ -575,19 +570,18 @@ export class RemoteServer {
 					typeof msg.prompt === "string" && msg.prompt.trim()
 						? msg.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH)
 						: "";
-				const prompt = rawPrompt
-					? buildAskUserRequestQuery(rawPrompt)
-					: DEFAULT_REMOTE_SESSION_QUERY;
 				debugLog(
 					"startSession:",
 					rawPrompt ? "custom prompt" : "default greeting",
-					"query length:",
-					prompt.length,
 				);
-				// Route through configured chat command (defaults to chat.open)
-				void openNewChatWithQuery(prompt).catch((e) =>
-					console.error("[TaskSync Remote] startSession:", e),
-				);
+				// Reuse the same session-aware path as the local New Session flow so
+				// Copilot receives the exact TaskSync session_id for subsequent ask_user calls.
+				void this.provider
+					.startNewSessionAndResetCopilotChat({
+						initialPrompt: rawPrompt || undefined,
+						useQueuedPrompt: false,
+					})
+					.catch((e) => console.error("[TaskSync Remote] startSession:", e));
 				break;
 			}
 			case "getState": {
@@ -632,13 +626,26 @@ export class RemoteServer {
 					.then(undefined, (e: unknown) => console.error("[TaskSync Chat]", e));
 				break;
 			}
-			case "chatCancel":
-				this.provider.cancelPendingToolCall("[Cancelled by user]");
+			case "chatCancel": {
+				const cancelSessionId =
+					typeof msg.sessionId === "string" ? msg.sessionId : undefined;
+				this.provider.cancelPendingToolCall(
+					"[Cancelled by user]",
+					cancelSessionId || undefined,
+				);
 				break;
+			}
 			case "newSession": {
 				debugLog("newSession: starting fresh remote chat");
 				void this.provider
-					.startNewSessionAndResetCopilotChat()
+					.startNewSessionAndResetCopilotChat({
+						stopCurrentSession: msg.stopCurrentSession === true,
+						initialPrompt:
+							typeof msg.initialPrompt === "string"
+								? msg.initialPrompt
+								: undefined,
+						useQueuedPrompt: msg.useQueuedPrompt === true,
+					})
 					.catch((e) =>
 						console.error("[TaskSync Remote] newSession error:", e),
 					);
@@ -648,6 +655,64 @@ export class RemoteServer {
 				debugLog("resetSession: clearing remote session state only");
 				this.provider.startNewSession();
 				break;
+			case "switchSession": {
+				const switchId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				if (!switchId) {
+					sendWsError(ws, "Missing sessionId", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "switchSession",
+					sessionId: switchId,
+				});
+				break;
+			}
+			case "deleteSession": {
+				const deleteId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				if (!deleteId) {
+					sendWsError(ws, "Missing sessionId", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "deleteSession",
+					sessionId: deleteId,
+				});
+				break;
+			}
+			case "archiveSession": {
+				const archiveId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				if (!archiveId) {
+					sendWsError(ws, "Missing sessionId", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "archiveSession",
+					sessionId: archiveId,
+				});
+				break;
+			}
+			case "updateSessionTitle": {
+				const renameId =
+					typeof msg.sessionId === "string" ? msg.sessionId : null;
+				const newTitle = typeof msg.title === "string" ? msg.title.trim() : "";
+				if (!renameId || !newTitle) {
+					sendWsError(
+						ws,
+						"Missing sessionId or title",
+						ErrorCode.INVALID_INPUT,
+					);
+					return;
+				}
+				this.provider._handleWebviewMessage({
+					type: "updateSessionTitle",
+					sessionId: renameId,
+					title: newTitle.slice(0, 100),
+				});
+				break;
+			}
 			default: {
 				const p = this.provider;
 				if (await dispatchSettingsMessage(ws, p, broadcastFn, msg)) break;

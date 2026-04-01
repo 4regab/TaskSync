@@ -19,9 +19,7 @@ function toggleSoundSetting() {
 }
 
 function updateSoundToggleUI() {
-	if (!soundToggle) return;
-	soundToggle.classList.toggle("active", soundEnabled);
-	soundToggle.setAttribute("aria-checked", soundEnabled ? "true" : "false");
+	setToggle(soundToggle, soundEnabled);
 }
 
 function toggleInteractiveApprovalSetting() {
@@ -34,15 +32,7 @@ function toggleInteractiveApprovalSetting() {
 }
 
 function updateInteractiveApprovalToggleUI() {
-	if (!interactiveApprovalToggle) return;
-	interactiveApprovalToggle.classList.toggle(
-		"active",
-		interactiveApprovalEnabled,
-	);
-	interactiveApprovalToggle.setAttribute(
-		"aria-checked",
-		interactiveApprovalEnabled ? "true" : "false",
-	);
+	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
 }
 
 function toggleAutoAppendSetting() {
@@ -56,11 +46,7 @@ function toggleAutoAppendSetting() {
 
 function updateAutoAppendToggleUI() {
 	if (!autoAppendToggle) return;
-	autoAppendToggle.classList.toggle("active", autoAppendEnabled);
-	autoAppendToggle.setAttribute(
-		"aria-checked",
-		autoAppendEnabled ? "true" : "false",
-	);
+	setToggle(autoAppendToggle, autoAppendEnabled);
 	updateAutoAppendTextVisibility();
 }
 
@@ -97,12 +83,7 @@ function toggleAlwaysAppendReminderSetting() {
 }
 
 function updateAlwaysAppendReminderToggleUI() {
-	if (!alwaysAppendReminderToggle) return;
-	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
-	alwaysAppendReminderToggle.setAttribute(
-		"aria-checked",
-		alwaysAppendReminder ? "true" : "false",
-	);
+	setToggle(alwaysAppendReminderToggle, alwaysAppendReminder);
 }
 
 function toggleSendWithCtrlEnterSetting() {
@@ -115,12 +96,7 @@ function toggleSendWithCtrlEnterSetting() {
 }
 
 function updateSendWithCtrlEnterToggleUI() {
-	if (!sendShortcutToggle) return;
-	sendShortcutToggle.classList.toggle("active", sendWithCtrlEnter);
-	sendShortcutToggle.setAttribute(
-		"aria-checked",
-		sendWithCtrlEnter ? "true" : "false",
-	);
+	setToggle(sendShortcutToggle, sendWithCtrlEnter);
 }
 
 function toggleAutopilotSetting() {
@@ -133,13 +109,7 @@ function toggleAutopilotSetting() {
 }
 
 function updateAutopilotToggleUI() {
-	if (autopilotToggle) {
-		autopilotToggle.classList.toggle("active", autopilotEnabled);
-		autopilotToggle.setAttribute(
-			"aria-checked",
-			autopilotEnabled ? "true" : "false",
-		);
-	}
+	setToggle(autopilotToggle, autopilotEnabled);
 }
 
 function handleResponseTimeoutChange() {
@@ -276,13 +246,7 @@ function handleHumanDelayMaxChange() {
 }
 
 function updateHumanDelayUI() {
-	if (humanDelayToggle) {
-		humanDelayToggle.classList.toggle("active", humanLikeDelayEnabled);
-		humanDelayToggle.setAttribute(
-			"aria-checked",
-			humanLikeDelayEnabled ? "true" : "false",
-		);
-	}
+	setToggle(humanDelayToggle, humanLikeDelayEnabled);
 	if (humanDelayRangeContainer) {
 		humanDelayRangeContainer.style.display = humanLikeDelayEnabled
 			? "flex"
@@ -353,202 +317,48 @@ function saveNewPrompt() {
 
 // ========== Autopilot Prompts Array Functions ==========
 
-// Track which autopilot prompt is being edited (-1 = adding new, >= 0 = editing index)
-let editingAutopilotPromptIndex = -1;
-// Track drag state
-let draggedAutopilotIndex = -1;
-
-function renderAutopilotPromptsList() {
-	if (!autopilotPromptsList) return;
-
-	if (autopilotPrompts.length === 0) {
-		autopilotPromptsList.innerHTML =
-			'<div class="empty-prompts-hint">No prompts added. Add prompts to cycle through during Autopilot.</div>';
-		return;
-	}
-
-	// Render list with drag handles, numbers, edit/delete buttons
-	autopilotPromptsList.innerHTML = autopilotPrompts
-		.map(function (prompt, index) {
-			let truncated =
-				prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt;
-			let tooltipText =
-				prompt.length > 300 ? prompt.substring(0, 300) + "..." : prompt;
-			tooltipText = escapeHtml(tooltipText);
-			return (
-				'<div class="autopilot-prompt-item" draggable="true" data-index="' +
-				index +
-				'" title="' +
-				tooltipText +
-				'">' +
-				'<span class="autopilot-prompt-drag-handle codicon codicon-grabber"></span>' +
-				'<span class="autopilot-prompt-number">' +
-				(index + 1) +
-				".</span>" +
-				'<span class="autopilot-prompt-text">' +
-				escapeHtml(truncated) +
-				"</span>" +
-				'<div class="autopilot-prompt-actions">' +
-				'<button class="prompt-item-btn edit" data-index="' +
-				index +
-				'" title="Edit"><span class="codicon codicon-edit"></span></button>' +
-				'<button class="prompt-item-btn delete" data-index="' +
-				index +
-				'" title="Delete"><span class="codicon codicon-trash"></span></button>' +
-				"</div></div>"
-			);
-		})
-		.join("");
-}
-
-function showAddAutopilotPromptForm() {
-	if (!addAutopilotPromptForm || !autopilotPromptInput) return;
-	editingAutopilotPromptIndex = -1;
-	autopilotPromptInput.value = "";
-	addAutopilotPromptForm.classList.remove("hidden");
-	addAutopilotPromptForm.removeAttribute("data-editing-index");
-	autopilotPromptInput.focus();
-}
-
-function hideAddAutopilotPromptForm() {
-	if (!addAutopilotPromptForm || !autopilotPromptInput) return;
-	addAutopilotPromptForm.classList.add("hidden");
-	autopilotPromptInput.value = "";
-	editingAutopilotPromptIndex = -1;
-	addAutopilotPromptForm.removeAttribute("data-editing-index");
-}
-
-function saveAutopilotPrompt() {
-	if (!autopilotPromptInput) return;
-	let prompt = autopilotPromptInput.value.trim();
-	if (!prompt) return;
-
-	let editingIndex = addAutopilotPromptForm.getAttribute("data-editing-index");
-	if (editingIndex !== null) {
-		// Editing existing
+// Shared prompt-list UI (delegates rendering/CRUD to promptListUI.js factory)
+var workspacePromptListUI = createPromptListUI({
+	getPrompts: function () {
+		return autopilotPrompts;
+	},
+	setPrompts: function (arr) {
+		autopilotPrompts = arr;
+	},
+	listEl: null, // bound lazily after DOM ready
+	formEl: null,
+	inputEl: null,
+	emptyHint: "No prompts added. Add prompts to cycle through during Autopilot.",
+	onListChange: function () {
 		vscode.postMessage({
-			type: "editAutopilotPrompt",
-			index: parseInt(editingIndex, 10),
-			prompt: prompt,
+			type: "saveAutopilotPrompts",
+			prompts: autopilotPrompts,
 		});
-	} else {
-		// Adding new
-		vscode.postMessage({ type: "addAutopilotPrompt", prompt: prompt });
-	}
-	hideAddAutopilotPromptForm();
-}
+	},
+});
 
-function handleAutopilotPromptsListClick(e) {
-	let target = e.target.closest(".prompt-item-btn");
-	if (!target) return;
-
-	let index = parseInt(target.getAttribute("data-index"), 10);
-	if (isNaN(index)) return;
-
-	if (target.classList.contains("edit")) {
-		editAutopilotPrompt(index);
-	} else if (target.classList.contains("delete")) {
-		deleteAutopilotPrompt(index);
-	}
-}
-
-function editAutopilotPrompt(index) {
-	if (index < 0 || index >= autopilotPrompts.length) return;
-	if (!addAutopilotPromptForm || !autopilotPromptInput) return;
-
-	let prompt = autopilotPrompts[index];
-	editingAutopilotPromptIndex = index;
-	autopilotPromptInput.value = prompt;
-	addAutopilotPromptForm.setAttribute("data-editing-index", index);
-	addAutopilotPromptForm.classList.remove("hidden");
-	autopilotPromptInput.focus();
-}
-
-function deleteAutopilotPrompt(index) {
-	if (index < 0 || index >= autopilotPrompts.length) return;
-	vscode.postMessage({ type: "removeAutopilotPrompt", index: index });
-}
-
-function handleAutopilotDragStart(e) {
-	let item = e.target.closest(".autopilot-prompt-item");
-	if (!item) return;
-	draggedAutopilotIndex = parseInt(item.getAttribute("data-index"), 10);
-	item.classList.add("dragging");
-	e.dataTransfer.effectAllowed = "move";
-	e.dataTransfer.setData("text/plain", draggedAutopilotIndex);
-}
-
-function handleAutopilotDragOver(e) {
-	e.preventDefault();
-	e.dataTransfer.dropEffect = "move";
-	let item = e.target.closest(".autopilot-prompt-item");
-	if (!item || !autopilotPromptsList) return;
-
-	// Remove all drag-over classes first
-	autopilotPromptsList
-		.querySelectorAll(".autopilot-prompt-item")
-		.forEach(function (el) {
-			el.classList.remove("drag-over-top", "drag-over-bottom");
-		});
-
-	// Determine if we're above or below center of target
-	let rect = item.getBoundingClientRect();
-	let midY = rect.top + rect.height / 2;
-	if (e.clientY < midY) {
-		item.classList.add("drag-over-top");
-	} else {
-		item.classList.add("drag-over-bottom");
-	}
-}
-
-function handleAutopilotDragEnd(e) {
-	draggedAutopilotIndex = -1;
-	if (!autopilotPromptsList) return;
-	autopilotPromptsList
-		.querySelectorAll(".autopilot-prompt-item")
-		.forEach(function (el) {
-			el.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
-		});
-}
-
-function handleAutopilotDrop(e) {
-	e.preventDefault();
-	let item = e.target.closest(".autopilot-prompt-item");
-	if (!item || draggedAutopilotIndex < 0) return;
-
-	let toIndex = parseInt(item.getAttribute("data-index"), 10);
-	if (isNaN(toIndex) || draggedAutopilotIndex === toIndex) {
-		handleAutopilotDragEnd(e);
-		return;
-	}
-
-	// Determine insert position based on where we dropped
-	let rect = item.getBoundingClientRect();
-	let midY = rect.top + rect.height / 2;
-	let insertBelow = e.clientY >= midY;
-
-	// Calculate actual target index
-	let targetIndex = toIndex;
-	if (insertBelow && toIndex < autopilotPrompts.length - 1) {
-		targetIndex = toIndex + 1;
-	}
-
-	// Adjust for removal of source
-	if (draggedAutopilotIndex < targetIndex) {
-		targetIndex--;
-	}
-
-	targetIndex = Math.max(0, Math.min(targetIndex, autopilotPrompts.length - 1));
-
-	if (draggedAutopilotIndex !== targetIndex) {
-		vscode.postMessage({
-			type: "reorderAutopilotPrompts",
-			fromIndex: draggedAutopilotIndex,
-			toIndex: targetIndex,
-		});
-	}
-
-	handleAutopilotDragEnd(e);
+/** Bind the shared UI to DOM elements (called after DOM is ready). */
+function initWorkspacePromptListUI() {
+	workspacePromptListUI = createPromptListUI({
+		getPrompts: function () {
+			return autopilotPrompts;
+		},
+		setPrompts: function (arr) {
+			autopilotPrompts = arr;
+		},
+		listEl: autopilotPromptsList,
+		formEl: addAutopilotPromptForm,
+		inputEl: autopilotPromptInput,
+		emptyHint:
+			"No prompts added. Add prompts to cycle through during Autopilot.",
+		onListChange: function () {
+			vscode.postMessage({
+				type: "saveAutopilotPrompts",
+				prompts: autopilotPrompts,
+			});
+		},
+	});
+	workspacePromptListUI.bindEvents();
 }
 
 // ========== End Autopilot Prompts Functions ==========

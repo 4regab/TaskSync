@@ -43,6 +43,13 @@ const AUTO_APPEND_DEFAULT_TEXT =
 		: "REQUIRED: The user CANNOT see your response unless you call #askUser. You MUST call #askUser after completing this task. NEVER end your turn without calling #askUser.";
 
 const PROCESSING_POLL_INTERVAL_MS = 5000; // Delay before polling server for state after tool call
+
+// Shared toggle helper — single source of truth for toggle + aria-checked updates
+function setToggle(el, active) {
+	if (!el) return;
+	el.classList.toggle("active", active);
+	el.setAttribute("aria-checked", active ? "true" : "false");
+}
 // ==================== Communication Adapter ====================
 // Provides unified API for VS Code postMessage or WebSocket communication
 const isRemoteMode = typeof acquireVsCodeApi === "undefined";
@@ -176,6 +183,8 @@ function mapToRemoteMessage(msg) {
 			if (pendingToolCall) {
 				return {
 					type: "respond",
+					sessionId:
+						msg.sessionId || pendingToolCall.sessionId || activeSessionId || "",
 					id: pendingToolCall.id,
 					value: msg.value,
 					attachments: msg.attachments || [],
@@ -216,7 +225,12 @@ function mapToRemoteMessage(msg) {
 		case "updateResponseTimeout":
 			return { type: "updateResponseTimeout", timeout: msg.value };
 		case "newSession":
-			return { type: "newSession" };
+			return {
+				type: "newSession",
+				stopCurrentSession: msg.stopCurrentSession === true,
+				initialPrompt: msg.initialPrompt,
+				useQueuedPrompt: msg.useQueuedPrompt === true,
+			};
 		case "resetSession":
 			return { type: "resetSession" };
 		case "chatMessage":
@@ -224,7 +238,10 @@ function mapToRemoteMessage(msg) {
 		case "chatFollowUp":
 			return { type: "chatFollowUp", content: msg.content };
 		case "chatCancel":
-			return { type: "chatCancel" };
+			return {
+				type: "chatCancel",
+				sessionId: pendingToolCall ? pendingToolCall.sessionId : "",
+			};
 		case "startSession":
 			return { type: "startSession", prompt: msg.prompt || "" };
 		case "webviewReady":
@@ -274,6 +291,36 @@ function mapToRemoteMessage(msg) {
 		case "searchContext":
 		case "selectContextReference":
 			return null;
+		// Multi-session operations — forward to server as-is
+		case "switchSession":
+			if (!msg.sessionId) {
+				// Back to hub — handle locally, no server round-trip needed
+				if (typeof saveActiveSessionComposerState === "function") {
+					saveActiveSessionComposerState();
+				}
+				activeSessionId = null;
+				if (typeof restoreActiveSessionComposerState === "function") {
+					restoreActiveSessionComposerState();
+				}
+				updateWelcomeSectionVisibility();
+				renderSessionsList();
+				return null;
+			}
+			// Optimistic update: switch view immediately, server will confirm
+			activeSessionId = msg.sessionId;
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
+			return { type: "switchSession", sessionId: msg.sessionId };
+		case "deleteSession":
+			return { type: "deleteSession", sessionId: msg.sessionId || "" };
+		case "archiveSession":
+			return { type: "archiveSession", sessionId: msg.sessionId || "" };
+		case "updateSessionTitle":
+			return {
+				type: "updateSessionTitle",
+				sessionId: msg.sessionId || "",
+				title: msg.title || "",
+			};
 		default:
 			// Pass through unknown messages
 			return msg;
@@ -470,6 +517,7 @@ function handleRemoteMessage(msg) {
 			clearTimeout(processingCheckTimer);
 			showPendingToolCall(
 				msg.data.id,
+				msg.data.sessionId,
 				msg.data.prompt,
 				msg.data.isApproval,
 				msg.data.choices,
@@ -549,6 +597,9 @@ function handleRemoteMessage(msg) {
 			break;
 		case "newSession":
 			debugLog("newSession received - clearing state");
+			if (typeof requestFollowServerActiveSession === "function") {
+				requestFollowServerActiveSession();
+			}
 			clearRemoteSessionState(msg.data && msg.data.statusMessage);
 			debugLog("newSession complete - state cleared");
 			break;
@@ -570,6 +621,19 @@ function handleRemoteMessage(msg) {
 				msg.data ? Object.keys(msg.data) : "no data",
 			);
 			if (msg.data) applyServerState(msg.data);
+			break;
+		case "updateSessions":
+			if (msg.data) {
+				sessions = Array.isArray(msg.data.sessions) ? msg.data.sessions : [];
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(msg.data.activeSessionId || null);
+				} else {
+					activeSessionId = msg.data.activeSessionId || null;
+				}
+				if (typeof renderSessionsList === "function") renderSessionsList();
+				if (typeof updateWelcomeSectionVisibility === "function")
+					updateWelcomeSectionVisibility();
+			}
 			break;
 		case "changes":
 			if (typeof applyChangesState === "function") {
@@ -632,6 +696,15 @@ function clearRemoteSessionState(statusMessage) {
 	pendingToolCall = null;
 	lastPendingContentHtml = "";
 	isProcessingResponse = false;
+	if (
+		typeof statusMessage === "string" &&
+		statusMessage &&
+		((typeof sessionExists === "function" &&
+			sessionExists(serverActiveSessionId)) ||
+			serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
 	if (chatStreamArea) {
 		chatStreamArea.innerHTML = "";
 		chatStreamArea.classList.add("hidden");
@@ -737,6 +810,16 @@ function applyServerState(state) {
 	}
 	updatePendingUI();
 	if (typeof updateCardSelection === "function") updateCardSelection();
+	// Multi-session state (sessions list + active session ID)
+	if (Array.isArray(state.sessions)) {
+		sessions = state.sessions;
+		if (typeof syncClientSessionSelection === "function") {
+			syncClientSessionSelection(state.activeSessionId || null);
+		} else {
+			activeSessionId = state.activeSessionId || null;
+		}
+		if (typeof renderSessionsList === "function") renderSessionsList();
+	}
 	if (typeof updateWelcomeSectionVisibility === "function")
 		updateWelcomeSectionVisibility();
 }
@@ -749,7 +832,13 @@ function handlePendingToolCall(data) {
 		data.prompt ? data.prompt.length : 0,
 	);
 	if (typeof showPendingToolCall === "function") {
-		showPendingToolCall(data.id, data.prompt, data.isApproval, data.choices);
+		showPendingToolCall(
+			data.id,
+			data.sessionId,
+			data.prompt,
+			data.isApproval,
+			data.choices,
+		);
 	} else {
 		pendingToolCall = data;
 		isApprovalQuestion = data.isApproval || false;
@@ -809,7 +898,7 @@ function applySettingsToUI() {
 	updateMaxAutoResponsesUI();
 	updateRemoteMaxDevicesUI();
 	updateHumanDelayUI();
-	renderAutopilotPromptsList();
+	workspacePromptListUI.render();
 	renderPromptsList();
 	updateQueueVisibility();
 }
@@ -908,6 +997,13 @@ let remoteSessionFrozenElapsed = null;
 let remoteSessionTimerInterval = null;
 let currentSessionCalls = []; // Current session tool calls (shown in chat)
 let persistedHistory = []; // Past sessions history (shown in modal)
+let sessions = []; // Multi-session orchestration: all sessions
+let activeSessionId = null; // Currently opened thread in the UI
+let serverActiveSessionId = null; // Backend-selected session used for routing
+let followServerActiveSessionOnce = false; // Opt into opening the next server-selected session
+let splitViewEnabled = previousState.splitViewEnabled || false; // Split view: sessions list + thread side by side
+let splitRatio = previousState.splitRatio || 38; // Hub panel width percentage (default 38%)
+let vertSplitRatio = previousState.vertSplitRatio || 35; // Vertical split: hub height percentage in single-column mode (default 35%)
 let lastContextMenuTarget = null; // Tracks where right-click was triggered for copy fallback behavior
 let lastContextMenuTimestamp = 0; // Ensures stale right-click targets are not reused for copy
 let pendingToolCall = null;
@@ -919,9 +1015,9 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
-let autoAppendEnabled = true;
-let autoAppendText = ""; // Custom text appended to responses (defaults to askUser reminder)
-let alwaysAppendReminder = false; // Force askUser reminder even with custom text (for GPT 5.4)
+let autoAppendEnabled = false;
+let autoAppendText = ""; // Custom text appended to responses for the active session
+let alwaysAppendReminder = false; // Global AskUser reminder toggle
 let sendWithCtrlEnter = false;
 let autopilotEnabled = false;
 let autopilotText = "";
@@ -940,6 +1036,7 @@ const CONTEXT_MENU_COPY_MAX_AGE_MS = 30000;
 // Tracks local edits to prevent stale settings overwriting user input mid-typing.
 let reusablePrompts = [];
 let audioUnlocked = false; // Track if audio playback has been unlocked by user gesture
+let sessionComposerState = previousState.sessionComposerState || {};
 
 // Slash command autocomplete state
 let slashDropdownVisible = false;
@@ -978,10 +1075,14 @@ let chatContainer,
 	autocompleteEmpty;
 let inputContainer, inputAreaContainer, welcomeSection;
 let cardVibe, cardSpec, toolHistoryArea, pendingMessage;
-let changesSection,
+let hubNewSessionBtn, hubHistoryBtn, hubSettingsBtn;
+let threadBackBtn, threadHistoryBtn, threadResetBtn, threadSettingsBtn;
+let changesModalOverlay,
+	changesSection,
 	changesRefreshBtn,
 	changesCloseBtn,
 	changesSummary,
+	changesLoadingSpinner,
 	changesStatus,
 	changesUnstagedGroup,
 	changesUnstagedList,
@@ -1009,6 +1110,8 @@ let slashDropdown, slashList, slashEmpty;
 // Timeout warning modal for extended timeouts (>4h)
 let timeoutWarningModalOverlay = null;
 let pendingTimeoutValue = null;
+// Simple alert modal (reusable for info messages)
+let simpleAlertModalOverlay = null;
 // Settings modal elements
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
@@ -1033,6 +1136,68 @@ let humanDelayToggle,
 	humanDelayRangeContainer,
 	humanDelayMinInput,
 	humanDelayMaxInput;
+// Session settings mini-modal elements
+let sessionSettingsOverlay,
+	sessionSettingsModal,
+	ssAutopilotToggle,
+	ssAutoAppendToggle,
+	ssAutoAppendTextInput,
+	ssAutoAppendError,
+	ssSaveAsDefaultBtn,
+	ssAutopilotPromptsList,
+	ssAddAutopilotPromptBtn,
+	ssAddAutopilotPromptForm,
+	ssAutopilotPromptInput,
+	ssSaveAutopilotPromptBtn,
+	ssCancelAutopilotPromptBtn;
+
+function sessionExists(sessionId) {
+	return (
+		!!sessionId &&
+		Array.isArray(sessions) &&
+		sessions.some(function (session) {
+			return session.id === sessionId;
+		})
+	);
+}
+
+function requestFollowServerActiveSession() {
+	followServerActiveSessionOnce = true;
+}
+
+function syncClientSessionSelection(nextServerActiveSessionId) {
+	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	if (pendingToolCall && sessionExists(pendingToolCall.sessionId)) {
+		activeSessionId = pendingToolCall.sessionId;
+	} else if (
+		followServerActiveSessionOnce &&
+		sessionExists(serverActiveSessionId)
+	) {
+		activeSessionId = serverActiveSessionId;
+	}
+
+	if (!sessionExists(activeSessionId)) {
+		activeSessionId = null;
+	}
+
+	followServerActiveSessionOnce = false;
+}
+
+function getSubmitSessionId() {
+	if (pendingToolCall && pendingToolCall.sessionId) {
+		return pendingToolCall.sessionId;
+	}
+	return activeSessionId || serverActiveSessionId || null;
+}
+
+function isSplitViewLayoutActive() {
+	return splitViewEnabled && sessionExists(activeSessionId);
+}
 function init() {
 	try {
 		cacheDOMElements();
@@ -1040,9 +1205,13 @@ function init() {
 		createEditModeUI();
 		createApprovalModal();
 		createSettingsModal();
+		initWorkspacePromptListUI();
+		createSessionSettingsModal();
+		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();
+		createSimpleAlertModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
 
@@ -1060,16 +1229,22 @@ function init() {
 					e.stopPropagation();
 					openNewSessionModal();
 				});
-			var resetSessionBtn = document.getElementById("remote-reset-session-btn");
-			if (resetSessionBtn)
-				resetSessionBtn.addEventListener("click", function (e) {
-					e.stopPropagation();
-					openResetSessionModal();
-				});
 			var settingsBtn = document.getElementById("remote-settings-btn");
 			if (settingsBtn)
 				settingsBtn.addEventListener("click", function () {
 					openSettingsModal();
+				});
+			var remoteSplitBtn = document.getElementById("remote-split-btn");
+			if (remoteSplitBtn)
+				remoteSplitBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					toggleSplitView();
+				});
+			var historyBtn = document.getElementById("remote-history-btn");
+			if (historyBtn)
+				historyBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					openHistoryModal();
 				});
 			// Hide attach button (VS Code-only)
 			var attachBtn = document.getElementById("attach-btn");
@@ -1081,12 +1256,35 @@ function init() {
 		initCardSelection();
 		initChangesPanel();
 
-		// Restore persisted input value (when user switches sidebar tabs and comes back)
-		if (chatInput && persistedInputValue) {
-			chatInput.value = persistedInputValue;
-			autoResizeTextarea();
-			updateInputHighlighter();
-			updateSendButtonState();
+		restoreActiveSessionComposerState();
+		updateWelcomeSectionVisibility();
+		initSplitResizer();
+		initVertResizer();
+
+		// Re-apply vertical split ratio on resize (e.g., when switching to/from narrow mode)
+		var lastNarrowState = splitViewEnabled && window.innerWidth <= 480;
+		window.addEventListener("resize", function () {
+			var isNarrow = splitViewEnabled && window.innerWidth <= 480;
+			if (isNarrow && vertSplitRatio) {
+				applyVertSplitRatio(vertSplitRatio);
+			} else if (!isNarrow && lastNarrowState) {
+				// Leaving narrow mode: clear inline styles so CSS media query takes over
+				var hubEl = document.getElementById("workspace-hub");
+				if (hubEl) {
+					hubEl.style.maxHeight = "";
+					hubEl.style.flex = "";
+				}
+			}
+			lastNarrowState = isNarrow;
+			updateWelcomeSectionVisibility();
+		});
+
+		// Bind collapse bar for narrow split-view sessions panel
+		var collapseBar = document.getElementById("sessions-collapse-bar");
+		if (collapseBar) {
+			collapseBar.addEventListener("click", function () {
+				toggleHubCollapse();
+			});
 		}
 
 		// Restore attachments display
@@ -1108,12 +1306,44 @@ function init() {
  * Save webview state to persist across sidebar visibility changes
  */
 function saveWebviewState() {
+	saveActiveSessionComposerState();
 	vscode.setState({
 		inputValue: chatInput ? chatInput.value : "",
 		attachments: currentAttachments.filter(function (a) {
 			return !a.isTemporary;
 		}), // Don't persist temp images
+		sessionComposerState: sessionComposerState,
+		splitViewEnabled: splitViewEnabled,
+		splitRatio: splitRatio,
+		vertSplitRatio: vertSplitRatio,
 	});
+}
+
+function getComposerStateKey() {
+	return activeSessionId || "__hub__";
+}
+
+function saveActiveSessionComposerState() {
+	var key = getComposerStateKey();
+	sessionComposerState[key] = {
+		inputValue: chatInput ? chatInput.value : "",
+	};
+}
+
+function restoreActiveSessionComposerState() {
+	if (!chatInput) return;
+	var key = getComposerStateKey();
+	var saved = sessionComposerState[key];
+	var nextValue =
+		saved && typeof saved.inputValue === "string"
+			? saved.inputValue
+			: !activeSessionId && persistedInputValue
+				? persistedInputValue
+				: "";
+	chatInput.value = nextValue;
+	autoResizeTextarea();
+	updateInputHighlighter();
+	updateSendButtonState();
 }
 
 function cacheDOMElements() {
@@ -1139,29 +1369,22 @@ function cacheDOMElements() {
 	welcomeSection = document.getElementById("welcome-section");
 	cardVibe = document.getElementById("card-vibe");
 	cardSpec = document.getElementById("card-spec");
+	changesModalOverlay = document.getElementById("changes-modal-overlay");
 	changesSection = document.getElementById("changes-section");
 	changesRefreshBtn = document.getElementById("changes-refresh-btn");
 	changesCloseBtn = document.getElementById("changes-close-btn");
 	changesSummary = document.getElementById("changes-summary");
+	changesLoadingSpinner = document.getElementById("changes-loading-spinner");
 	changesStatus = document.getElementById("changes-status");
 	changesUnstagedGroup = document.getElementById("changes-unstaged-group");
 	changesUnstagedList = document.getElementById("changes-unstaged-list");
 	changesDiffTitle = document.getElementById("changes-diff-title");
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
-	remoteSessionTimerEl = document.getElementById("remote-session-timer");
-	if (!remoteSessionTimerEl && isRemoteMode) {
-		var remoteHeaderLeft = document.querySelector(".remote-header-left");
-		if (remoteHeaderLeft) {
-			var timerSpan = document.createElement("span");
-			timerSpan.id = "remote-session-timer";
-			timerSpan.className = "remote-session-timer inactive";
-			timerSpan.textContent = "0s";
-			timerSpan.title = "Session timer (idle)";
-			remoteHeaderLeft.appendChild(timerSpan);
-			remoteSessionTimerEl = timerSpan;
-		}
-	}
+	threadBackBtn = document.getElementById("thread-back-btn");
+	threadResetBtn = document.getElementById("thread-reset-btn");
+	threadSettingsBtn = document.getElementById("thread-settings-btn");
+	remoteSessionTimerEl = document.getElementById("thread-sub");
 	autopilotToggle = document.getElementById("autopilot-toggle");
 	toolHistoryArea = document.getElementById("tool-history-area");
 	chatStreamArea = document.getElementById("chat-stream-area");
@@ -1405,29 +1628,19 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(sendShortcutSection);
 
-	// Auto Append section - appends configured guidance to every ask_user response.
-	let autoAppendSection = document.createElement("div");
-	autoAppendSection.className = "settings-section";
-	autoAppendSection.innerHTML =
+	// AskUser reminder section - global reminder appended to every response.
+	let reminderSection = document.createElement("div");
+	reminderSection.className = "settings-section";
+	reminderSection.innerHTML =
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
-		'<span class="settings-info-icon" title="When enabled, TaskSync appends this text directly to every ask_user response (manual, queue, autopilot, timeout).\n\nThis increases context usage, so keep it concise.">' +
+		'<span class="codicon codicon-comment-discussion"></span> AskUser Reminder' +
+		'<span class="settings-info-icon" title="Always append the built-in askUser reminder to every response. Useful when the model tends to stop without calling askUser, especially with GPT 5.4.">' +
 		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
-		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
-		"</div>" +
-		'<div class="form-row hidden" id="auto-append-text-row">' +
-		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
-		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
-		'<div class="auto-append-reminder-row">' +
-		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder' +
-		'<span class="settings-info-icon-inline" title="Auto Append = YOUR custom rules (e.g. &quot;follow SOLID principles&quot;). If empty, nothing is appended.\n\nAuto Reminder = predefined instruction that tells the AI to call askUser. Enable this if your AI keeps ending without asking for feedback (common with GPT 5.4).\n\nBoth can be ON together.">' +
-		'<span class="codicon codicon-question"></span></span></label>' +
-		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
-		"</div>" +
+		'<div class="toggle-switch" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Enable AskUser reminder" tabindex="0"></div>' +
 		"</div>";
-	modalContent.appendChild(autoAppendSection);
+	modalContent.appendChild(reminderSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
 	let humanDelaySection = document.createElement("div");
@@ -1480,30 +1693,6 @@ function createSettingsModal() {
 		'" />' +
 		"</div>";
 	modalContent.appendChild(remoteMaxDevicesSection);
-
-	// Autopilot section with cycling prompts list
-	let autopilotSection = document.createElement("div");
-	autopilotSection.className = "settings-section";
-	autopilotSection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-rocket"></span> Autopilot Prompts' +
-		'<span class="settings-info-icon" title="Prompts cycle in order (1→2→3→1...) with human-like delay.\n\nHow it works:\n• The agent calls ask_user → Autopilot sends the next prompt in sequence\n• Add multiple prompts to alternate between different instructions\n• Drag to reorder, edit or delete individual prompts\n\nQueue Priority:\n• Queued prompts ALWAYS take priority over Autopilot\n• Autopilot only activates when the queue is empty">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		'<button class="add-prompt-btn-inline" id="autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
-		"</div>" +
-		'<div class="autopilot-prompts-list" id="autopilot-prompts-list"></div>' +
-		'<div class="add-autopilot-prompt-form hidden" id="add-autopilot-prompt-form">' +
-		'<div class="form-row">' +
-		'<textarea class="form-input form-textarea" id="autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
-		"</div>" +
-		'<div class="form-actions">' +
-		'<button class="form-btn form-btn-cancel" id="cancel-autopilot-prompt-btn">Cancel</button>' +
-		'<button class="form-btn form-btn-save" id="save-autopilot-prompt-btn">Save</button>' +
-		"</div>" +
-		"</div>";
-	modalContent.appendChild(autopilotSection);
 
 	// Response Timeout section - dropdown for 10-120 minutes
 	let timeoutSection = document.createElement("div");
@@ -1616,21 +1805,10 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
-	autoAppendToggle = document.getElementById("auto-append-toggle");
-	autoAppendTextRow = document.getElementById("auto-append-text-row");
-	autoAppendTextInput = document.getElementById("auto-append-text-input");
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
-	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
-	autopilotAddBtn = document.getElementById("autopilot-add-btn");
-	addAutopilotPromptForm = document.getElementById("add-autopilot-prompt-form");
-	autopilotPromptInput = document.getElementById("autopilot-prompt-input");
-	saveAutopilotPromptBtn = document.getElementById("save-autopilot-prompt-btn");
-	cancelAutopilotPromptBtn = document.getElementById(
-		"cancel-autopilot-prompt-btn",
-	);
 	responseTimeoutSelect = document.getElementById("response-timeout-select");
 	sessionWarningHoursSelect = document.getElementById(
 		"session-warning-hours-select",
@@ -1644,6 +1822,140 @@ function createSettingsModal() {
 	promptsList = document.getElementById("prompts-list");
 	addPromptBtn = document.getElementById("add-prompt-btn");
 	addPromptForm = document.getElementById("add-prompt-form");
+}
+
+// ===== SESSION SETTINGS MINI-MODAL =====
+
+function createSessionSettingsModal() {
+	sessionSettingsOverlay = document.createElement("div");
+	sessionSettingsOverlay.className = "settings-modal-overlay hidden";
+	sessionSettingsOverlay.id = "session-settings-overlay";
+
+	sessionSettingsModal = document.createElement("div");
+	sessionSettingsModal.className = "settings-modal session-settings-modal";
+	sessionSettingsModal.id = "session-settings-modal";
+	sessionSettingsModal.setAttribute("role", "dialog");
+	sessionSettingsModal.setAttribute(
+		"aria-labelledby",
+		"session-settings-title",
+	);
+
+	// Modal header
+	var ssHeader = document.createElement("div");
+	ssHeader.className = "settings-modal-header";
+
+	var ssTitleSpan = document.createElement("span");
+	ssTitleSpan.className = "settings-modal-title";
+	ssTitleSpan.id = "session-settings-title";
+	ssTitleSpan.textContent = "Session Settings";
+	ssHeader.appendChild(ssTitleSpan);
+
+	var ssHeaderBtns = document.createElement("div");
+	ssHeaderBtns.className = "settings-modal-header-buttons";
+
+	var ssResetBtn = document.createElement("button");
+	ssResetBtn.className = "settings-modal-header-btn";
+	ssResetBtn.innerHTML = '<span class="codicon codicon-discard"></span>';
+	ssResetBtn.title = "Reset this session's settings";
+	ssResetBtn.setAttribute("aria-label", "Reset this session's settings");
+	ssResetBtn.id = "ss-reset-btn";
+	ssHeaderBtns.appendChild(ssResetBtn);
+
+	var ssCloseBtn = document.createElement("button");
+	ssCloseBtn.className = "settings-modal-header-btn";
+	ssCloseBtn.innerHTML = '<span class="codicon codicon-close"></span>';
+	ssCloseBtn.title = "Close";
+	ssCloseBtn.setAttribute("aria-label", "Close session settings");
+	ssCloseBtn.id = "ss-close-btn";
+	ssHeaderBtns.appendChild(ssCloseBtn);
+
+	ssHeader.appendChild(ssHeaderBtns);
+
+	// Modal content
+	var ssContent = document.createElement("div");
+	ssContent.className = "settings-modal-content";
+
+	// Description
+	var ssDesc = document.createElement("div");
+	ssDesc.className = "session-settings-desc";
+	ssDesc.textContent =
+		"Configure Autopilot and Auto Append for this session only.";
+	ssContent.appendChild(ssDesc);
+
+	// Autopilot toggle section
+	var ssAutopilotSection = document.createElement("div");
+	ssAutopilotSection.className = "settings-section";
+	ssAutopilotSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-rocket"></span> Autopilot</div>' +
+		'<div class="toggle-switch" id="ss-autopilot-toggle" role="switch" aria-checked="false" aria-label="Enable Autopilot for this session" tabindex="0"></div>' +
+		"</div>";
+	ssContent.appendChild(ssAutopilotSection);
+
+	// Autopilot Prompts section
+	var ssPromptsSection = document.createElement("div");
+	ssPromptsSection.className = "settings-section";
+	ssPromptsSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-list-ordered"></span> Autopilot Prompts</div>' +
+		'<button class="add-prompt-btn-inline" id="ss-autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
+		"</div>" +
+		'<div class="autopilot-prompts-list" id="ss-autopilot-prompts-list"></div>' +
+		'<div class="add-autopilot-prompt-form hidden" id="ss-add-autopilot-prompt-form">' +
+		'<div class="form-row">' +
+		'<textarea class="form-input form-textarea" id="ss-autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
+		"</div>" +
+		'<div class="form-actions">' +
+		'<button class="form-btn form-btn-cancel" id="ss-cancel-autopilot-prompt-btn">Cancel</button>' +
+		'<button class="form-btn form-btn-save" id="ss-save-autopilot-prompt-btn">Save</button>' +
+		"</div>" +
+		"</div>";
+	ssContent.appendChild(ssPromptsSection);
+
+	// Auto Append section
+	var ssAutoAppendSection = document.createElement("div");
+	ssAutoAppendSection.className = "settings-section";
+	ssAutoAppendSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
+		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. The AskUser reminder is configured globally in Settings.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
+		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response in this session" maxlength="2000"></textarea>' +
+		'<div class="ss-auto-append-error hidden" id="ss-auto-append-error">Enter text to append, or disable Auto Append.</div>' +
+		'<button class="form-btn form-btn-secondary ss-save-default-btn hidden" id="ss-save-as-default-btn" title="Save these Auto Append settings as the default for all new sessions">' +
+		'<span class="codicon codicon-save"></span> Save as Workspace Default</button>' +
+		"</div>";
+	ssContent.appendChild(ssAutoAppendSection);
+
+	// Assemble
+	sessionSettingsModal.appendChild(ssHeader);
+	sessionSettingsModal.appendChild(ssContent);
+	sessionSettingsOverlay.appendChild(sessionSettingsModal);
+	document.body.appendChild(sessionSettingsOverlay);
+
+	// Cache inner elements
+	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
+	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
+	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
+	ssAutoAppendError = document.getElementById("ss-auto-append-error");
+	ssSaveAsDefaultBtn = document.getElementById("ss-save-as-default-btn");
+	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
+	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
+	ssAddAutopilotPromptForm = document.getElementById(
+		"ss-add-autopilot-prompt-form",
+	);
+	ssAutopilotPromptInput = document.getElementById("ss-autopilot-prompt-input");
+	ssSaveAutopilotPromptBtn = document.getElementById(
+		"ss-save-autopilot-prompt-btn",
+	);
+	ssCancelAutopilotPromptBtn = document.getElementById(
+		"ss-cancel-autopilot-prompt-btn",
+	);
 }
 
 // ===== NEW SESSION MODAL =====
@@ -1703,26 +2015,32 @@ function createSessionActionModal(config) {
 
 	var btnRow = document.createElement("div");
 	btnRow.className = "new-session-btn-row";
-	var cancelBtn = document.createElement("button");
-	cancelBtn.className = "form-btn form-btn-cancel";
-	cancelBtn.textContent = "Cancel";
-	cancelBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-	});
-	btnRow.appendChild(cancelBtn);
 
-	var confirmBtn = document.createElement("button");
-	confirmBtn.className = "form-btn form-btn-save";
-	confirmBtn.textContent = config.confirmLabel;
-	confirmBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-		if (config.onConfirm) {
-			config.onConfirm();
-		} else {
-			vscode.postMessage({ type: config.messageType });
-		}
+	var actions = Array.isArray(config.actions)
+		? config.actions
+		: [
+				{
+					label: config.confirmLabel,
+					className: "form-btn form-btn-save",
+					onClick: config.onConfirm,
+					messageType: config.messageType,
+				},
+			];
+	actions.forEach(function (action) {
+		var actionBtn = document.createElement("button");
+		actionBtn.className = action.className || "form-btn form-btn-save";
+		actionBtn.textContent = action.label;
+		if (action.id) actionBtn.id = action.id;
+		actionBtn.addEventListener("click", function () {
+			closeSessionActionModal(overlay);
+			if (typeof action.onClick === "function") {
+				action.onClick();
+			} else if (action.messageType) {
+				vscode.postMessage({ type: action.messageType });
+			}
+		});
+		btnRow.appendChild(actionBtn);
 	});
-	btnRow.appendChild(confirmBtn);
 	content.appendChild(btnRow);
 
 	modal.appendChild(header);
@@ -1782,30 +2100,69 @@ function createNewSessionModal() {
 		noteHtml:
 			'<span class="codicon codicon-info"></span> Please check the model and agent preselected in VS Code Chat before starting.',
 		warningText:
-			"This will clear the current session history and start a fresh Copilot chat session.",
-		confirmLabel: "New Session",
+			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
-		onConfirm: function () {
-			var promptInput = document.getElementById("new-session-prompt");
-			var queueCheckbox = document.getElementById("new-session-use-queue");
-			var initialPrompt = promptInput ? promptInput.value.trim() : "";
-			var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
-			var msg = { type: "newSession" };
-			if (initialPrompt) {
-				msg.initialPrompt = initialPrompt;
-			}
-			if (promptQueue.length > 0) {
-				msg.useQueuedPrompt = useQueuedPrompt;
-			}
-			vscode.postMessage(msg);
-			// Clear textarea for next open
-			if (promptInput) promptInput.value = "";
-		},
+		actions: [
+			{
+				label: "New Session",
+				className: "form-btn form-btn-save",
+				onClick: function () {
+					submitNewSessionAction(false);
+				},
+			},
+			{
+				label: "End & New Session",
+				id: "new-session-end-btn",
+				className: "form-btn form-btn-save",
+				onClick: function () {
+					submitNewSessionAction(true);
+				},
+			},
+		],
 	});
+}
+
+function submitNewSessionAction(stopCurrentSession) {
+	var promptInput = document.getElementById("new-session-prompt");
+	var queueCheckbox = document.getElementById("new-session-use-queue");
+	var initialPrompt = promptInput ? promptInput.value.trim() : "";
+	var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
+	requestFollowServerActiveSession();
+	var msg = { type: "newSession" };
+	if (initialPrompt) {
+		msg.initialPrompt = initialPrompt;
+	}
+	if (promptQueue.length > 0) {
+		msg.useQueuedPrompt = useQueuedPrompt;
+	}
+	if (stopCurrentSession) {
+		msg.stopCurrentSession = true;
+	}
+	vscode.postMessage(msg);
+	if (promptInput) promptInput.value = "";
 }
 
 function openNewSessionModal() {
 	if (!newSessionModalOverlay) return;
+	// Show "End & New Session" only when the active session is non-terminated
+	var endBtn = document.getElementById("new-session-end-btn"); // ssot-id-allowed — dynamically created in createSessionActionModal
+	var activeSession =
+		activeSessionId &&
+		Array.isArray(sessions) &&
+		sessions.find(function (s) {
+			return s.id === activeSessionId;
+		});
+	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	if (endBtn) {
+		endBtn.classList.toggle("hidden", !hasActiveSession);
+	}
+	// Update warning text based on whether there's an active session
+	var warningEl = newSessionModalOverlay.querySelector(".new-session-warning");
+	if (warningEl) {
+		warningEl.textContent = hasActiveSession
+			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
+			: "Start a fresh Copilot chat session.";
+	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
 	var queueLabel = document.getElementById("new-session-queue-label");
@@ -2029,6 +2386,107 @@ function confirmTimeoutWarning() {
 		responseTimeoutSelect.focus();
 	}
 }
+
+// ==================== Simple Alert Modal (reusable) ====================
+
+/**
+ * Create a reusable simple alert modal for info messages.
+ * Can be shown with different content via showSimpleAlert().
+ */
+function createSimpleAlertModal() {
+	simpleAlertModalOverlay = document.createElement("div");
+	simpleAlertModalOverlay.className = "settings-modal-overlay hidden";
+	simpleAlertModalOverlay.id = "simple-alert-modal-overlay";
+
+	var modal = document.createElement("div");
+	modal.className = "settings-modal simple-alert-modal";
+	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-modal", "true");
+	modal.setAttribute("aria-labelledby", "simple-alert-modal-title");
+	modal.setAttribute("aria-describedby", "simple-alert-modal-desc");
+	modal.id = "simple-alert-modal";
+
+	// Header with icon
+	var header = document.createElement("div");
+	header.className = "settings-modal-header simple-alert-header";
+	var title = document.createElement("span");
+	title.className = "settings-modal-title simple-alert-title";
+	title.id = "simple-alert-modal-title";
+	title.innerHTML =
+		'<span class="codicon codicon-info" id="simple-alert-icon"></span> <span id="simple-alert-title-text">Info</span>';
+	header.appendChild(title);
+
+	// Content
+	var content = document.createElement("div");
+	content.className = "settings-modal-content simple-alert-content";
+	content.id = "simple-alert-modal-desc";
+
+	var messageText = document.createElement("p");
+	messageText.className = "simple-alert-text";
+	messageText.id = "simple-alert-text";
+	content.appendChild(messageText);
+
+	// Button row
+	var btnRow = document.createElement("div");
+	btnRow.className = "new-session-btn-row";
+
+	var okBtn = document.createElement("button");
+	okBtn.className = "form-btn form-btn-primary";
+	okBtn.id = "simple-alert-ok-btn";
+	okBtn.textContent = "OK";
+	okBtn.addEventListener("click", closeSimpleAlert);
+	btnRow.appendChild(okBtn);
+
+	content.appendChild(btnRow);
+	modal.appendChild(header);
+	modal.appendChild(content);
+	simpleAlertModalOverlay.appendChild(modal);
+	document.body.appendChild(simpleAlertModalOverlay);
+
+	// Close on overlay click
+	simpleAlertModalOverlay.addEventListener("click", function (e) {
+		if (e.target === simpleAlertModalOverlay) closeSimpleAlert();
+	});
+
+	// Keyboard handling: Escape or Enter to close
+	simpleAlertModalOverlay.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" || e.key === "Enter") {
+			closeSimpleAlert();
+		}
+	});
+}
+
+/**
+ * Show the simple alert modal with custom content.
+ * @param {string} title - The title text
+ * @param {string} message - The message to display
+ * @param {string} [iconClass] - Optional codicon class (default: codicon-info)
+ */
+function showSimpleAlert(title, message, iconClass) {
+	if (!simpleAlertModalOverlay) return;
+
+	var titleText = document.getElementById("simple-alert-title-text");
+	var alertText = document.getElementById("simple-alert-text");
+	var alertIcon = document.getElementById("simple-alert-icon");
+
+	if (titleText) titleText.textContent = title;
+	if (alertText) alertText.textContent = message;
+	if (alertIcon) {
+		alertIcon.className = "codicon " + (iconClass || "codicon-info");
+	}
+
+	simpleAlertModalOverlay.classList.remove("hidden");
+
+	// Focus the OK button for keyboard accessibility
+	var okBtn = document.getElementById("simple-alert-ok-btn");
+	if (okBtn) okBtn.focus();
+}
+
+function closeSimpleAlert() {
+	if (simpleAlertModalOverlay) {
+		simpleAlertModalOverlay.classList.add("hidden");
+	}
+}
 // ==================== Event Listeners ====================
 
 function bindEventListeners() {
@@ -2114,6 +2572,78 @@ function bindEventListeners() {
 			if (e.target === historyModalOverlay) closeHistoryModal();
 		});
 	}
+
+	// Hub & Thread Shell events
+	if (threadBackBtn) {
+		threadBackBtn.addEventListener("click", function () {
+			saveActiveSessionComposerState();
+			activeSessionId = null;
+			restoreActiveSessionComposerState();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
+			vscode.postMessage({ type: "switchSession", sessionId: null });
+		});
+	}
+	if (threadSettingsBtn)
+		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
+	if (threadResetBtn)
+		threadResetBtn.addEventListener("click", function () {
+			openResetSessionModal();
+		});
+
+	var threadEditBtn = document.getElementById("thread-edit-btn");
+	if (threadEditBtn) {
+		threadEditBtn.addEventListener("click", function () {
+			var titleEl = document.getElementById("thread-title");
+			if (!titleEl || !activeSessionId) return;
+			var currentTitle = titleEl.textContent || "";
+			var input = document.createElement("input");
+			input.type = "text";
+			input.className = "session-rename-input";
+			input.value = currentTitle;
+			input.maxLength = 50;
+			titleEl.replaceWith(input);
+			input.focus();
+			input.select();
+
+			var committed = false;
+			function commit() {
+				if (committed) return;
+				committed = true;
+				var newTitle = input.value.trim();
+				var strong = document.createElement("strong");
+				strong.id = "thread-title";
+				strong.textContent = newTitle || currentTitle;
+				input.replaceWith(strong);
+				if (newTitle && newTitle !== currentTitle) {
+					vscode.postMessage({
+						type: "updateSessionTitle",
+						sessionId: activeSessionId,
+						title: newTitle,
+					});
+				}
+			}
+
+			input.addEventListener("keydown", function (ev) {
+				if (ev.key === "Enter") {
+					ev.preventDefault();
+					commit();
+				} else if (ev.key === "Escape") {
+					ev.preventDefault();
+					committed = true;
+					var strong = document.createElement("strong");
+					strong.id = "thread-title";
+					strong.textContent = currentTitle;
+					input.replaceWith(strong);
+				}
+			});
+			input.addEventListener("blur", commit);
+		});
+	}
+
+	// Session settings modal events
+	bindSessionSettingsEvents();
+
 	// Edit mode button events
 	if (editCancelBtn) editCancelBtn.addEventListener("click", cancelEditMode);
 	if (editConfirmBtn) editConfirmBtn.addEventListener("click", confirmEditMode);
@@ -2200,31 +2730,21 @@ function bindEventListeners() {
 	}
 	// Autopilot prompts list event listeners
 	if (autopilotAddBtn) {
-		autopilotAddBtn.addEventListener("click", showAddAutopilotPromptForm);
+		autopilotAddBtn.addEventListener("click", function () {
+			workspacePromptListUI.showAddForm();
+		});
 	}
 	if (saveAutopilotPromptBtn) {
-		saveAutopilotPromptBtn.addEventListener("click", saveAutopilotPrompt);
+		saveAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.save();
+		});
 	}
 	if (cancelAutopilotPromptBtn) {
-		cancelAutopilotPromptBtn.addEventListener(
-			"click",
-			hideAddAutopilotPromptForm,
-		);
+		cancelAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.hideAddForm();
+		});
 	}
-	if (autopilotPromptsList) {
-		autopilotPromptsList.addEventListener(
-			"click",
-			handleAutopilotPromptsListClick,
-		);
-		// Drag and drop for reordering
-		autopilotPromptsList.addEventListener(
-			"dragstart",
-			handleAutopilotDragStart,
-		);
-		autopilotPromptsList.addEventListener("dragover", handleAutopilotDragOver);
-		autopilotPromptsList.addEventListener("dragend", handleAutopilotDragEnd);
-		autopilotPromptsList.addEventListener("drop", handleAutopilotDrop);
-	}
+	// List-level events (click, drag) are bound via initWorkspacePromptListUI()
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.addEventListener(
 			"change",
@@ -2284,12 +2804,66 @@ function bindEventListeners() {
 
 	window.addEventListener("message", handleExtensionMessage);
 }
+
+function bindSessionSettingsEvents() {
+	var ssCloseBtn = document.getElementById("ss-close-btn");
+	var ssResetBtn = document.getElementById("ss-reset-btn");
+
+	if (sessionSettingsOverlay) {
+		sessionSettingsOverlay.addEventListener("click", function (e) {
+			if (e.target === sessionSettingsOverlay) closeSessionSettingsModal();
+		});
+	}
+	if (ssCloseBtn)
+		ssCloseBtn.addEventListener("click", closeSessionSettingsModal);
+	if (ssResetBtn) ssResetBtn.addEventListener("click", resetSessionSettings);
+	if (ssAutopilotToggle) {
+		ssAutopilotToggle.addEventListener("click", ssToggleAutopilot);
+		ssAutopilotToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAutopilot();
+			}
+		});
+	}
+	if (ssAutoAppendToggle) {
+		ssAutoAppendToggle.addEventListener("click", ssToggleAutoAppend);
+		ssAutoAppendToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAutoAppend();
+			}
+		});
+	}
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.addEventListener("input", ssValidateAutoAppendText);
+	}
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.addEventListener("click", ssSaveAutoAppendAsDefault);
+	}
+	if (ssAddAutopilotPromptBtn)
+		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
+	if (ssSaveAutopilotPromptBtn)
+		ssSaveAutopilotPromptBtn.addEventListener("click", ssSavePrompt);
+	if (ssCancelAutopilotPromptBtn)
+		ssCancelAutopilotPromptBtn.addEventListener("click", ssHideAddPromptForm);
+	// List-level events (click, drag) are bound via initSessionPromptListUI()
+}
 // ==================== History Modal ====================
 
 function openHistoryModal() {
 	if (!historyModalOverlay) return;
-	// Request persisted history from extension
-	vscode.postMessage({ type: "openHistoryModal" });
+
+	if (isRemoteMode) {
+		// Remote mode: use currentSessionCalls as history source (already available)
+		// Map to persistedHistory format for renderHistoryModal
+		persistedHistory = (currentSessionCalls || []).slice().reverse();
+		renderHistoryModal();
+	} else {
+		// VS Code mode: request persisted history from extension
+		vscode.postMessage({ type: "openHistoryModal" });
+	}
+
 	historyModalOverlay.classList.remove("hidden");
 }
 
@@ -2849,6 +3423,8 @@ function handleSend() {
 	} else {
 		vscode.postMessage({
 			type: "submit",
+			sessionId: getSubmitSessionId(),
+			toolCallId: pendingToolCall ? pendingToolCall.id : null,
 			value: text,
 			attachments: currentAttachments,
 		});
@@ -2965,6 +3541,7 @@ function handleExtensionMessage(event) {
 		case "toolCallPending":
 			showPendingToolCall(
 				message.id,
+				message.sessionId,
 				message.prompt,
 				message.isApproval,
 				message.choices,
@@ -2978,8 +3555,6 @@ function handleExtensionMessage(event) {
 			currentSessionCalls = message.history || [];
 			_inputHistoryCache = null; // Invalidate cache when session updates
 			renderCurrentSession();
-			// Hide welcome section if we have completed tool calls
-			updateWelcomeSectionVisibility();
 			// Auto-scroll to bottom after rendering
 			scrollToBottom();
 			break;
@@ -2987,6 +3562,18 @@ function handleExtensionMessage(event) {
 			persistedHistory = message.history || [];
 			_inputHistoryCache = null; // Invalidate cache when history updates
 			renderHistoryModal();
+			break;
+		case "updateSessions":
+			if (typeof saveActiveSessionComposerState === "function") {
+				saveActiveSessionComposerState();
+			}
+			sessions = Array.isArray(message.sessions) ? message.sessions : [];
+			syncClientSessionSelection(message.activeSessionId || null);
+			renderSessionsList();
+			if (typeof restoreActiveSessionComposerState === "function") {
+				restoreActiveSessionComposerState();
+			}
+			updateWelcomeSectionVisibility();
 			break;
 		case "openHistoryModal":
 			openHistoryModal();
@@ -3000,6 +3587,9 @@ function handleExtensionMessage(event) {
 		case "openResetSessionModal":
 			openResetSessionModal();
 			break;
+		case "toggleSplitView":
+			toggleSplitView();
+			break;
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
@@ -3007,7 +3597,7 @@ function handleExtensionMessage(event) {
 			autoAppendText =
 				typeof message.autoAppendText === "string"
 					? message.autoAppendText
-					: DEFAULT_AUTO_APPEND_TEXT;
+					: "";
 			alwaysAppendReminder = message.alwaysAppendReminder === true;
 			sendWithCtrlEnter = message.sendWithCtrlEnter === true;
 			autopilotEnabled = message.autopilotEnabled === true;
@@ -3050,7 +3640,7 @@ function handleExtensionMessage(event) {
 			updateAlwaysAppendReminderToggleUI();
 			updateSendWithCtrlEnterToggleUI();
 			updateAutopilotToggleUI();
-			renderAutopilotPromptsList();
+			workspacePromptListUI.render();
 			updateResponseTimeoutUI();
 			updateSessionWarningHoursUI();
 			updateMaxAutoResponsesUI();
@@ -3087,6 +3677,22 @@ function handleExtensionMessage(event) {
 			pendingToolCall = null;
 			lastPendingContentHtml = "";
 			isProcessingResponse = false;
+			if (
+				typeof message.statusMessage === "string" &&
+				message.statusMessage &&
+				sessionExists(serverActiveSessionId)
+			) {
+				activeSessionId = serverActiveSessionId;
+			}
+			if (activeSessionId) {
+				sessionComposerState[activeSessionId] = { inputValue: "" };
+			}
+			if (chatInput) {
+				chatInput.value = "";
+				chatInput.style.height = "auto";
+				updateInputHighlighter();
+				updateSendButtonState();
+			}
 			renderCurrentSession();
 			if (pendingMessage) {
 				if (
@@ -3104,7 +3710,22 @@ function handleExtensionMessage(event) {
 					pendingMessage.innerHTML = "";
 				}
 			}
+			if (typeof restoreActiveSessionComposerState === "function") {
+				restoreActiveSessionComposerState();
+			}
 			updateWelcomeSectionVisibility();
+			break;
+		case "clearPendingState":
+			pendingToolCall = null;
+			lastPendingContentHtml = "";
+			isProcessingResponse = false;
+			if (pendingMessage) {
+				pendingMessage.classList.add("hidden");
+				pendingMessage.innerHTML = "";
+			}
+			hideApprovalModal();
+			hideChoicesBar();
+			renderCurrentSession();
 			break;
 		case "updateSessionTimer":
 			updateRemoteSessionTimerState(
@@ -3116,6 +3737,9 @@ function handleExtensionMessage(event) {
 			break;
 		case "triggerSendFromShortcut":
 			handleSendFromShortcut();
+			break;
+		case "sessionSettingsState":
+			populateSessionSettings(message);
 			break;
 	}
 }
@@ -3141,6 +3765,16 @@ function updateRemoteSessionTimerState(startTime, frozenElapsed) {
 
 function renderRemoteSessionTimer() {
 	if (!remoteSessionTimerEl) return;
+
+	if (remoteSessionStartTime === null && remoteSessionFrozenElapsed === null) {
+		remoteSessionTimerEl.textContent = "";
+		remoteSessionTimerEl.classList.add("hidden");
+		remoteSessionTimerEl.classList.remove("inactive", "active", "frozen");
+		remoteSessionTimerEl.title = "Session timer (idle)";
+		return;
+	}
+
+	remoteSessionTimerEl.classList.remove("hidden");
 
 	var timerText = "0s";
 	var timerStateClass = "inactive";
@@ -3170,11 +3804,24 @@ function formatRemoteElapsed(ms) {
 	return s + "s";
 }
 
-function showPendingToolCall(id, prompt, isApproval, choices) {
-	pendingToolCall = { id: id, prompt: prompt };
+function showPendingToolCall(id, sessionId, prompt, isApproval, choices) {
+	pendingToolCall = { id: id, sessionId: sessionId, prompt: prompt };
 	isProcessingResponse = false; // AI is now asking, not processing
 	isApprovalQuestion = isApproval === true;
 	currentChoices = choices || [];
+
+	if (sessionId && activeSessionId !== sessionId) {
+		if (typeof saveActiveSessionComposerState === "function") {
+			saveActiveSessionComposerState();
+		}
+		activeSessionId = sessionId;
+		if (typeof renderSessionsList === "function") {
+			renderSessionsList();
+		}
+		if (typeof restoreActiveSessionComposerState === "function") {
+			restoreActiveSessionComposerState();
+		}
+	}
 
 	if (welcomeSection) {
 		welcomeSection.classList.add("hidden");
@@ -3416,7 +4063,7 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 			let newSessionBtn = document.getElementById("new-session-btn");
 			if (newSessionBtn) {
 				newSessionBtn.addEventListener("click", function () {
-					vscode.postMessage({ type: "newSession" });
+					openNewSessionModal();
 				});
 			}
 		} else {
@@ -3431,6 +4078,12 @@ function addToolCallToCurrentSession(entry, sessionTerminated) {
 
 function renderCurrentSession() {
 	if (!toolHistoryArea) return;
+
+	// Clear old chat stream bubbles when switching/re-rendering session
+	if (chatStreamArea) {
+		chatStreamArea.innerHTML = "";
+		chatStreamArea.classList.add("hidden");
+	}
 
 	let completedCalls = currentSessionCalls.filter(function (tc) {
 		return tc.status === "completed";
@@ -3894,19 +4547,298 @@ function renderMermaidDiagrams() {
 }
 
 /**
- * Update welcome section visibility based on current session state
- * Hide welcome when there are completed tool calls or a pending call
+ * Toggle split view mode (sessions list + thread side by side).
+ * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
+ */
+function toggleSplitView() {
+	splitViewEnabled = !splitViewEnabled;
+	syncSplitViewLayout();
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+}
+
+/**
+ * Apply the split ratio to the hub panel width
+ */
+function applySplitRatio(ratio) {
+	ratio = Math.min(60, Math.max(20, ratio));
+	var hubEl = document.getElementById("workspace-hub");
+	if (hubEl) {
+		hubEl.style.flex = "0 0 " + ratio + "%";
+	}
+}
+
+/**
+ * Initialise the split-view drag resizer.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ */
+function initSplitResizer() {
+	var resizer = document.getElementById("split-resizer");
+	if (!resizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	if (!container) return;
+
+	var dragging = false;
+
+	resizer.addEventListener("mousedown", function (e) {
+		if (!isSplitViewLayoutActive()) return;
+		e.preventDefault();
+		dragging = true;
+		resizer.classList.add("active");
+		document.body.style.cursor = "col-resize";
+		document.body.style.userSelect = "none";
+	});
+
+	document.addEventListener("mousemove", function (e) {
+		if (!dragging) return;
+		var rect = container.getBoundingClientRect();
+		var offset = e.clientX - rect.left;
+		var pct = (offset / rect.width) * 100;
+		// Clamp between 20% and 60%
+		pct = Math.min(60, Math.max(20, pct));
+		splitRatio = Math.round(pct);
+		applySplitRatio(splitRatio);
+	});
+
+	document.addEventListener("mouseup", function () {
+		if (!dragging) return;
+		dragging = false;
+		resizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	});
+
+	// Restore persisted ratio on init
+	if (isSplitViewLayoutActive()) {
+		resizer.classList.remove("hidden");
+		applySplitRatio(splitRatio);
+	}
+}
+
+/**
+ * Initialise the vertical resizer for narrow split-view mode.
+ * Called once from cacheDOMElements / DOMContentLoaded.
+ * Works when split-view is enabled AND viewport is narrow (<=480px).
+ */
+function initVertResizer() {
+	var vertResizer = document.getElementById("vert-resizer");
+	if (!vertResizer) return;
+
+	var container = document.querySelector(".main-container.orch");
+	var hubEl = document.getElementById("workspace-hub");
+	if (!container || !hubEl) return;
+
+	var dragging = false;
+
+	function isNarrowSplitView() {
+		return isSplitViewLayoutActive() && window.innerWidth <= 480;
+	}
+
+	function startDrag(e) {
+		if (!isNarrowSplitView()) return;
+		e.preventDefault();
+		dragging = true;
+		vertResizer.classList.add("active");
+		document.body.style.cursor = "row-resize";
+		document.body.style.userSelect = "none";
+	}
+
+	function onDrag(e) {
+		if (!dragging) return;
+		var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+		var rect = container.getBoundingClientRect();
+		var offset = clientY - rect.top;
+		var pct = (offset / rect.height) * 100;
+		// Clamp between 15% and 70%
+		pct = Math.min(70, Math.max(15, pct));
+		vertSplitRatio = Math.round(pct);
+		applyVertSplitRatio(vertSplitRatio);
+	}
+
+	function endDrag() {
+		if (!dragging) return;
+		dragging = false;
+		vertResizer.classList.remove("active");
+		document.body.style.cursor = "";
+		document.body.style.userSelect = "";
+		saveWebviewState();
+	}
+
+	// Mouse events
+	vertResizer.addEventListener("mousedown", startDrag);
+	document.addEventListener("mousemove", onDrag);
+	document.addEventListener("mouseup", endDrag);
+
+	// Touch events for mobile
+	vertResizer.addEventListener("touchstart", startDrag, { passive: false });
+	document.addEventListener("touchmove", onDrag, { passive: false });
+	document.addEventListener("touchend", endDrag);
+
+	// Apply initial ratio if in narrow split-view mode
+	if (isNarrowSplitView() && vertSplitRatio) {
+		applyVertSplitRatio(vertSplitRatio);
+	}
+}
+
+/**
+ * Apply vertical split ratio to panels in narrow split-view mode.
+ * Sets hub max-height percentage to resize the stacked layout.
+ */
+function applyVertSplitRatio(pct) {
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+	if (!hubEl || !threadEl) return;
+
+	// Only apply in narrow split-view mode
+	if (!isSplitViewLayoutActive() || window.innerWidth > 480) return;
+
+	hubEl.style.maxHeight = pct + "%";
+	hubEl.style.flex = "0 0 auto";
+	threadEl.style.flex = "1 1 0";
+}
+
+/**
+ * Keep hidden-list unread indicators derived from shared session summaries.
+ */
+function syncHiddenListUnreadIndicators() {
+	var backBtn = document.getElementById("thread-back-btn");
+	var collapseBar = document.getElementById("sessions-collapse-bar");
+	var hubEl = document.getElementById("workspace-hub");
+	var hasOpenSession = !!activeSessionId;
+	var hasUnreadOtherSession = (sessions || []).some(function (session) {
+		return session.id !== activeSessionId && session.unread === true;
+	});
+	var showBackIndicator =
+		hasOpenSession && !isSplitViewLayoutActive() && hasUnreadOtherSession;
+	var showCollapsedBarIndicator =
+		hasOpenSession &&
+		isSplitViewLayoutActive() &&
+		window.innerWidth <= 480 &&
+		!!hubEl &&
+		hubEl.classList.contains("collapsed") &&
+		hasUnreadOtherSession;
+
+	if (backBtn) {
+		backBtn.classList.toggle("has-unread-indicator", showBackIndicator);
+		backBtn.title = showBackIndicator
+			? "Back to Sessions (unread sessions)"
+			: "Back to Sessions";
+		backBtn.setAttribute("aria-label", backBtn.title);
+	}
+
+	if (collapseBar) {
+		collapseBar.classList.toggle(
+			"has-unread-indicator",
+			showCollapsedBarIndicator,
+		);
+		collapseBar.title = showCollapsedBarIndicator
+			? "Sessions (unread sessions)"
+			: "Sessions";
+		collapseBar.setAttribute("aria-label", collapseBar.title);
+	}
+}
+
+function syncSplitViewLayout() {
+	var effectiveSplitView = isSplitViewLayoutActive();
+	var container = document.querySelector(".main-container.orch");
+	var resizer = document.getElementById("split-resizer");
+	var remoteSplitBtn = document.getElementById("remote-split-btn");
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+
+	if (container) {
+		container.classList.toggle("split-view", effectiveSplitView);
+	}
+	if (resizer) {
+		resizer.classList.toggle("hidden", !effectiveSplitView);
+	}
+	if (remoteSplitBtn) {
+		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+	}
+
+	if (effectiveSplitView) {
+		applySplitRatio(splitRatio);
+		if (window.innerWidth <= 480 && vertSplitRatio) {
+			applyVertSplitRatio(vertSplitRatio);
+		}
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (hubEl) {
+		hubEl.style.flex = "";
+		hubEl.style.maxHeight = "";
+	}
+	if (threadEl) {
+		threadEl.style.flex = "";
+	}
+
+	syncHiddenListUnreadIndicators();
+}
+
+/**
+ * Update workspace visibility and toggle between Hub and Thread views
  */
 function updateWelcomeSectionVisibility() {
-	if (!welcomeSection) return;
-	let hasCompletedCalls = currentSessionCalls.some(function (tc) {
-		return tc.status === "completed";
-	});
-	let hasPendingMessage =
-		pendingMessage && !pendingMessage.classList.contains("hidden");
-	let shouldHide =
-		hasCompletedCalls || pendingToolCall !== null || hasPendingMessage;
-	welcomeSection.classList.toggle("hidden", shouldHide);
+	var hubEl = document.getElementById("workspace-hub");
+	var threadEl = document.getElementById("thread-shell");
+	var placeholderEl = document.getElementById("split-placeholder");
+	var threadHeadEl = document.getElementById("thread-head");
+	var composerEl = document.getElementById("input-area-container");
+
+	syncSplitViewLayout();
+
+	if (isSplitViewLayoutActive()) {
+		// Split view: always show hub, always show thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		if (activeSessionId) {
+			// Session selected: show thread content, hide placeholder
+			if (placeholderEl) placeholderEl.classList.add("hidden");
+			if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+			if (composerEl) composerEl.classList.remove("hidden");
+			var activeSession = (sessions || []).find(function (s) {
+				return s.id === activeSessionId;
+			});
+			var threadTitle = document.getElementById("thread-title");
+			if (activeSession && threadTitle) {
+				threadTitle.textContent = activeSession.title;
+			}
+		} else {
+			// No session: show placeholder, hide thread head + composer
+			if (placeholderEl) placeholderEl.classList.remove("hidden");
+			if (threadHeadEl) threadHeadEl.classList.add("hidden");
+			if (composerEl) composerEl.classList.add("hidden");
+		}
+		return;
+	}
+
+	// Single view (default): hide placeholder, restore thread head + composer
+	if (placeholderEl) placeholderEl.classList.add("hidden");
+	if (threadHeadEl) threadHeadEl.classList.remove("hidden");
+	if (composerEl) composerEl.classList.remove("hidden");
+
+	// Toggle between hub and thread
+	if (activeSessionId) {
+		if (hubEl) hubEl.classList.add("hidden");
+		if (threadEl) threadEl.classList.remove("hidden");
+
+		// Update thread head title
+		var activeSession = (sessions || []).find(function (s) {
+			return s.id === activeSessionId;
+		});
+		var threadTitle = document.getElementById("thread-title");
+		if (activeSession) {
+			if (threadTitle) threadTitle.textContent = activeSession.title;
+		}
+	} else {
+		// No active session: show the hub, hide the thread shell
+		if (hubEl) hubEl.classList.remove("hidden");
+		if (threadEl) threadEl.classList.add("hidden");
+	}
 }
 
 /**
@@ -3917,6 +4849,138 @@ function scrollToBottom() {
 	requestAnimationFrame(function () {
 		chatContainer.scrollTop = chatContainer.scrollHeight;
 	});
+}
+
+// ==================== Multi-Session Rendering ====================
+
+/**
+ * Render the sessions list in the workspace-hub.
+ * Displays each session as a clickable row.
+ */
+function renderSessionsList() {
+	var sessionsListEl = document.getElementById("sessions-list");
+	var sessionsPanelEl = document.getElementById("sessions-panel");
+	if (!sessionsListEl) return;
+
+	// Update collapse bar session count
+	var countEl = document.getElementById("sessions-collapse-count");
+	if (countEl) {
+		countEl.textContent =
+			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+	}
+
+	if (!sessions || sessions.length === 0) {
+		sessionsListEl.innerHTML = "";
+		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) welcomeSection.classList.remove("hidden");
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (sessionsPanelEl) sessionsPanelEl.classList.remove("hidden");
+	if (welcomeSection) welcomeSection.classList.add("hidden");
+
+	// Sort: active sessions first (newest first), then archived
+	var sorted = sessions.slice().sort(function (a, b) {
+		if (a.status !== b.status) {
+			return a.status === "active" ? -1 : 1;
+		}
+		return b.createdAt - a.createdAt;
+	});
+
+	var html = sorted
+		.map(function (session) {
+			var isActive = session.id === activeSessionId;
+			var isWaiting = session.waitingOnUser;
+			var isUnread = session.unread === true;
+			var isArchived = session.status === "archived";
+
+			var rowClass =
+				"chat-row" +
+				(isActive ? " active" : "") +
+				(isWaiting ? " waiting" : "") +
+				(isUnread ? " unread" : "") +
+				(isArchived ? " archived" : "");
+
+			// Preview snippet from latest history entry (history is newest-first via unshift)
+			var promptPreview = "Tap to view thread...";
+			if (session.history && session.history.length > 0) {
+				promptPreview = session.history[0].prompt || promptPreview;
+			}
+			if (isWaiting) promptPreview = "Waiting for reply: " + promptPreview;
+
+			var formatTime = function (ts) {
+				if (!ts) return "";
+				var d = new Date(ts);
+				return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+			};
+			var timeStr = formatTime(session.createdAt);
+
+			return (
+				'<div class="' +
+				rowClass +
+				'" data-session-id="' +
+				escapeHtml(session.id) +
+				'">' +
+				'<div class="chat-row-main">' +
+				'<div class="chat-row-top">' +
+				'<strong class="session-title">' +
+				escapeHtml(session.title) +
+				"</strong>" +
+				'<span class="chat-row-top-actions">' +
+				escapeHtml(timeStr) +
+				'<button class="session-action-btn session-delete-btn" data-delete-session-id="' +
+				escapeHtml(session.id) +
+				'" title="Delete session" aria-label="Delete session ' +
+				escapeHtml(session.title) +
+				'"><span class="codicon codicon-trash"></span></button>' +
+				"</span>" +
+				"</div>" +
+				'<div class="chat-row-preview">' +
+				escapeHtml(promptPreview).substring(0, 200) +
+				"</div>" +
+				"</div>" +
+				"</div>"
+			);
+		})
+		.join("");
+
+	sessionsListEl.innerHTML = html;
+
+	// Bind click handlers for session switching
+	sessionsListEl.querySelectorAll(".chat-row").forEach(function (item) {
+		item.addEventListener("click", function () {
+			var sessionId = item.getAttribute("data-session-id");
+			if (sessionId) {
+				requestFollowServerActiveSession();
+				vscode.postMessage({ type: "switchSession", sessionId: sessionId });
+			}
+		});
+	});
+
+	sessionsListEl
+		.querySelectorAll(".session-delete-btn")
+		.forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.stopPropagation();
+				var sessionId = btn.getAttribute("data-delete-session-id");
+				if (sessionId) {
+					vscode.postMessage({ type: "deleteSession", sessionId: sessionId });
+				}
+			});
+		});
+
+	syncHiddenListUnreadIndicators();
+}
+
+/**
+ * Toggle the sessions hub panel between expanded and collapsed in split view.
+ */
+function toggleHubCollapse() {
+	var hub = document.getElementById("workspace-hub");
+	if (!hub) return;
+	hub.classList.toggle("collapsed");
+	syncHiddenListUnreadIndicators();
 }
 // ==================== Queue Management ====================
 
@@ -4170,7 +5234,13 @@ function handleApprovalContinue() {
 	hideApprovalModal();
 
 	// Send affirmative response
-	vscode.postMessage({ type: "submit", value: "yes", attachments: [] });
+	vscode.postMessage({
+		type: "submit",
+		sessionId: getSubmitSessionId(),
+		toolCallId: pendingToolCall ? pendingToolCall.id : null,
+		value: "yes",
+		attachments: [],
+	});
 	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;
@@ -4387,7 +5457,13 @@ function handleChoicesSend() {
 	hideChoicesBar();
 
 	// Send the response
-	vscode.postMessage({ type: "submit", value: responseValue, attachments: [] });
+	vscode.postMessage({
+		type: "submit",
+		sessionId: getSubmitSessionId(),
+		toolCallId: pendingToolCall ? pendingToolCall.id : null,
+		value: responseValue,
+		attachments: [],
+	});
 	// In remote mode, show "Processing your response" optimistically while awaiting server round-trip
 	if (isRemoteMode) {
 		pendingToolCall = null;
@@ -4433,6 +5509,243 @@ function updateChoicesSendButton() {
 		allBtn.setAttribute("aria-label", allBtnActionLabel);
 	}
 }
+// Shared autopilot prompt-list UI factory.
+// Both workspace settings and session settings reuse this to avoid CRUD duplication.
+
+/**
+ * Create a prompt-list UI controller bound to the given DOM elements and data hooks.
+ *
+ * @param {Object} opts
+ * @param {function(): string[]} opts.getPrompts      - Return the current prompts array.
+ * @param {function(string[]): void} opts.setPrompts   - Replace the prompts array.
+ * @param {HTMLElement|null} opts.listEl               - The UL/container for prompt items.
+ * @param {HTMLElement|null} opts.formEl               - The add/edit form wrapper.
+ * @param {HTMLInputElement|null} opts.inputEl         - The prompt text input.
+ * @param {string} opts.emptyHint                      - HTML shown when the list is empty.
+ * @param {function(): void} [opts.onListChange]       - Called after any mutation (render already done).
+ */
+function createPromptListUI(opts) {
+	var getPrompts = opts.getPrompts;
+	var setPrompts = opts.setPrompts;
+	var listEl = opts.listEl;
+	var formEl = opts.formEl;
+	var inputEl = opts.inputEl;
+	var emptyHint = opts.emptyHint;
+	var onListChange = opts.onListChange || function () {};
+
+	var editingIndex = -1;
+	var draggedIndex = -1;
+
+	function render() {
+		if (!listEl) return;
+		var prompts = getPrompts();
+
+		if (prompts.length === 0) {
+			listEl.innerHTML =
+				'<div class="empty-prompts-hint">' + emptyHint + "</div>";
+			return;
+		}
+
+		listEl.innerHTML = prompts
+			.map(function (prompt, index) {
+				var truncated =
+					prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt;
+				var tooltipText =
+					prompt.length > 300 ? prompt.substring(0, 300) + "..." : prompt;
+				tooltipText = escapeHtml(tooltipText);
+				return (
+					'<div class="autopilot-prompt-item" draggable="true" data-index="' +
+					index +
+					'" title="' +
+					tooltipText +
+					'">' +
+					'<span class="autopilot-prompt-drag-handle codicon codicon-grabber"></span>' +
+					'<span class="autopilot-prompt-number">' +
+					(index + 1) +
+					".</span>" +
+					'<span class="autopilot-prompt-text">' +
+					escapeHtml(truncated) +
+					"</span>" +
+					'<div class="autopilot-prompt-actions">' +
+					'<button class="prompt-item-btn edit" data-index="' +
+					index +
+					'" title="Edit"><span class="codicon codicon-edit"></span></button>' +
+					'<button class="prompt-item-btn delete" data-index="' +
+					index +
+					'" title="Delete"><span class="codicon codicon-trash"></span></button>' +
+					"</div></div>"
+				);
+			})
+			.join("");
+	}
+
+	function showAddForm() {
+		if (!formEl || !inputEl) return;
+		editingIndex = -1;
+		inputEl.value = "";
+		formEl.classList.remove("hidden");
+		formEl.removeAttribute("data-editing-index");
+		inputEl.focus();
+	}
+
+	function hideAddForm() {
+		if (!formEl || !inputEl) return;
+		formEl.classList.add("hidden");
+		inputEl.value = "";
+		editingIndex = -1;
+		formEl.removeAttribute("data-editing-index");
+	}
+
+	function save() {
+		if (!inputEl) return;
+		var prompt = inputEl.value.trim();
+		if (!prompt) return;
+
+		var prompts = getPrompts().slice();
+		var editAttr = formEl ? formEl.getAttribute("data-editing-index") : null;
+		if (editAttr !== null) {
+			var idx = parseInt(editAttr, 10);
+			if (idx >= 0 && idx < prompts.length) {
+				prompts[idx] = prompt;
+			}
+		} else {
+			prompts.push(prompt);
+		}
+		setPrompts(prompts);
+		hideAddForm();
+		render();
+		onListChange();
+	}
+
+	function handleListClick(e) {
+		var target = e.target.closest(".prompt-item-btn");
+		if (!target) return;
+
+		var index = parseInt(target.getAttribute("data-index"), 10);
+		if (isNaN(index)) return;
+
+		if (target.classList.contains("edit")) {
+			editPrompt(index);
+		} else if (target.classList.contains("delete")) {
+			deletePrompt(index);
+		}
+	}
+
+	function editPrompt(index) {
+		var prompts = getPrompts();
+		if (index < 0 || index >= prompts.length) return;
+		if (!formEl || !inputEl) return;
+
+		editingIndex = index;
+		inputEl.value = prompts[index];
+		formEl.setAttribute("data-editing-index", index);
+		formEl.classList.remove("hidden");
+		inputEl.focus();
+	}
+
+	function deletePrompt(index) {
+		var prompts = getPrompts().slice();
+		if (index < 0 || index >= prompts.length) return;
+		prompts.splice(index, 1);
+		setPrompts(prompts);
+		render();
+		onListChange();
+	}
+
+	function handleDragStart(e) {
+		var item = e.target.closest(".autopilot-prompt-item");
+		if (!item) return;
+		draggedIndex = parseInt(item.getAttribute("data-index"), 10);
+		item.classList.add("dragging");
+		e.dataTransfer.effectAllowed = "move";
+		e.dataTransfer.setData("text/plain", draggedIndex);
+	}
+
+	function handleDragOver(e) {
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		var item = e.target.closest(".autopilot-prompt-item");
+		if (!item || !listEl) return;
+
+		listEl.querySelectorAll(".autopilot-prompt-item").forEach(function (el) {
+			el.classList.remove("drag-over-top", "drag-over-bottom");
+		});
+
+		var rect = item.getBoundingClientRect();
+		var midY = rect.top + rect.height / 2;
+		if (e.clientY < midY) {
+			item.classList.add("drag-over-top");
+		} else {
+			item.classList.add("drag-over-bottom");
+		}
+	}
+
+	function handleDragEnd() {
+		draggedIndex = -1;
+		if (!listEl) return;
+		listEl.querySelectorAll(".autopilot-prompt-item").forEach(function (el) {
+			el.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
+		});
+	}
+
+	function handleDrop(e) {
+		e.preventDefault();
+		var item = e.target.closest(".autopilot-prompt-item");
+		if (!item || draggedIndex < 0) return;
+
+		var toIndex = parseInt(item.getAttribute("data-index"), 10);
+		if (isNaN(toIndex) || draggedIndex === toIndex) {
+			handleDragEnd();
+			return;
+		}
+
+		var prompts = getPrompts().slice();
+		var rect = item.getBoundingClientRect();
+		var midY = rect.top + rect.height / 2;
+		var insertBelow = e.clientY >= midY;
+
+		var targetIndex = toIndex;
+		if (insertBelow && toIndex < prompts.length - 1) {
+			targetIndex = toIndex + 1;
+		}
+		if (draggedIndex < targetIndex) {
+			targetIndex--;
+		}
+		targetIndex = Math.max(0, Math.min(targetIndex, prompts.length - 1));
+
+		if (draggedIndex !== targetIndex) {
+			var moved = prompts.splice(draggedIndex, 1)[0];
+			prompts.splice(targetIndex, 0, moved);
+			setPrompts(prompts);
+			render();
+			onListChange();
+		}
+		handleDragEnd();
+	}
+
+	// Bind drag events to the list element
+	function bindEvents() {
+		if (!listEl) return;
+		listEl.addEventListener("click", handleListClick);
+		listEl.addEventListener("dragstart", handleDragStart);
+		listEl.addEventListener("dragover", handleDragOver);
+		listEl.addEventListener("dragend", handleDragEnd);
+		listEl.addEventListener("drop", handleDrop);
+	}
+
+	return {
+		render: render,
+		showAddForm: showAddForm,
+		hideAddForm: hideAddForm,
+		save: save,
+		handleListClick: handleListClick,
+		handleDragStart: handleDragStart,
+		handleDragOver: handleDragOver,
+		handleDragEnd: handleDragEnd,
+		handleDrop: handleDrop,
+		bindEvents: bindEvents,
+	};
+}
 // ===== SETTINGS MODAL FUNCTIONS =====
 
 function openSettingsModal() {
@@ -4454,9 +5767,7 @@ function toggleSoundSetting() {
 }
 
 function updateSoundToggleUI() {
-	if (!soundToggle) return;
-	soundToggle.classList.toggle("active", soundEnabled);
-	soundToggle.setAttribute("aria-checked", soundEnabled ? "true" : "false");
+	setToggle(soundToggle, soundEnabled);
 }
 
 function toggleInteractiveApprovalSetting() {
@@ -4469,15 +5780,7 @@ function toggleInteractiveApprovalSetting() {
 }
 
 function updateInteractiveApprovalToggleUI() {
-	if (!interactiveApprovalToggle) return;
-	interactiveApprovalToggle.classList.toggle(
-		"active",
-		interactiveApprovalEnabled,
-	);
-	interactiveApprovalToggle.setAttribute(
-		"aria-checked",
-		interactiveApprovalEnabled ? "true" : "false",
-	);
+	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
 }
 
 function toggleAutoAppendSetting() {
@@ -4491,11 +5794,7 @@ function toggleAutoAppendSetting() {
 
 function updateAutoAppendToggleUI() {
 	if (!autoAppendToggle) return;
-	autoAppendToggle.classList.toggle("active", autoAppendEnabled);
-	autoAppendToggle.setAttribute(
-		"aria-checked",
-		autoAppendEnabled ? "true" : "false",
-	);
+	setToggle(autoAppendToggle, autoAppendEnabled);
 	updateAutoAppendTextVisibility();
 }
 
@@ -4532,12 +5831,7 @@ function toggleAlwaysAppendReminderSetting() {
 }
 
 function updateAlwaysAppendReminderToggleUI() {
-	if (!alwaysAppendReminderToggle) return;
-	alwaysAppendReminderToggle.classList.toggle("active", alwaysAppendReminder);
-	alwaysAppendReminderToggle.setAttribute(
-		"aria-checked",
-		alwaysAppendReminder ? "true" : "false",
-	);
+	setToggle(alwaysAppendReminderToggle, alwaysAppendReminder);
 }
 
 function toggleSendWithCtrlEnterSetting() {
@@ -4550,12 +5844,7 @@ function toggleSendWithCtrlEnterSetting() {
 }
 
 function updateSendWithCtrlEnterToggleUI() {
-	if (!sendShortcutToggle) return;
-	sendShortcutToggle.classList.toggle("active", sendWithCtrlEnter);
-	sendShortcutToggle.setAttribute(
-		"aria-checked",
-		sendWithCtrlEnter ? "true" : "false",
-	);
+	setToggle(sendShortcutToggle, sendWithCtrlEnter);
 }
 
 function toggleAutopilotSetting() {
@@ -4568,13 +5857,7 @@ function toggleAutopilotSetting() {
 }
 
 function updateAutopilotToggleUI() {
-	if (autopilotToggle) {
-		autopilotToggle.classList.toggle("active", autopilotEnabled);
-		autopilotToggle.setAttribute(
-			"aria-checked",
-			autopilotEnabled ? "true" : "false",
-		);
-	}
+	setToggle(autopilotToggle, autopilotEnabled);
 }
 
 function handleResponseTimeoutChange() {
@@ -4711,13 +5994,7 @@ function handleHumanDelayMaxChange() {
 }
 
 function updateHumanDelayUI() {
-	if (humanDelayToggle) {
-		humanDelayToggle.classList.toggle("active", humanLikeDelayEnabled);
-		humanDelayToggle.setAttribute(
-			"aria-checked",
-			humanLikeDelayEnabled ? "true" : "false",
-		);
-	}
+	setToggle(humanDelayToggle, humanLikeDelayEnabled);
 	if (humanDelayRangeContainer) {
 		humanDelayRangeContainer.style.display = humanLikeDelayEnabled
 			? "flex"
@@ -4788,202 +6065,48 @@ function saveNewPrompt() {
 
 // ========== Autopilot Prompts Array Functions ==========
 
-// Track which autopilot prompt is being edited (-1 = adding new, >= 0 = editing index)
-let editingAutopilotPromptIndex = -1;
-// Track drag state
-let draggedAutopilotIndex = -1;
-
-function renderAutopilotPromptsList() {
-	if (!autopilotPromptsList) return;
-
-	if (autopilotPrompts.length === 0) {
-		autopilotPromptsList.innerHTML =
-			'<div class="empty-prompts-hint">No prompts added. Add prompts to cycle through during Autopilot.</div>';
-		return;
-	}
-
-	// Render list with drag handles, numbers, edit/delete buttons
-	autopilotPromptsList.innerHTML = autopilotPrompts
-		.map(function (prompt, index) {
-			let truncated =
-				prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt;
-			let tooltipText =
-				prompt.length > 300 ? prompt.substring(0, 300) + "..." : prompt;
-			tooltipText = escapeHtml(tooltipText);
-			return (
-				'<div class="autopilot-prompt-item" draggable="true" data-index="' +
-				index +
-				'" title="' +
-				tooltipText +
-				'">' +
-				'<span class="autopilot-prompt-drag-handle codicon codicon-grabber"></span>' +
-				'<span class="autopilot-prompt-number">' +
-				(index + 1) +
-				".</span>" +
-				'<span class="autopilot-prompt-text">' +
-				escapeHtml(truncated) +
-				"</span>" +
-				'<div class="autopilot-prompt-actions">' +
-				'<button class="prompt-item-btn edit" data-index="' +
-				index +
-				'" title="Edit"><span class="codicon codicon-edit"></span></button>' +
-				'<button class="prompt-item-btn delete" data-index="' +
-				index +
-				'" title="Delete"><span class="codicon codicon-trash"></span></button>' +
-				"</div></div>"
-			);
-		})
-		.join("");
-}
-
-function showAddAutopilotPromptForm() {
-	if (!addAutopilotPromptForm || !autopilotPromptInput) return;
-	editingAutopilotPromptIndex = -1;
-	autopilotPromptInput.value = "";
-	addAutopilotPromptForm.classList.remove("hidden");
-	addAutopilotPromptForm.removeAttribute("data-editing-index");
-	autopilotPromptInput.focus();
-}
-
-function hideAddAutopilotPromptForm() {
-	if (!addAutopilotPromptForm || !autopilotPromptInput) return;
-	addAutopilotPromptForm.classList.add("hidden");
-	autopilotPromptInput.value = "";
-	editingAutopilotPromptIndex = -1;
-	addAutopilotPromptForm.removeAttribute("data-editing-index");
-}
-
-function saveAutopilotPrompt() {
-	if (!autopilotPromptInput) return;
-	let prompt = autopilotPromptInput.value.trim();
-	if (!prompt) return;
-
-	let editingIndex = addAutopilotPromptForm.getAttribute("data-editing-index");
-	if (editingIndex !== null) {
-		// Editing existing
+// Shared prompt-list UI (delegates rendering/CRUD to promptListUI.js factory)
+var workspacePromptListUI = createPromptListUI({
+	getPrompts: function () {
+		return autopilotPrompts;
+	},
+	setPrompts: function (arr) {
+		autopilotPrompts = arr;
+	},
+	listEl: null, // bound lazily after DOM ready
+	formEl: null,
+	inputEl: null,
+	emptyHint: "No prompts added. Add prompts to cycle through during Autopilot.",
+	onListChange: function () {
 		vscode.postMessage({
-			type: "editAutopilotPrompt",
-			index: parseInt(editingIndex, 10),
-			prompt: prompt,
+			type: "saveAutopilotPrompts",
+			prompts: autopilotPrompts,
 		});
-	} else {
-		// Adding new
-		vscode.postMessage({ type: "addAutopilotPrompt", prompt: prompt });
-	}
-	hideAddAutopilotPromptForm();
-}
+	},
+});
 
-function handleAutopilotPromptsListClick(e) {
-	let target = e.target.closest(".prompt-item-btn");
-	if (!target) return;
-
-	let index = parseInt(target.getAttribute("data-index"), 10);
-	if (isNaN(index)) return;
-
-	if (target.classList.contains("edit")) {
-		editAutopilotPrompt(index);
-	} else if (target.classList.contains("delete")) {
-		deleteAutopilotPrompt(index);
-	}
-}
-
-function editAutopilotPrompt(index) {
-	if (index < 0 || index >= autopilotPrompts.length) return;
-	if (!addAutopilotPromptForm || !autopilotPromptInput) return;
-
-	let prompt = autopilotPrompts[index];
-	editingAutopilotPromptIndex = index;
-	autopilotPromptInput.value = prompt;
-	addAutopilotPromptForm.setAttribute("data-editing-index", index);
-	addAutopilotPromptForm.classList.remove("hidden");
-	autopilotPromptInput.focus();
-}
-
-function deleteAutopilotPrompt(index) {
-	if (index < 0 || index >= autopilotPrompts.length) return;
-	vscode.postMessage({ type: "removeAutopilotPrompt", index: index });
-}
-
-function handleAutopilotDragStart(e) {
-	let item = e.target.closest(".autopilot-prompt-item");
-	if (!item) return;
-	draggedAutopilotIndex = parseInt(item.getAttribute("data-index"), 10);
-	item.classList.add("dragging");
-	e.dataTransfer.effectAllowed = "move";
-	e.dataTransfer.setData("text/plain", draggedAutopilotIndex);
-}
-
-function handleAutopilotDragOver(e) {
-	e.preventDefault();
-	e.dataTransfer.dropEffect = "move";
-	let item = e.target.closest(".autopilot-prompt-item");
-	if (!item || !autopilotPromptsList) return;
-
-	// Remove all drag-over classes first
-	autopilotPromptsList
-		.querySelectorAll(".autopilot-prompt-item")
-		.forEach(function (el) {
-			el.classList.remove("drag-over-top", "drag-over-bottom");
-		});
-
-	// Determine if we're above or below center of target
-	let rect = item.getBoundingClientRect();
-	let midY = rect.top + rect.height / 2;
-	if (e.clientY < midY) {
-		item.classList.add("drag-over-top");
-	} else {
-		item.classList.add("drag-over-bottom");
-	}
-}
-
-function handleAutopilotDragEnd(e) {
-	draggedAutopilotIndex = -1;
-	if (!autopilotPromptsList) return;
-	autopilotPromptsList
-		.querySelectorAll(".autopilot-prompt-item")
-		.forEach(function (el) {
-			el.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
-		});
-}
-
-function handleAutopilotDrop(e) {
-	e.preventDefault();
-	let item = e.target.closest(".autopilot-prompt-item");
-	if (!item || draggedAutopilotIndex < 0) return;
-
-	let toIndex = parseInt(item.getAttribute("data-index"), 10);
-	if (isNaN(toIndex) || draggedAutopilotIndex === toIndex) {
-		handleAutopilotDragEnd(e);
-		return;
-	}
-
-	// Determine insert position based on where we dropped
-	let rect = item.getBoundingClientRect();
-	let midY = rect.top + rect.height / 2;
-	let insertBelow = e.clientY >= midY;
-
-	// Calculate actual target index
-	let targetIndex = toIndex;
-	if (insertBelow && toIndex < autopilotPrompts.length - 1) {
-		targetIndex = toIndex + 1;
-	}
-
-	// Adjust for removal of source
-	if (draggedAutopilotIndex < targetIndex) {
-		targetIndex--;
-	}
-
-	targetIndex = Math.max(0, Math.min(targetIndex, autopilotPrompts.length - 1));
-
-	if (draggedAutopilotIndex !== targetIndex) {
-		vscode.postMessage({
-			type: "reorderAutopilotPrompts",
-			fromIndex: draggedAutopilotIndex,
-			toIndex: targetIndex,
-		});
-	}
-
-	handleAutopilotDragEnd(e);
+/** Bind the shared UI to DOM elements (called after DOM is ready). */
+function initWorkspacePromptListUI() {
+	workspacePromptListUI = createPromptListUI({
+		getPrompts: function () {
+			return autopilotPrompts;
+		},
+		setPrompts: function (arr) {
+			autopilotPrompts = arr;
+		},
+		listEl: autopilotPromptsList,
+		formEl: addAutopilotPromptForm,
+		inputEl: autopilotPromptInput,
+		emptyHint:
+			"No prompts added. Add prompts to cycle through during Autopilot.",
+		onListChange: function () {
+			vscode.postMessage({
+				type: "saveAutopilotPrompts",
+				prompts: autopilotPrompts,
+			});
+		},
+	});
+	workspacePromptListUI.bindEvents();
 }
 
 // ========== End Autopilot Prompts Functions ==========
@@ -5067,6 +6190,212 @@ function editPrompt(id) {
 
 function deletePrompt(id) {
 	vscode.postMessage({ type: "removeReusablePrompt", id: id });
+}
+// ===== SESSION SETTINGS MINI-MODAL FUNCTIONS =====
+
+// Local state for session-level autopilot prompts (managed entirely in the modal)
+var ssAutopilotPromptsLocal = [];
+// Workspace-level default auto-append text (for dirty-check on save button)
+var ssWorkspaceDefaultAutoAppendText = "";
+
+// Shared prompt-list UI for session settings (delegates rendering/CRUD to promptListUI.js)
+var sessionPromptListUI = createPromptListUI({
+	getPrompts: function () {
+		return ssAutopilotPromptsLocal;
+	},
+	setPrompts: function (arr) {
+		ssAutopilotPromptsLocal = arr;
+	},
+	listEl: null,
+	formEl: null,
+	inputEl: null,
+	emptyHint:
+		"No session prompts yet. Autopilot will use the default fallback text.",
+});
+
+/** Bind the shared UI to DOM elements (called after DOM is ready). */
+function initSessionPromptListUI() {
+	sessionPromptListUI = createPromptListUI({
+		getPrompts: function () {
+			return ssAutopilotPromptsLocal;
+		},
+		setPrompts: function (arr) {
+			ssAutopilotPromptsLocal = arr;
+		},
+		listEl: ssAutopilotPromptsList,
+		formEl: ssAddAutopilotPromptForm,
+		inputEl: ssAutopilotPromptInput,
+		emptyHint:
+			"No session prompts yet. Autopilot will use the default fallback text.",
+	});
+	sessionPromptListUI.bindEvents();
+}
+
+// Delegate to shared UI
+function ssRenderPromptsList() {
+	sessionPromptListUI.render();
+}
+function ssShowAddPromptForm() {
+	sessionPromptListUI.showAddForm();
+}
+function ssHideAddPromptForm() {
+	sessionPromptListUI.hideAddForm();
+}
+function ssSavePrompt() {
+	sessionPromptListUI.save();
+}
+function ssHandlePromptsListClick(e) {
+	sessionPromptListUI.handleListClick(e);
+}
+function ssHandleDragStart(e) {
+	sessionPromptListUI.handleDragStart(e);
+}
+function ssHandleDragOver(e) {
+	sessionPromptListUI.handleDragOver(e);
+}
+function ssHandleDragEnd() {
+	sessionPromptListUI.handleDragEnd();
+}
+function ssHandleDrop(e) {
+	sessionPromptListUI.handleDrop(e);
+}
+
+function openSessionSettingsModal() {
+	if (!sessionSettingsOverlay) return;
+	vscode.postMessage({ type: "requestSessionSettings" });
+	sessionSettingsOverlay.classList.remove("hidden");
+}
+
+function closeSessionSettingsModal() {
+	if (!sessionSettingsOverlay) return;
+	// Auto-save on close
+	saveSessionSettings();
+	sessionSettingsOverlay.classList.add("hidden");
+	ssHideAddPromptForm();
+}
+
+function saveSessionSettings() {
+	var isAutopilotEnabled = ssAutopilotToggle
+		? ssAutopilotToggle.classList.contains("active")
+		: false;
+	var isAutoAppendEnabled = ssAutoAppendToggle
+		? ssAutoAppendToggle.classList.contains("active")
+		: false;
+	var autoAppendText = ssAutoAppendTextInput ? ssAutoAppendTextInput.value : "";
+
+	vscode.postMessage({
+		type: "updateSessionSettings",
+		autopilotEnabled: isAutopilotEnabled,
+		autopilotPrompts: ssAutopilotPromptsLocal.filter(function (p) {
+			return p.trim().length > 0;
+		}),
+		autoAppendEnabled: isAutoAppendEnabled,
+		autoAppendText: autoAppendText,
+	});
+}
+
+function resetSessionSettings() {
+	vscode.postMessage({ type: "resetSessionSettings" });
+	// The backend will send back a sessionSettingsState with TaskSync defaults
+}
+
+function populateSessionSettings(msg) {
+	// Autopilot toggle
+	setToggle(ssAutopilotToggle, msg.autopilotEnabled === true);
+
+	// Autopilot prompts
+	ssAutopilotPromptsLocal = Array.isArray(msg.autopilotPrompts)
+		? msg.autopilotPrompts.slice()
+		: [];
+	ssRenderPromptsList();
+
+	// Auto Append toggle
+	setToggle(ssAutoAppendToggle, msg.autoAppendEnabled === true);
+
+	// Store workspace default for dirty-check
+	ssWorkspaceDefaultAutoAppendText =
+		typeof msg.workspaceDefaultAutoAppendText === "string"
+			? msg.workspaceDefaultAutoAppendText
+			: "";
+
+	// Auto Append text row visibility
+	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
+	if (ssAutoAppendTextRow) {
+		ssAutoAppendTextRow.classList.toggle(
+			"hidden",
+			msg.autoAppendEnabled !== true,
+		);
+	}
+
+	// Auto Append text
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.value =
+			typeof msg.autoAppendText === "string" ? msg.autoAppendText : "";
+	}
+
+	ssValidateAutoAppendText();
+}
+
+// --- Session toggle functions ---
+
+function ssToggleAutopilot() {
+	if (!ssAutopilotToggle) return;
+	setToggle(ssAutopilotToggle, !ssAutopilotToggle.classList.contains("active"));
+}
+
+function ssToggleAutoAppend() {
+	if (!ssAutoAppendToggle) return;
+	var active = !ssAutoAppendToggle.classList.contains("active");
+	setToggle(ssAutoAppendToggle, active);
+
+	var ssAutoAppendTextRow = document.getElementById("ss-auto-append-text-row");
+	if (ssAutoAppendTextRow) {
+		ssAutoAppendTextRow.classList.toggle("hidden", !active);
+	}
+	ssValidateAutoAppendText();
+}
+
+/** Show/hide the error message and save-as-default button based on toggle + text state. */
+function ssValidateAutoAppendText() {
+	var isActive =
+		ssAutoAppendToggle && ssAutoAppendToggle.classList.contains("active");
+	var text = ssAutoAppendTextInput ? ssAutoAppendTextInput.value.trim() : "";
+	if (ssAutoAppendError) {
+		ssAutoAppendError.classList.toggle(
+			"hidden",
+			!(isActive && text.length === 0),
+		);
+	}
+	if (ssSaveAsDefaultBtn) {
+		// Show only when toggle ON, text is non-empty, and text differs from workspace default
+		var isDirty = text !== ssWorkspaceDefaultAutoAppendText;
+		ssSaveAsDefaultBtn.classList.toggle(
+			"hidden",
+			!(isActive && text.length > 0 && isDirty),
+		);
+	}
+}
+
+/** Save current auto-append settings as the workspace default for new sessions. */
+function ssSaveAutoAppendAsDefault() {
+	// Flush current modal state to the session first — messages are processed in order
+	saveSessionSettings();
+	vscode.postMessage({ type: "saveAutoAppendAsWorkspaceDefault" });
+	// Update cached default so button hides (text is now the new default)
+	ssWorkspaceDefaultAutoAppendText = ssAutoAppendTextInput
+		? ssAutoAppendTextInput.value.trim()
+		: "";
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.textContent = "\u2713 Saved";
+		ssSaveAsDefaultBtn.disabled = true;
+		setTimeout(function () {
+			if (ssSaveAsDefaultBtn) {
+				ssSaveAsDefaultBtn.innerHTML =
+					'<span class="codicon codicon-save"></span> Save as Workspace Default';
+				ssSaveAsDefaultBtn.disabled = false;
+			}
+		}, 2000);
+	}
 }
 // ===== SLASH COMMAND FUNCTIONS =====
 
@@ -5910,22 +7239,99 @@ function renderAttachmentsHtml(attachments) {
 }
 
 function initChangesPanel() {
-	if (!changesSection) return;
-	changesSection.classList.toggle("hidden", !changesPanelVisible);
+	if (!changesModalOverlay) return;
+	changesModalOverlay.classList.toggle("hidden", !changesPanelVisible);
 	updateChangesHeaderButton();
+
+	// Event delegation for file selection - handles dynamically rendered items
+	// This is set up ONCE at init, not on every render
+	if (changesUnstagedList) {
+		changesUnstagedList.addEventListener("click", function (e) {
+			// Find the button with data-select-change-file (could be target or ancestor)
+			var btn = e.target.closest("[data-select-change-file]");
+			if (btn) {
+				var filePath = btn.getAttribute("data-select-change-file");
+				if (filePath) handleChangeFileSelect(filePath);
+			}
+		});
+	}
+
 	renderChangesPanel();
 }
 
-function toggleChangesPanel(forceVisible) {
-	changesPanelVisible =
+/**
+ * Toggle the changes panel visibility.
+ * When opening, fetches changes first and shows alert if no changes exist.
+ * @param {boolean} [forceVisible] - Force a specific visibility state
+ */
+async function toggleChangesPanel(forceVisible) {
+	var targetVisible =
 		typeof forceVisible === "boolean" ? forceVisible : !changesPanelVisible;
-	if (changesSection) {
-		changesSection.classList.toggle("hidden", !changesPanelVisible);
+
+	// If closing, just close
+	if (!targetVisible) {
+		changesPanelVisible = false;
+		if (changesModalOverlay) {
+			changesModalOverlay.classList.add("hidden");
+		}
+		updateChangesHeaderButton();
+		return;
+	}
+
+	// If opening, fetch changes first to check if any exist
+	if (isRemoteMode) {
+		try {
+			var data = await callRemoteGitApi("GET", "/api/changes");
+
+			// Validate response format (must have staged/unstaged arrays)
+			if (!Array.isArray(data.staged) || !Array.isArray(data.unstaged)) {
+				console.error("[TaskSync] Invalid response format:", data);
+				showSimpleAlert(
+					"Error",
+					"Invalid response from git API. Please try again.",
+					"codicon-error",
+				);
+				return;
+			}
+
+			var hasChanges = data.staged.length > 0 || data.unstaged.length > 0;
+
+			if (!hasChanges) {
+				// No changes - show alert instead of panel
+				showSimpleAlert(
+					"No Changes",
+					"There are no git changes to review.",
+					"codicon-source-control",
+				);
+				return;
+			}
+
+			// Has changes - open panel and apply state
+			changesPanelVisible = true;
+			if (changesModalOverlay) {
+				changesModalOverlay.classList.remove("hidden");
+			}
+			updateChangesHeaderButton();
+			applyChangesState(data);
+		} catch (err) {
+			// Error fetching - show alert with error
+			console.error("[TaskSync] Error fetching changes:", err);
+			showSimpleAlert(
+				"Error",
+				err && err.message ? err.message : "Failed to load git changes.",
+				"codicon-error",
+			);
+		}
+		return;
+	}
+
+	// VS Code mode - just open panel and request changes (let it load)
+	changesPanelVisible = true;
+	if (changesModalOverlay) {
+		changesModalOverlay.classList.remove("hidden");
 	}
 	updateChangesHeaderButton();
-	if (changesPanelVisible) {
-		requestChangesRefresh();
-	}
+	requestChangesRefresh();
 }
 
 function updateChangesHeaderButton() {
@@ -6100,33 +7506,31 @@ function formatChangeStatusLabel(statusText) {
 function renderChangesPanel() {
 	if (!changesSection) return;
 
-	if (changesSummary) {
-		var summaryText;
-		if (
-			changesLoading &&
-			!changesState.staged.length &&
-			!changesState.unstaged.length
-		) {
-			summaryText = "Loading git changes...";
+	// Show/hide spinner based on loading state
+	if (changesLoadingSpinner) {
+		if (changesLoading) {
+			changesLoadingSpinner.classList.remove("hidden");
 		} else {
-			var totalChanges =
-				changesState.unstaged.length + changesState.staged.length;
-			summaryText =
-				totalChanges +
-				" changes (" +
-				changesState.unstaged.length +
-				" unstaged, " +
-				changesState.staged.length +
-				" staged)";
+			changesLoadingSpinner.classList.add("hidden");
 		}
+	}
+
+	if (changesSummary) {
+		var totalChanges =
+			changesState.unstaged.length + changesState.staged.length;
+		var summaryText =
+			totalChanges +
+			" changes (" +
+			changesState.unstaged.length +
+			" unstaged, " +
+			changesState.staged.length +
+			" staged)";
 		changesSummary.textContent = summaryText;
 	}
 
 	if (changesStatus) {
 		if (changesError) {
 			changesStatus.textContent = changesError;
-		} else if (changesLoading) {
-			changesStatus.textContent = "Loading...";
 		} else {
 			changesStatus.textContent = "";
 		}
@@ -6153,8 +7557,9 @@ function renderChangesPanel() {
 		if (selectedChangeDiff) {
 			changesDiffOutput.innerHTML = formatGitDiffHtml(selectedChangeDiff);
 			changesDiffOutput.classList.remove("empty");
-		} else if (changesLoading && selectedChangeFile) {
-			changesDiffOutput.textContent = "Loading diff...";
+		} else if (selectedChangeFile) {
+			// Empty state while loading or if diff is empty
+			changesDiffOutput.textContent = "";
 			changesDiffOutput.classList.add("empty");
 		} else {
 			changesDiffOutput.textContent =
@@ -6521,6 +7926,15 @@ function findChangeItem(filePath) {
 function bindChangePanelEvents() {
 	if (!changesSection) return;
 
+	// Click overlay backdrop to close (but not the panel itself)
+	if (changesModalOverlay) {
+		changesModalOverlay.onclick = function (e) {
+			if (e.target === changesModalOverlay) {
+				toggleChangesPanel(false);
+			}
+		};
+	}
+
 	if (changesRefreshBtn) {
 		changesRefreshBtn.onclick = function () {
 			void requestChangesRefresh();
@@ -6532,14 +7946,8 @@ function bindChangePanelEvents() {
 		};
 	}
 
-	changesSection
-		.querySelectorAll("[data-select-change-file]")
-		.forEach(function (btn) {
-			btn.onclick = function () {
-				var filePath = btn.getAttribute("data-select-change-file");
-				if (filePath) handleChangeFileSelect(filePath);
-			};
-		});
+	// Event delegation for file selection - handles dynamically rendered items
+	// (individual button handlers removed - using container delegation instead)
 }
 
     if (document.readyState === 'loading') {

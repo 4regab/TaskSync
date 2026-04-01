@@ -4,7 +4,6 @@
  */
 import * as vscode from "vscode";
 import {
-	ASKUSER_SUPERSEDED_MESSAGE,
 	CONFIG_SECTION,
 	DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
 } from "../constants/remoteConstants";
@@ -12,6 +11,7 @@ import {
 import { isApprovalQuestion, parseChoices } from "./choiceParser";
 import * as settingsH from "./settingsHandlers";
 import type {
+	ChatSession,
 	P,
 	ToolCallEntry,
 	ToWebviewMessage,
@@ -22,46 +22,115 @@ import {
 	broadcastToolCallCompleted,
 	debugLog,
 	generateId,
-	hasQueuedItems,
 	markSessionTerminated,
 	notifyQueueChanged,
+	sessionHasQueuedItems,
 } from "./webviewUtils";
 
 /**
- * Cancel any pending request superseded by a new one.
+ * Persist session state and refresh only the active thread's mirrors when needed.
  */
-export function cancelSupersededPendingRequest(p: P): void {
-	if (!p._currentToolCallId || !p._pendingRequests.has(p._currentToolCallId)) {
+function persistSessionState(p: P, session: ChatSession): void {
+	if (p._sessionManager.getActiveSessionId() === session.id) {
+		p._syncActiveSessionState();
+	} else {
+		p._updateSessionsUI();
+	}
+	p._saveSessionsToDisk();
+}
+
+function buildRejectedResult(
+	session: ChatSession | undefined,
+	message: string,
+): UserResponseResult {
+	return {
+		value: message,
+		queue: session ? sessionHasQueuedItems(session) : false,
+		attachments: [],
+		cancelled: true,
+	};
+}
+
+function isSessionActive(p: P, sessionId: string): boolean {
+	return p._sessionManager.getActiveSessionId() === sessionId;
+}
+
+/**
+ * SSOT: Resolve the effective autopilot text from a session, cycling through
+ * prompts when configured. Mutates `session.autopilotIndex` on each call.
+ * Used by both the normal autopilot path and the response-timeout path.
+ */
+function resolveAutopilotText(p: P, session: ChatSession): string {
+	const prompts = Array.isArray(session.autopilotPrompts)
+		? session.autopilotPrompts
+		: [];
+	if (prompts.length > 0) {
+		const text = prompts[session.autopilotIndex] ?? prompts[0];
+		session.autopilotIndex = (session.autopilotIndex + 1) % prompts.length;
+		return text;
+	}
+	const text = session.autopilotText ?? "";
+	return settingsH.normalizeAutopilotText(p, text);
+}
+
+function replacePendingToolCallForSession(p: P, session: ChatSession): void {
+	const previousToolCallId = session.pendingToolCallId;
+	if (!previousToolCallId) return;
+
+	debugLog(
+		`[TaskSync] waitForUserResponse — replacing existing pending ask_user for session ${session.id}, previousToolCallId: ${previousToolCallId}`,
+	);
+
+	p._clearResponseTimeoutTimer(previousToolCallId);
+
+	const previousResolve = p._pendingRequests.get(previousToolCallId);
+	p._pendingRequests.delete(previousToolCallId);
+	p._toolCallSessionMap.delete(previousToolCallId);
+	p._currentSessionCallsMap.delete(previousToolCallId);
+	session.history = session.history.filter(
+		(entry) => entry.id !== previousToolCallId,
+	);
+
+	session.pendingToolCallId = null;
+	session.waitingOnUser = false;
+	session.unread = false;
+
+	if (previousResolve) {
+		previousResolve({
+			value:
+				"TaskSync replaced a previous unanswered ask_user in this same session because a newer ask_user arrived.",
+			queue: sessionHasQueuedItems(session),
+			attachments: [],
+			cancelled: true,
+		} satisfies UserResponseResult);
+	}
+}
+
+function postPendingToActiveWebview(
+	p: P,
+	session: ChatSession,
+	entry: ToolCallEntry,
+): void {
+	const choices = parseChoices(entry.prompt);
+	const isApproval = choices.length === 0 && isApprovalQuestion(entry.prompt);
+
+	if (p._webviewReady && p._view) {
+		p._view.webview.postMessage({
+			type: "toolCallPending",
+			id: entry.id,
+			sessionId: session.id,
+			prompt: entry.prompt,
+			isApproval,
+			choices: choices.length > 0 ? choices : undefined,
+		} satisfies ToWebviewMessage);
 		return;
 	}
 
-	debugLog("[TaskSync] Superseding pending request:", p._currentToolCallId);
-	if (p._responseTimeoutTimer) {
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
-	}
-
-	const oldToolCallId = p._currentToolCallId;
-	const oldResolve = p._pendingRequests.get(oldToolCallId);
-	if (oldResolve) {
-		oldResolve({
-			value: ASKUSER_SUPERSEDED_MESSAGE,
-			queue: hasQueuedItems(p),
-			attachments: [],
-			cancelled: true,
-		} as UserResponseResult);
-		p._pendingRequests.delete(oldToolCallId);
-
-		const oldEntry = p._currentSessionCallsMap.get(oldToolCallId);
-		if (oldEntry && oldEntry.status === "pending") {
-			oldEntry.status = "cancelled";
-			oldEntry.response = "[Superseded by new request]";
-			p._updateCurrentSessionUI();
-		}
-		console.error(
-			`[TaskSync] Previous request ${oldToolCallId} was superseded by new request`,
-		);
-	}
+	p._pendingToolCallMessage = {
+		id: entry.id,
+		sessionId: session.id,
+		prompt: entry.prompt,
+	};
 }
 
 /**
@@ -70,117 +139,44 @@ export function cancelSupersededPendingRequest(p: P): void {
 export async function waitForUserResponse(
 	p: P,
 	question: string,
+	sessionId?: string,
 ): Promise<UserResponseResult> {
+	const normalizedSessionId = sessionId?.trim();
 	debugLog(
 		"[TaskSync] waitForUserResponse — question:",
 		question.slice(0, 80),
-		"currentToolCallId:",
-		p._currentToolCallId,
-		"pendingRequests:",
-		p._pendingRequests.size,
+		"sessionId:",
+		normalizedSessionId || "<missing>",
 	);
-	// AI called askUser — it's no longer processing, it's waiting for user input
-	p._aiTurnActive = false;
 
-	// Auto-start new session if previous session was terminated
-	if (p._sessionTerminated) {
-		debugLog(
-			"[TaskSync] waitForUserResponse — session was terminated, auto-starting new session",
+	if (!normalizedSessionId) {
+		return buildRejectedResult(
+			undefined,
+			"TaskSync rejected ask_user because session_id is required. Start a TaskSync conversation and pass that exact session_id on every ask_user call.",
 		);
-		p.startNewSession();
 	}
 
-	// Start session timer on first tool call
-	if (p._sessionStartTime === null) {
-		p._sessionStartTime = Date.now();
-		p._sessionFrozenElapsed = null;
-		p._startSessionTimerInterval();
-		p._updateViewTitle();
+	const session = p._bindSession(normalizedSessionId);
+	const activeSession = isSessionActive(p, session.id);
+
+	if (session.pendingToolCallId) {
+		replacePendingToolCallForSession(p, session);
 	}
 
-	if (p._autopilotEnabled && !hasQueuedItems(p)) {
-		debugLog(
-			"[TaskSync] waitForUserResponse — autopilot enabled, no queue items, auto-responding",
+	if (session.sessionTerminated) {
+		return buildRejectedResult(
+			session,
+			`TaskSync rejected ask_user for session_id ${session.id} because this conversation is already terminated. Start a new Copilot chat that uses a new session_id instead of reusing this one.`,
 		);
-		cancelSupersededPendingRequest(p);
-
-		p._consecutiveAutoResponses++;
-
-		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-		const maxConsecutive = config.get<number>(
-			"maxConsecutiveAutoResponses",
-			DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
-		);
-
-		if (p._consecutiveAutoResponses > maxConsecutive) {
-			debugLog(
-				`[TaskSync] waitForUserResponse — autopilot limit reached (${p._consecutiveAutoResponses}/${maxConsecutive}), disabling`,
-			);
-			p._autopilotEnabled = false;
-			await config.update(
-				"autopilot",
-				false,
-				vscode.ConfigurationTarget.Workspace,
-			);
-			p._updateSettingsUI();
-			vscode.window.showWarningMessage(
-				`TaskSync: Auto-response limit (${maxConsecutive}) reached. Waiting for response or timeout.`,
-			);
-			// Fall through to pending request flow with timeout timer
-		} else {
-			const toolCallId = generateId("tc");
-			p._currentToolCallId = toolCallId;
-
-			await p._applyHumanLikeDelay("Autopilot");
-
-			if (!p._autopilotEnabled || p._currentToolCallId !== toolCallId) {
-				// State changed during delay — fall through
-			} else {
-				let effectiveText: string;
-				if (p._autopilotPrompts.length > 0) {
-					effectiveText = p._autopilotPrompts[p._autopilotIndex];
-					p._autopilotIndex =
-						(p._autopilotIndex + 1) % p._autopilotPrompts.length;
-				} else {
-					effectiveText = settingsH.normalizeAutopilotText(p, p._autopilotText);
-				}
-				debugLog(
-					`[TaskSync] waitForUserResponse — autopilot auto-responding with: "${effectiveText.slice(0, 60)}" (${p._consecutiveAutoResponses}/${maxConsecutive})`,
-				);
-				const effectiveResponse = settingsH.applyAutoAppendToResponse(
-					p,
-					effectiveText,
-				);
-				vscode.window.showInformationMessage(
-					`TaskSync: Autopilot auto-responded. (${p._consecutiveAutoResponses}/${maxConsecutive})`,
-				);
-
-				const entry: ToolCallEntry = {
-					id: toolCallId,
-					prompt: question,
-					response: effectiveResponse,
-					timestamp: Date.now(),
-					isFromQueue: false,
-					status: "completed",
-				};
-				p._currentSessionCalls.unshift(entry);
-				p._currentSessionCallsMap.set(entry.id, entry);
-				p._updateViewTitle();
-				p._updateCurrentSessionUI();
-				p._currentToolCallId = null;
-
-				broadcastToolCallCompleted(p, entry);
-
-				return {
-					value: effectiveText,
-					queue: hasQueuedItems(p),
-					attachments: [],
-				};
-			}
-		}
 	}
 
-	// If view is not available, open the sidebar first
+	session.aiTurnActive = false;
+
+	if (session.sessionStartTime === null) {
+		session.sessionStartTime = Date.now();
+		session.sessionFrozenElapsed = null;
+	}
+
 	if (!p._view) {
 		await vscode.commands.executeCommand(`${VIEW_TYPE}.focus`);
 
@@ -202,81 +198,183 @@ export async function waitForUserResponse(
 		}
 	}
 
-	cancelSupersededPendingRequest(p);
+	if (session.autopilotEnabled && !sessionHasQueuedItems(session)) {
+		debugLog(
+			`[TaskSync] waitForUserResponse — autopilot enabled for session ${session.id}, no queue items, auto-responding`,
+		);
+		session.consecutiveAutoResponses++;
+
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		const maxConsecutive = config.get<number>(
+			"maxConsecutiveAutoResponses",
+			DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
+		);
+
+		if (session.consecutiveAutoResponses > maxConsecutive) {
+			debugLog(
+				`[TaskSync] waitForUserResponse — autopilot limit reached for session ${session.id} (${session.consecutiveAutoResponses}/${maxConsecutive}), disabling`,
+			);
+			session.autopilotEnabled = false;
+			persistSessionState(p, session);
+			vscode.window.showWarningMessage(
+				`TaskSync: Auto-response limit (${maxConsecutive}) reached. Waiting for response or timeout.`,
+			);
+		} else {
+			await p._applyHumanLikeDelay("Autopilot");
+
+			if (session.autopilotEnabled) {
+				const effectiveText = resolveAutopilotText(p, session);
+				debugLog(
+					`[TaskSync] waitForUserResponse — autopilot auto-responding for session ${session.id} with: "${effectiveText.slice(0, 60)}" (${session.consecutiveAutoResponses}/${maxConsecutive})`,
+				);
+				const effectiveResponse = settingsH.applyAutoAppendToResponse(
+					p,
+					effectiveText,
+					session,
+				);
+				vscode.window.showInformationMessage(
+					`TaskSync: Autopilot auto-responded. (${session.consecutiveAutoResponses}/${maxConsecutive})`,
+				);
+
+				const entry: ToolCallEntry = {
+					id: generateId("tc"),
+					sessionId: session.id,
+					prompt: question,
+					response: effectiveResponse,
+					timestamp: Date.now(),
+					isFromQueue: false,
+					status: "completed",
+				};
+				session.history.unshift(entry);
+				p._currentSessionCallsMap.set(entry.id, entry);
+				session.aiTurnActive = true;
+				persistSessionState(p, session);
+
+				if (activeSession) {
+					broadcastToolCallCompleted(p, entry);
+				}
+
+				return {
+					value: effectiveText,
+					queue: sessionHasQueuedItems(session),
+					attachments: [],
+				};
+			}
+		}
+	}
 
 	const toolCallId = generateId("tc");
-	p._currentToolCallId = toolCallId;
+	p._toolCallSessionMap.set(toolCallId, session.id);
+	session.pendingToolCallId = toolCallId;
+	session.waitingOnUser = true;
 
-	// Check if queue has prompts — auto-respond
-	if (hasQueuedItems(p)) {
+	if (sessionHasQueuedItems(session)) {
 		debugLog(
-			`[TaskSync] waitForUserResponse — queue has ${p._promptQueue.length} items, attempting auto-respond from queue`,
+			`[TaskSync] waitForUserResponse — session ${session.id} queue has ${session.queue.length} items, attempting auto-respond from queue`,
 		);
-		const queuedPrompt = p._promptQueue.shift();
+		const queuedPrompt = session.queue.shift();
 		if (queuedPrompt) {
-			notifyQueueChanged(p);
+			if (activeSession) {
+				notifyQueueChanged(p);
+			} else {
+				p._updateSessionsUI();
+				p._saveSessionsToDisk();
+			}
 
 			await p._applyHumanLikeDelay("Queue");
 
-			if (!p._queueEnabled || p._currentToolCallId !== toolCallId) {
+			if (session.pendingToolCallId !== toolCallId) {
+				// Superseded by a newer ask_user during the delay — re-queue and abandon.
 				debugLog(
-					"[TaskSync] waitForUserResponse — queue disabled or toolCallId changed during delay, re-queuing",
+					`[TaskSync] waitForUserResponse — session ${session.id} superseded (pendingToolCallId changed), re-queuing`,
 				);
-				p._promptQueue.unshift(queuedPrompt);
-				notifyQueueChanged(p);
+				session.queue.unshift(queuedPrompt);
+				p._toolCallSessionMap.delete(toolCallId);
+				if (activeSession) {
+					notifyQueueChanged(p);
+				} else {
+					p._updateSessionsUI();
+					p._saveSessionsToDisk();
+				}
+				return {
+					value: "[Superseded by newer request]",
+					queue: sessionHasQueuedItems(session),
+					attachments: [],
+				};
+			} else if (!session.queueEnabled) {
+				// Queue disabled during delay — re-queue the prompt and fall through
+				// to present the question to the user interactively.
+				// pendingToolCallId and _toolCallSessionMap remain set.
+				debugLog(
+					`[TaskSync] waitForUserResponse — session ${session.id} queue disabled during delay, re-queuing and presenting to user`,
+				);
+				session.queue.unshift(queuedPrompt);
+				if (activeSession) {
+					notifyQueueChanged(p);
+				} else {
+					p._updateSessionsUI();
+					p._saveSessionsToDisk();
+				}
 			} else {
 				debugLog(
-					`[TaskSync] waitForUserResponse — queue auto-responding with: "${queuedPrompt.prompt.slice(0, 60)}"`,
+					`[TaskSync] waitForUserResponse — session ${session.id} queue auto-responding with: "${queuedPrompt.prompt.slice(0, 60)}"`,
 				);
 				const effectiveResponse = settingsH.applyAutoAppendToResponse(
 					p,
 					queuedPrompt.prompt,
+					session,
 				);
 				const entry: ToolCallEntry = {
 					id: toolCallId,
+					sessionId: session.id,
 					prompt: question,
 					response: effectiveResponse,
 					timestamp: Date.now(),
 					isFromQueue: true,
 					status: "completed",
 				};
-				p._currentSessionCalls.unshift(entry);
+				session.history.unshift(entry);
 				p._currentSessionCallsMap.set(entry.id, entry);
-				p._updateViewTitle();
-				p._updateCurrentSessionUI();
-				p._currentToolCallId = null;
+				session.pendingToolCallId = null;
+				session.waitingOnUser = false;
+				session.aiTurnActive = true;
+				p._toolCallSessionMap.delete(toolCallId);
+				persistSessionState(p, session);
 
-				broadcastToolCallCompleted(p, entry);
+				if (activeSession) {
+					broadcastToolCallCompleted(p, entry);
+				}
 
 				return {
 					value: queuedPrompt.prompt,
-					queue: hasQueuedItems(p),
+					queue: sessionHasQueuedItems(session),
 					attachments: queuedPrompt.attachments || [],
 				};
 			}
 		}
 	}
 
-	p._view.show(true);
+	const activeSessionAtPendingCreation = isSessionActive(p, session.id);
+
+	if (activeSessionAtPendingCreation) {
+		p._view?.show(true);
+	}
 
 	debugLog(
-		`[TaskSync] waitForUserResponse — creating pending entry, toolCallId: ${toolCallId}, webviewReady: ${p._webviewReady}`,
+		`[TaskSync] waitForUserResponse — creating pending entry, session: ${session.id}, toolCallId: ${toolCallId}, webviewReady: ${p._webviewReady}, isActiveSession: ${activeSessionAtPendingCreation}`,
 	);
-	// Add pending entry to current session
 	const pendingEntry: ToolCallEntry = {
 		id: toolCallId,
+		sessionId: session.id,
 		prompt: question,
 		response: "",
 		timestamp: Date.now(),
 		isFromQueue: false,
 		status: "pending",
 	};
-	p._currentSessionCalls.unshift(pendingEntry);
+	session.unread = !activeSessionAtPendingCreation;
+	session.history.unshift(pendingEntry);
 	p._currentSessionCallsMap.set(toolCallId, pendingEntry);
-	p._updateViewTitle();
-
-	const choices = parseChoices(question);
-	const isApproval = choices.length === 0 && isApprovalQuestion(question);
 
 	// Wait for webview to be ready
 	if (!p._webviewReady) {
@@ -289,71 +387,58 @@ export async function waitForUserResponse(
 		}
 	}
 
-	if (p._webviewReady && p._view) {
-		debugLog(
-			`[TaskSync] waitForUserResponse — posting toolCallPending to webview, id: ${toolCallId}`,
-		);
-		p._view.webview.postMessage({
-			type: "toolCallPending",
-			id: toolCallId,
-			prompt: question,
-			isApproval,
-			choices: choices.length > 0 ? choices : undefined,
-		} satisfies ToWebviewMessage);
-		p.playNotificationSound();
-	} else {
-		debugLog(
-			`[TaskSync] waitForUserResponse — webview not ready, deferring toolCallPending message for id: ${toolCallId}`,
-		);
-		p._pendingToolCallMessage = {
-			id: toolCallId,
-			prompt: question,
-		};
+	if (activeSessionAtPendingCreation) {
+		postPendingToActiveWebview(p, session, pendingEntry);
 	}
 
-	debugLog(
-		`[TaskSync] waitForUserResponse — broadcasting toolCallPending to remote, id: ${toolCallId}`,
-	);
-	// Broadcast to remote clients
-	p._remoteServer?.broadcast("toolCallPending", {
-		id: toolCallId,
-		prompt: question,
-		isApproval,
-		timestamp: Date.now(),
-		sessionStartTime: p._sessionStartTime,
-		sessionFrozenElapsed: p._sessionFrozenElapsed,
-		choices:
-			choices.length > 0
-				? choices.map(
-						(c: { label: string; value: string; shortLabel?: string }) => ({
-							label: c.label,
-							value: c.value,
-							shortLabel: c.shortLabel,
-						}),
-					)
-				: undefined,
-	});
+	if (p._webviewReady && p._view) {
+		p.playNotificationSound();
+	}
 
-	p._updateCurrentSessionUI();
+	if (activeSessionAtPendingCreation) {
+		const choices = parseChoices(question);
+		const isApproval = choices.length === 0 && isApprovalQuestion(question);
+		p._remoteServer?.broadcast("toolCallPending", {
+			id: toolCallId,
+			sessionId: session.id,
+			prompt: question,
+			isApproval,
+			timestamp: Date.now(),
+			sessionStartTime: session.sessionStartTime,
+			sessionFrozenElapsed: session.sessionFrozenElapsed,
+			choices:
+				choices.length > 0
+					? choices.map(
+							(c: { label: string; value: string; shortLabel?: string }) => ({
+								label: c.label,
+								value: c.value,
+								shortLabel: c.shortLabel,
+							}),
+						)
+					: undefined,
+		});
+	}
+
+	persistSessionState(p, session);
 
 	debugLog(
-		`[TaskSync] waitForUserResponse — waiting for user input, toolCallId: ${toolCallId}`,
+		`[TaskSync] waitForUserResponse — waiting for user input, session: ${session.id}, toolCallId: ${toolCallId}`,
 	);
 	return new Promise<UserResponseResult>((resolve) => {
 		p._pendingRequests.set(toolCallId, resolve);
-		startResponseTimeoutTimer(p, toolCallId);
+		startResponseTimeoutTimer(p, toolCallId, session.id);
 	});
 }
 
 /**
  * Start response timeout timer for a pending tool call.
  */
-export function startResponseTimeoutTimer(p: P, toolCallId: string): void {
-	if (p._responseTimeoutTimer) {
-		clearTimeout(p._responseTimeoutTimer);
-		p._responseTimeoutTimer = null;
-	}
-
+export function startResponseTimeoutTimer(
+	p: P,
+	toolCallId: string,
+	sessionId: string,
+): void {
+	p._clearResponseTimeoutTimer(toolCallId);
 	const timeoutMinutes = settingsH.readResponseTimeoutMinutes();
 	if (timeoutMinutes <= 0) {
 		debugLog(
@@ -364,12 +449,13 @@ export function startResponseTimeoutTimer(p: P, toolCallId: string): void {
 
 	const timeoutMs = timeoutMinutes * 60 * 1000;
 	debugLog(
-		`[TaskSync] startResponseTimeoutTimer — setting ${timeoutMinutes} min timer for toolCallId: ${toolCallId}`,
+		`[TaskSync] startResponseTimeoutTimer — setting ${timeoutMinutes} min timer for session ${sessionId}, toolCallId: ${toolCallId}`,
 	);
 
-	p._responseTimeoutTimer = setTimeout(() => {
-		handleResponseTimeout(p, toolCallId);
+	const timer = setTimeout(() => {
+		void handleResponseTimeout(p, toolCallId, sessionId);
 	}, timeoutMs);
+	p._responseTimeoutTimers.set(toolCallId, timer);
 }
 
 /**
@@ -378,14 +464,20 @@ export function startResponseTimeoutTimer(p: P, toolCallId: string): void {
 export async function handleResponseTimeout(
 	p: P,
 	toolCallId: string,
+	sessionId: string,
 ): Promise<void> {
 	debugLog(
-		`[TaskSync] handleResponseTimeout — toolCallId: ${toolCallId}, currentToolCallId: ${p._currentToolCallId}`,
+		`[TaskSync] handleResponseTimeout — sessionId: ${sessionId}, toolCallId: ${toolCallId}`,
 	);
-	p._responseTimeoutTimer = null;
+	p._responseTimeoutTimers.delete(toolCallId);
+
+	const session = p._getSession(sessionId);
+	if (!session) {
+		return;
+	}
 
 	if (
-		p._currentToolCallId !== toolCallId ||
+		session.pendingToolCallId !== toolCallId ||
 		!p._pendingRequests.has(toolCallId)
 	) {
 		debugLog("[TaskSync] handleResponseTimeout — stale timeout, ignoring");
@@ -395,7 +487,7 @@ export async function handleResponseTimeout(
 	await p._applyHumanLikeDelay("Timeout");
 
 	if (
-		p._currentToolCallId !== toolCallId ||
+		session.pendingToolCallId !== toolCallId ||
 		!p._pendingRequests.has(toolCallId)
 	) {
 		return;
@@ -408,26 +500,26 @@ export async function handleResponseTimeout(
 		DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
 	);
 
-	p._consecutiveAutoResponses++;
+	session.consecutiveAutoResponses++;
 	let responseText: string;
 	let isTermination = false;
 
-	if (p._consecutiveAutoResponses > maxConsecutive) {
+	if (session.consecutiveAutoResponses > maxConsecutive) {
 		responseText = p._SESSION_TERMINATION_TEXT;
 		isTermination = true;
 		debugLog(
-			`[TaskSync] handleResponseTimeout — auto-response limit reached (${p._consecutiveAutoResponses}/${maxConsecutive}), terminating session`,
+			`[TaskSync] handleResponseTimeout — auto-response limit reached for session ${session.id} (${session.consecutiveAutoResponses}/${maxConsecutive}), terminating session`,
 		);
 		vscode.window.showWarningMessage(
 			`TaskSync: Auto-response limit (${maxConsecutive}) reached. Session terminated after ${timeoutMinutes} min idle.`,
 		);
-	} else if (p._autopilotEnabled) {
-		responseText = settingsH.normalizeAutopilotText(p, p._autopilotText);
+	} else if (session.autopilotEnabled) {
+		responseText = resolveAutopilotText(p, session);
 		debugLog(
-			`[TaskSync] handleResponseTimeout — autopilot auto-responding with: "${responseText.slice(0, 60)}"`,
+			`[TaskSync] handleResponseTimeout — session ${session.id} autopilot auto-responding with: "${responseText.slice(0, 60)}"`,
 		);
 		vscode.window.showInformationMessage(
-			`TaskSync: Auto-responded after ${timeoutMinutes} min idle. (${p._consecutiveAutoResponses}/${maxConsecutive})`,
+			`TaskSync: Auto-responded after ${timeoutMinutes} min idle. (${session.consecutiveAutoResponses}/${maxConsecutive})`,
 		);
 	} else {
 		responseText = p._SESSION_TERMINATION_TEXT;
@@ -445,6 +537,7 @@ export async function handleResponseTimeout(
 		const effectiveResponse = settingsH.applyAutoAppendToResponse(
 			p,
 			responseText,
+			session,
 		);
 		const pendingEntry = p._currentSessionCallsMap.get(toolCallId);
 		if (pendingEntry && pendingEntry.status === "pending") {
@@ -453,31 +546,34 @@ export async function handleResponseTimeout(
 			pendingEntry.timestamp = Date.now();
 			pendingEntry.isFromQueue = false;
 
-			p._view?.webview.postMessage({
-				type: "toolCallCompleted",
-				entry: pendingEntry,
-				sessionTerminated: isTermination,
-			} satisfies ToWebviewMessage);
-
-			// Broadcast timeout auto-response to remote clients
-			broadcastToolCallCompleted(p, pendingEntry, isTermination);
+			if (isSessionActive(p, session.id)) {
+				p._view?.webview.postMessage({
+					type: "toolCallCompleted",
+					entry: pendingEntry,
+					sessionTerminated: isTermination,
+				} satisfies ToWebviewMessage);
+				broadcastToolCallCompleted(p, pendingEntry, isTermination);
+			}
 		}
 
-		p._updateCurrentSessionUI();
+		session.pendingToolCallId = null;
+		session.waitingOnUser = false;
+		session.unread = false;
+		session.aiTurnActive = true;
 		resolve({
 			value: responseText,
-			queue: hasQueuedItems(p),
+			queue: sessionHasQueuedItems(session),
 			attachments: [],
 		} as UserResponseResult);
 		p._pendingRequests.delete(toolCallId);
-		p._currentToolCallId = null;
-		p._aiTurnActive = true; // AI is now processing the timeout auto-response
+		p._toolCallSessionMap.delete(toolCallId);
 		debugLog(
-			`[TaskSync] handleResponseTimeout — resolved with: "${responseText.slice(0, 60)}", isTermination: ${isTermination}, aiTurnActive: true`,
+			`[TaskSync] handleResponseTimeout — resolved with: "${responseText.slice(0, 60)}" for session ${session.id}, isTermination: ${isTermination}`,
 		);
 
 		if (isTermination) {
-			markSessionTerminated(p);
+			markSessionTerminated(p, session);
 		}
+		persistSessionState(p, session);
 	}
 }

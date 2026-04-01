@@ -9,9 +9,10 @@ import {
 	DEFAULT_SESSION_WARNING_HOURS,
 	MAX_QUEUE_PROMPT_LENGTH,
 } from "../constants/remoteConstants";
-import { ContextManager, ContextReferenceType } from "../context";
+import type { ContextManager, ContextReferenceType } from "../context";
 import type { RemoteServer } from "../server/remoteServer";
-import { startFreshCopilotChatWithQuery } from "../utils/chatSessionUtils";
+import { startNewSessionChat } from "../utils/chatSessionUtils";
+import { ChatSessionManager } from "./chatSessionManager";
 import * as fileH from "./fileHandlers";
 import * as lifecycle from "./lifecycleHandlers";
 import * as router from "./messageRouter";
@@ -22,6 +23,7 @@ import * as settingsH from "./settingsHandlers";
 import * as toolCall from "./toolCallHandler";
 import {
 	type AttachmentInfo,
+	type ChatSession,
 	type FileSearchResult,
 	type FromWebviewMessage,
 	type QueuedPrompt,
@@ -31,7 +33,12 @@ import {
 	type UserResponseResult,
 	VIEW_TYPE,
 } from "./webviewTypes";
-import { debugLog, mergeAndDedup, notifyQueueChanged } from "./webviewUtils";
+import {
+	debugLog,
+	markSessionTerminated,
+	mergeAndDedup,
+	notifyQueueChanged,
+} from "./webviewUtils";
 
 const NEW_SESSION_STATUS_MESSAGE = "New session started — waiting for AI";
 
@@ -53,23 +60,44 @@ export class TaskSyncWebviewProvider
 
 	// All underscore-prefixed members are "internal" by convention but public
 	// for handler module access. See webviewTypes.ts P type.
+	//
+	// MIRROR FIELD CONVENTION:
+	// Fields marked "Mirrors the ACTIVE session's ..." are copies of the active
+	// ChatSession's state. They are kept in sync so the webview and handler
+	// modules can read them without reaching into _sessionManager. The canonical
+	// source of truth is always the ChatSession object in _sessionManager. When a handler writes to both the session field
+	// AND the mirror field, call _syncActiveSessionState() afterward to ensure
+	// consistency. If only the session was updated, _syncActiveSessionState()
+	// will copy the new value into the mirror field automatically.
 	_view?: vscode.WebviewView;
+
+	// Multi-session orchestration manager
+	_sessionManager: ChatSessionManager = new ChatSessionManager();
+
 	_pendingRequests: Map<string, (result: UserResponseResult) => void> =
 		new Map();
 
+	// Maps each toolCallId → session_id so cancelSupersededPendingRequest
+	// can avoid cancelling pending calls that belong to a DIFFERENT session.
+	_toolCallSessionMap: Map<string, string> = new Map();
+
 	// Prompt queue state
+	// Mirrors the ACTIVE session's queue for the current webview.
 	_promptQueue: QueuedPrompt[] = [];
 	_queueVersion: number = 0; // Monotonic counter for remote sync
-	_queueEnabled: boolean = true; // Default to queue mode
+	_queueEnabled: boolean = true; // Mirrors the ACTIVE session's queue mode
 
 	// Attachments state
+	// Mirrors the ACTIVE session's attachments/composer state.
 	_attachments: AttachmentInfo[] = [];
 
 	// Current session tool calls (memory only - not persisted during session)
+	// Mirrors the ACTIVE session's history for the current webview.
 	_currentSessionCalls: ToolCallEntry[] = [];
 
 	// Persisted history from past sessions (loaded from disk)
 	_persistedHistory: ToolCallEntry[] = [];
+	// Mirrors the ACTIVE session's pending tool call id.
 	_currentToolCallId: string | null = null;
 
 	// Tracks whether the AI is actively working (between user response and next askUser call)
@@ -82,6 +110,7 @@ export class TaskSyncWebviewProvider
 	_webviewReady: boolean = false;
 	_pendingToolCallMessage: {
 		id: string;
+		sessionId: string;
 		prompt: string;
 	} | null = null;
 
@@ -89,6 +118,10 @@ export class TaskSyncWebviewProvider
 	_queueSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 	readonly _QUEUE_SAVE_DEBOUNCE_MS = 300;
+
+	// Debounce timer for session persistence
+	_sessionSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	readonly _SESSION_SAVE_DEBOUNCE_MS = 500;
 
 	// Debounce timer for history persistence (async background saves)
 	_historySaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -120,10 +153,10 @@ export class TaskSyncWebviewProvider
 
 	// Interactive approval buttons enabled (loaded from VS Code settings)
 	_interactiveApprovalEnabled: boolean = true;
-	// Auto Append setting controls whether shared guidance is appended to ask_user responses.
+	// Mirrors the ACTIVE session's Auto Append state.
 	_autoAppendEnabled: boolean = false;
 	_autoAppendText: string = "";
-	// Force askUser reminder even with custom autoAppendText (for GPT 5.4)
+	// Global AskUser reminder toggle.
 	_alwaysAppendReminder: boolean = false;
 
 	readonly _AUTOPILOT_DEFAULT_TEXT =
@@ -131,13 +164,13 @@ export class TaskSyncWebviewProvider
 	readonly _SESSION_TERMINATION_TEXT =
 		"Session terminated. Do not use askUser tool again.";
 
-	// Autopilot enabled (loaded from VS Code settings)
+	// Mirrors the ACTIVE session's Autopilot enabled state.
 	_autopilotEnabled: boolean = false;
 
-	// Autopilot fallback text used when no autopilot prompts are configured.
+	// Autopilot fallback text used when no session prompts are configured.
 	_autopilotText: string = "";
 
-	// Autopilot prompts array (cycles through in order)
+	// Mirrors the ACTIVE session's Autopilot prompt cycle.
 	_autopilotPrompts: string[] = [];
 
 	// Current index in autopilot prompts cycle (resets on new session)
@@ -167,8 +200,9 @@ export class TaskSyncWebviewProvider
 	// Context manager for #terminal, #problems references
 	readonly _contextManager: ContextManager;
 
-	// Response timeout tracking
-	_responseTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+	// Response timeout tracking is session-owned. Each pending ask_user gets its own timer.
+	_responseTimeoutTimers: Map<string, ReturnType<typeof setTimeout>> =
+		new Map();
 	_consecutiveAutoResponses: number = 0;
 
 	// Session timer (resets on new session)
@@ -189,10 +223,16 @@ export class TaskSyncWebviewProvider
 		contextManager: ContextManager,
 	) {
 		this._contextManager = contextManager;
-		// Load both queue and history async to not block activation
-		this._loadQueueFromDiskAsync().catch((err) => {
-			console.error("[TaskSync] Failed to load queue:", err);
-		});
+		// Load persisted state async to avoid blocking activation.
+		this._loadQueueFromDiskAsync()
+			.catch((err) => {
+				console.error("[TaskSync] Failed to load queue:", err);
+			})
+			.finally(() => {
+				this._loadSessionsFromDiskAsync().catch((err) => {
+					console.error("[TaskSync] Failed to load sessions:", err);
+				});
+			});
 		this._loadPersistedHistoryFromDiskAsync().catch((err) => {
 			console.error("[TaskSync] Failed to load history:", err);
 		});
@@ -220,15 +260,9 @@ export class TaskSyncWebviewProvider
 				if (
 					e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendEnabled`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autoAppendText`) ||
 					e.affectsConfiguration(
 						`${CONFIG_SECTION}.alwaysAppendAskUserReminder`,
 					) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.askUserVerbosePayload`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autopilot`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotText`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.autopilotPrompts`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
 					e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
@@ -301,21 +335,201 @@ export class TaskSyncWebviewProvider
 		} satisfies ToWebviewMessage);
 	}
 
+	public _getSession(sessionId: string): ChatSession | undefined {
+		return this._sessionManager.getSession(sessionId);
+	}
+
+	private _sessionDefaults(): Partial<ChatSession> {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		const autoAppendText = settingsH.normalizeAutoAppendText(
+			config.get<string>("autoAppendText", "") ?? "",
+		);
+		return {
+			queueEnabled: this._queueEnabled,
+			autopilotEnabled: false,
+			autopilotPrompts: [],
+			autoAppendEnabled: false,
+			autoAppendText,
+		};
+	}
+
+	public _ensureSession(
+		sessionId: string,
+		title: string = this._sessionManager.getNextAgentTitle(),
+	): ChatSession {
+		const session = this._sessionManager.ensureSession(
+			sessionId,
+			title,
+			this._sessionDefaults(),
+		);
+		for (const entry of session.history) {
+			entry.sessionId ??= session.id;
+			this._currentSessionCallsMap.set(entry.id, entry);
+		}
+		return session;
+	}
+
+	public _getSessionForToolCall(toolCallId: string): ChatSession | undefined {
+		const directSessionId = this._toolCallSessionMap.get(toolCallId);
+		if (directSessionId) {
+			return this._sessionManager.getSession(directSessionId);
+		}
+
+		for (const session of this._sessionManager.getAllSessions()) {
+			if (session.pendingToolCallId === toolCallId) {
+				return session;
+			}
+			if (session.history.some((entry) => entry.id === toolCallId)) {
+				return session;
+			}
+		}
+		return undefined;
+	}
+
+	public _setActiveSession(sessionId: string | null): boolean {
+		const switched = this._sessionManager.setActiveSession(sessionId);
+		if (switched) {
+			this._syncActiveSessionState();
+			// Keep remote clients in sync with the newly active session
+			this._remoteServer?.broadcast("state", this.getRemoteState());
+		}
+		return switched;
+	}
+
+	public _syncActiveSessionState(): void {
+		const activeSession = this._sessionManager.getActiveSession();
+
+		if (activeSession) {
+			activeSession.unread = false;
+			for (const entry of activeSession.history) {
+				entry.sessionId ??= activeSession.id;
+				this._currentSessionCallsMap.set(entry.id, entry);
+			}
+			this._currentSessionCalls = activeSession.history;
+			this._promptQueue = activeSession.queue;
+			this._attachments = activeSession.attachments;
+			this._queueEnabled = activeSession.queueEnabled;
+			this._currentToolCallId = activeSession.pendingToolCallId;
+			this._autopilotEnabled = activeSession.autopilotEnabled;
+			this._sessionStartTime = activeSession.sessionStartTime;
+			this._sessionFrozenElapsed = activeSession.sessionFrozenElapsed;
+			this._sessionTerminated = activeSession.sessionTerminated;
+			this._sessionWarningShown = activeSession.sessionWarningShown;
+			this._aiTurnActive = activeSession.aiTurnActive;
+			this._consecutiveAutoResponses = activeSession.consecutiveAutoResponses;
+			this._autopilotIndex = activeSession.autopilotIndex;
+		} else {
+			this._currentSessionCalls = [];
+			this._promptQueue = [];
+			this._attachments = [];
+			this._currentToolCallId = null;
+			this._sessionStartTime = null;
+			this._sessionFrozenElapsed = null;
+			this._sessionTerminated = false;
+			this._sessionWarningShown = false;
+			this._aiTurnActive = false;
+			this._consecutiveAutoResponses = 0;
+			this._autopilotIndex = 0;
+		}
+
+		if (
+			this._sessionStartTime !== null &&
+			this._sessionFrozenElapsed === null
+		) {
+			this._startSessionTimerInterval();
+		} else {
+			this._stopSessionTimerInterval();
+		}
+
+		this._updateViewTitle();
+		this._updateCurrentSessionUI();
+		this._updateQueueUI();
+		this._updateAttachmentsUI();
+		this._loadSettings();
+		this._updateSettingsUI();
+	}
+
+	public _bindSession(sessionId: string): ChatSession {
+		return this._ensureSession(
+			sessionId,
+			this._sessionManager.getNextAgentTitle(),
+		);
+	}
+
+	public createSessionForMissingId(): ChatSession {
+		const session = this._sessionManager.createSession(
+			this._sessionManager.getNextAgentTitle(),
+			this._sessionManager.getNextSessionId(),
+			this._sessionDefaults(),
+			false,
+		);
+		this._updateSessionsUI();
+		this._saveSessionsToDisk();
+		return session;
+	}
+
+	public _clearResponseTimeoutTimer(
+		toolCallId: string | null | undefined,
+	): void {
+		if (!toolCallId) return;
+		const timer = this._responseTimeoutTimers.get(toolCallId);
+		if (timer) {
+			clearTimeout(timer);
+			this._responseTimeoutTimers.delete(toolCallId);
+		}
+	}
+
 	public startNewSession(): void {
 		lifecycle.startNewSession(this);
 	}
 
-	public async startNewSessionAndResetCopilotChat(
-		initialPrompt?: string,
-		useQueuedPrompt?: boolean,
-	): Promise<void> {
-		lifecycle.startNewSession(this, {
-			remoteEventType: "newSession",
+	public async startNewSessionAndResetCopilotChat(options?: {
+		initialPrompt?: string;
+		useQueuedPrompt?: boolean;
+		stopCurrentSession?: boolean;
+	}): Promise<void> {
+		const previousActiveSession = this._sessionManager.getActiveSession();
+		let queuedPromptFromPrevious: QueuedPrompt | undefined;
+		const useQueuedPrompt = options?.useQueuedPrompt;
+
+		if (useQueuedPrompt !== false && previousActiveSession?.queue.length) {
+			queuedPromptFromPrevious = previousActiveSession.queue.shift();
+			if (
+				previousActiveSession.id === this._sessionManager.getActiveSessionId()
+			) {
+				notifyQueueChanged(this);
+			}
+		}
+
+		if (options?.stopCurrentSession && previousActiveSession) {
+			if (previousActiveSession.pendingToolCallId) {
+				this.cancelPendingToolCall(
+					"[Session stopped by user]",
+					previousActiveSession.id,
+				);
+			}
+			markSessionTerminated(this, previousActiveSession);
+			this._saveSessionsToDisk();
+		}
+
+		const chatSession = this._sessionManager.createSession(
+			this._sessionManager.getNextAgentTitle(),
+			undefined,
+			this._sessionDefaults(),
+		);
+		this._syncActiveSessionState();
+		this._saveSessionsToDisk();
+		this._updateSessionsUI();
+		this._view?.webview.postMessage({
+			type: "clear",
+			statusMessage: NEW_SESSION_STATUS_MESSAGE,
+		} satisfies ToWebviewMessage);
+		this._remoteServer?.broadcast("newSession", {
 			statusMessage: NEW_SESSION_STATUS_MESSAGE,
 		});
 
 		let chatQuery: string;
-		const trimmedPrompt = initialPrompt?.trim();
+		const trimmedPrompt = options?.initialPrompt?.trim();
 
 		if (trimmedPrompt) {
 			// User typed a prompt in the modal — use it directly (clamped to max length)
@@ -323,13 +537,12 @@ export class TaskSyncWebviewProvider
 				trimmedPrompt.slice(0, MAX_QUEUE_PROMPT_LENGTH),
 			);
 		} else if (useQueuedPrompt !== false) {
-			// Dequeue first item if available (default behavior when no explicit prompt)
-			const first = this._promptQueue[0];
-			const queuedPrompt = first?.prompt.slice(0, MAX_QUEUE_PROMPT_LENGTH);
-			if (first) {
-				this._promptQueue.shift();
-				notifyQueueChanged(this);
-			}
+			// Optionally bootstrap the new session from the previously active
+			// session's next queued prompt.
+			const queuedPrompt = queuedPromptFromPrevious?.prompt.slice(
+				0,
+				MAX_QUEUE_PROMPT_LENGTH,
+			);
 			chatQuery = queuedPrompt
 				? buildAskUserRequestQuery(queuedPrompt)
 				: DEFAULT_REMOTE_SESSION_QUERY;
@@ -343,7 +556,9 @@ export class TaskSyncWebviewProvider
 			DEFAULT_REMOTE_CHAT_COMMAND,
 		);
 
-		await startFreshCopilotChatWithQuery(
+		// Use session-aware chat starter to inject session_id into Copilot
+		await startNewSessionChat(
+			chatSession.id,
 			chatCommand,
 			chatQuery,
 			DEFAULT_REMOTE_CHAT_COMMAND,
@@ -376,6 +591,12 @@ export class TaskSyncWebviewProvider
 			type: "openResetSessionModal",
 		} satisfies ToWebviewMessage);
 		return true;
+	}
+
+	public toggleSplitView(): void {
+		this._view?.webview.postMessage({
+			type: "toggleSplitView",
+		} satisfies ToWebviewMessage);
 	}
 
 	_updateViewTitle(): void {
@@ -435,11 +656,18 @@ export class TaskSyncWebviewProvider
 	}
 
 	public resolveRemoteResponse(
+		sessionId: string,
 		toolCallId: string,
 		value: string,
 		attachments: AttachmentInfo[],
 	): boolean {
-		return remote.resolveRemoteResponse(this, toolCallId, value, attachments);
+		return remote.resolveRemoteResponse(
+			this,
+			sessionId,
+			toolCallId,
+			value,
+			attachments,
+		);
 	}
 
 	public addToQueueFromRemote(
@@ -486,8 +714,8 @@ export class TaskSyncWebviewProvider
 		return remote.setResponseTimeoutFromRemote(this, timeout);
 	}
 
-	public cancelPendingToolCall(reason?: string): boolean {
-		return remote.cancelPendingToolCall(this, reason);
+	public cancelPendingToolCall(reason?: string, sessionId?: string): boolean {
+		return remote.cancelPendingToolCall(this, reason, sessionId);
 	}
 
 	// ==================== End Remote Server Integration ====================
@@ -507,8 +735,9 @@ export class TaskSyncWebviewProvider
 
 	public async waitForUserResponse(
 		question: string,
+		sessionId?: string,
 	): Promise<UserResponseResult> {
-		return toolCall.waitForUserResponse(this, question);
+		return toolCall.waitForUserResponse(this, question, sessionId);
 	}
 
 	_handleWebviewMessage(message: FromWebviewMessage): void {
@@ -546,6 +775,23 @@ export class TaskSyncWebviewProvider
 			queue: this._promptQueue,
 			enabled: this._queueEnabled,
 		} satisfies ToWebviewMessage);
+	}
+
+	/**
+	 * Push multi-session state to the webview (threads list, active session)
+	 * and broadcast lightweight session summaries to remote clients.
+	 */
+	_updateSessionsUI(): void {
+		const data = this._sessionManager.toJSON();
+		this._view?.webview.postMessage({
+			type: "updateSessions",
+			sessions: data.sessions,
+			activeSessionId: data.activeSessionId,
+		} satisfies ToWebviewMessage);
+		this._remoteServer?.broadcast("updateSessions", {
+			sessions: remote.getRemoteSessionSummaries(this),
+			activeSessionId: data.activeSessionId,
+		});
 	}
 
 	/**
@@ -603,6 +849,46 @@ export class TaskSyncWebviewProvider
 
 	private _savePersistedHistoryToDiskSync(): void {
 		persist.savePersistedHistoryToDiskSync(this);
+	}
+
+	private async _loadSessionsFromDiskAsync(): Promise<void> {
+		await persist.loadSessionsFromDiskAsync(this);
+		// Clear stale pending state: after a reload, Promise resolvers are gone
+		// so any persisted pendingToolCallId can never be resolved.
+		for (const session of this._sessionManager.getAllSessions()) {
+			// Keep truly live in-flight requests intact when async disk rehydrate
+			// finishes after ask_user has already created a pending resolver.
+			const hasLivePendingRequest =
+				typeof session.pendingToolCallId === "string" &&
+				this._pendingRequests.has(session.pendingToolCallId);
+			let clearedStalePending = false;
+			if (session.pendingToolCallId && !hasLivePendingRequest) {
+				session.pendingToolCallId = null;
+				session.waitingOnUser = false;
+				session.aiTurnActive = false;
+				clearedStalePending = true;
+			}
+			// Transition stale "pending" history entries to "completed" —
+			// their tool-call Promises are gone so they can never resolve.
+			if (!hasLivePendingRequest) {
+				for (const entry of session.history) {
+					if (entry.status === "pending") {
+						entry.status = "completed";
+						entry.response ??= "[Session interrupted]";
+						clearedStalePending = true;
+					}
+				}
+			}
+			if (clearedStalePending) {
+				session.unread = false;
+			}
+		}
+		this._syncActiveSessionState();
+		this._updateSessionsUI();
+	}
+
+	_saveSessionsToDisk(): void {
+		persist.saveSessionsToDisk(this);
 	}
 }
 

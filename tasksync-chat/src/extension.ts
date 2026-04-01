@@ -67,12 +67,17 @@ export function activate(context: vscode.ExtensionContext): void {
 				return;
 			}
 			const answer = await vscode.window.showWarningMessage(
-				"Are you sure you want to start a new session? This will clear the current session history.",
+				"Choose how to start the next TaskSync session.",
 				{ modal: true },
-				"Start New Session",
+				"New Session",
+				"End & New Session",
 			);
-			if (answer === "Start New Session") {
+			if (answer === "New Session") {
 				await provider.startNewSessionAndResetCopilotChat();
+			} else if (answer === "End & New Session") {
+				await provider.startNewSessionAndResetCopilotChat({
+					stopCurrentSession: true,
+				});
 			}
 		},
 	);
@@ -101,6 +106,14 @@ export function activate(context: vscode.ExtensionContext): void {
 		"tasksync.openSettings",
 		() => {
 			provider.openSettingsModal();
+		},
+	);
+
+	// Toggle split view command (triggered from view title bar)
+	const toggleSplitViewCmd = vscode.commands.registerCommand(
+		"tasksync.toggleSplitView",
+		() => {
+			provider.toggleSplitView();
 		},
 	);
 
@@ -301,6 +314,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		newSessionCmd,
 		resetSessionCmd,
 		openSettingsCmd,
+		toggleSplitViewCmd,
 		startRemoteLanCmd,
 		stopRemoteCmd,
 		goRemoteCmd,

@@ -83,6 +83,78 @@ function bindEventListeners() {
 			if (e.target === historyModalOverlay) closeHistoryModal();
 		});
 	}
+
+	// Hub & Thread Shell events
+	if (threadBackBtn) {
+		threadBackBtn.addEventListener("click", function () {
+			saveActiveSessionComposerState();
+			activeSessionId = null;
+			restoreActiveSessionComposerState();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
+			vscode.postMessage({ type: "switchSession", sessionId: null });
+		});
+	}
+	if (threadSettingsBtn)
+		threadSettingsBtn.addEventListener("click", openSessionSettingsModal);
+	if (threadResetBtn)
+		threadResetBtn.addEventListener("click", function () {
+			openResetSessionModal();
+		});
+
+	var threadEditBtn = document.getElementById("thread-edit-btn");
+	if (threadEditBtn) {
+		threadEditBtn.addEventListener("click", function () {
+			var titleEl = document.getElementById("thread-title");
+			if (!titleEl || !activeSessionId) return;
+			var currentTitle = titleEl.textContent || "";
+			var input = document.createElement("input");
+			input.type = "text";
+			input.className = "session-rename-input";
+			input.value = currentTitle;
+			input.maxLength = 50;
+			titleEl.replaceWith(input);
+			input.focus();
+			input.select();
+
+			var committed = false;
+			function commit() {
+				if (committed) return;
+				committed = true;
+				var newTitle = input.value.trim();
+				var strong = document.createElement("strong");
+				strong.id = "thread-title";
+				strong.textContent = newTitle || currentTitle;
+				input.replaceWith(strong);
+				if (newTitle && newTitle !== currentTitle) {
+					vscode.postMessage({
+						type: "updateSessionTitle",
+						sessionId: activeSessionId,
+						title: newTitle,
+					});
+				}
+			}
+
+			input.addEventListener("keydown", function (ev) {
+				if (ev.key === "Enter") {
+					ev.preventDefault();
+					commit();
+				} else if (ev.key === "Escape") {
+					ev.preventDefault();
+					committed = true;
+					var strong = document.createElement("strong");
+					strong.id = "thread-title";
+					strong.textContent = currentTitle;
+					input.replaceWith(strong);
+				}
+			});
+			input.addEventListener("blur", commit);
+		});
+	}
+
+	// Session settings modal events
+	bindSessionSettingsEvents();
+
 	// Edit mode button events
 	if (editCancelBtn) editCancelBtn.addEventListener("click", cancelEditMode);
 	if (editConfirmBtn) editConfirmBtn.addEventListener("click", confirmEditMode);
@@ -169,31 +241,21 @@ function bindEventListeners() {
 	}
 	// Autopilot prompts list event listeners
 	if (autopilotAddBtn) {
-		autopilotAddBtn.addEventListener("click", showAddAutopilotPromptForm);
+		autopilotAddBtn.addEventListener("click", function () {
+			workspacePromptListUI.showAddForm();
+		});
 	}
 	if (saveAutopilotPromptBtn) {
-		saveAutopilotPromptBtn.addEventListener("click", saveAutopilotPrompt);
+		saveAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.save();
+		});
 	}
 	if (cancelAutopilotPromptBtn) {
-		cancelAutopilotPromptBtn.addEventListener(
-			"click",
-			hideAddAutopilotPromptForm,
-		);
+		cancelAutopilotPromptBtn.addEventListener("click", function () {
+			workspacePromptListUI.hideAddForm();
+		});
 	}
-	if (autopilotPromptsList) {
-		autopilotPromptsList.addEventListener(
-			"click",
-			handleAutopilotPromptsListClick,
-		);
-		// Drag and drop for reordering
-		autopilotPromptsList.addEventListener(
-			"dragstart",
-			handleAutopilotDragStart,
-		);
-		autopilotPromptsList.addEventListener("dragover", handleAutopilotDragOver);
-		autopilotPromptsList.addEventListener("dragend", handleAutopilotDragEnd);
-		autopilotPromptsList.addEventListener("drop", handleAutopilotDrop);
-	}
+	// List-level events (click, drag) are bound via initWorkspacePromptListUI()
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.addEventListener(
 			"change",
@@ -252,4 +314,49 @@ function bindEventListeners() {
 	if (savePromptBtn) savePromptBtn.addEventListener("click", saveNewPrompt);
 
 	window.addEventListener("message", handleExtensionMessage);
+}
+
+function bindSessionSettingsEvents() {
+	var ssCloseBtn = document.getElementById("ss-close-btn");
+	var ssResetBtn = document.getElementById("ss-reset-btn");
+
+	if (sessionSettingsOverlay) {
+		sessionSettingsOverlay.addEventListener("click", function (e) {
+			if (e.target === sessionSettingsOverlay) closeSessionSettingsModal();
+		});
+	}
+	if (ssCloseBtn)
+		ssCloseBtn.addEventListener("click", closeSessionSettingsModal);
+	if (ssResetBtn) ssResetBtn.addEventListener("click", resetSessionSettings);
+	if (ssAutopilotToggle) {
+		ssAutopilotToggle.addEventListener("click", ssToggleAutopilot);
+		ssAutopilotToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAutopilot();
+			}
+		});
+	}
+	if (ssAutoAppendToggle) {
+		ssAutoAppendToggle.addEventListener("click", ssToggleAutoAppend);
+		ssAutoAppendToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				ssToggleAutoAppend();
+			}
+		});
+	}
+	if (ssAutoAppendTextInput) {
+		ssAutoAppendTextInput.addEventListener("input", ssValidateAutoAppendText);
+	}
+	if (ssSaveAsDefaultBtn) {
+		ssSaveAsDefaultBtn.addEventListener("click", ssSaveAutoAppendAsDefault);
+	}
+	if (ssAddAutopilotPromptBtn)
+		ssAddAutopilotPromptBtn.addEventListener("click", ssShowAddPromptForm);
+	if (ssSaveAutopilotPromptBtn)
+		ssSaveAutopilotPromptBtn.addEventListener("click", ssSavePrompt);
+	if (ssCancelAutopilotPromptBtn)
+		ssCancelAutopilotPromptBtn.addEventListener("click", ssHideAddPromptForm);
+	// List-level events (click, drag) are bound via initSessionPromptListUI()
 }

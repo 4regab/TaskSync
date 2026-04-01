@@ -5,9 +5,13 @@ function init() {
 		createEditModeUI();
 		createApprovalModal();
 		createSettingsModal();
+		initWorkspacePromptListUI();
+		createSessionSettingsModal();
+		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
 		createTimeoutWarningModal();
+		createSimpleAlertModal();
 		bindEventListeners();
 		unlockAudioOnInteraction(); // Enable audio after first user interaction
 
@@ -25,16 +29,22 @@ function init() {
 					e.stopPropagation();
 					openNewSessionModal();
 				});
-			var resetSessionBtn = document.getElementById("remote-reset-session-btn");
-			if (resetSessionBtn)
-				resetSessionBtn.addEventListener("click", function (e) {
-					e.stopPropagation();
-					openResetSessionModal();
-				});
 			var settingsBtn = document.getElementById("remote-settings-btn");
 			if (settingsBtn)
 				settingsBtn.addEventListener("click", function () {
 					openSettingsModal();
+				});
+			var remoteSplitBtn = document.getElementById("remote-split-btn");
+			if (remoteSplitBtn)
+				remoteSplitBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					toggleSplitView();
+				});
+			var historyBtn = document.getElementById("remote-history-btn");
+			if (historyBtn)
+				historyBtn.addEventListener("click", function (e) {
+					e.stopPropagation();
+					openHistoryModal();
 				});
 			// Hide attach button (VS Code-only)
 			var attachBtn = document.getElementById("attach-btn");
@@ -46,12 +56,35 @@ function init() {
 		initCardSelection();
 		initChangesPanel();
 
-		// Restore persisted input value (when user switches sidebar tabs and comes back)
-		if (chatInput && persistedInputValue) {
-			chatInput.value = persistedInputValue;
-			autoResizeTextarea();
-			updateInputHighlighter();
-			updateSendButtonState();
+		restoreActiveSessionComposerState();
+		updateWelcomeSectionVisibility();
+		initSplitResizer();
+		initVertResizer();
+
+		// Re-apply vertical split ratio on resize (e.g., when switching to/from narrow mode)
+		var lastNarrowState = splitViewEnabled && window.innerWidth <= 480;
+		window.addEventListener("resize", function () {
+			var isNarrow = splitViewEnabled && window.innerWidth <= 480;
+			if (isNarrow && vertSplitRatio) {
+				applyVertSplitRatio(vertSplitRatio);
+			} else if (!isNarrow && lastNarrowState) {
+				// Leaving narrow mode: clear inline styles so CSS media query takes over
+				var hubEl = document.getElementById("workspace-hub");
+				if (hubEl) {
+					hubEl.style.maxHeight = "";
+					hubEl.style.flex = "";
+				}
+			}
+			lastNarrowState = isNarrow;
+			updateWelcomeSectionVisibility();
+		});
+
+		// Bind collapse bar for narrow split-view sessions panel
+		var collapseBar = document.getElementById("sessions-collapse-bar");
+		if (collapseBar) {
+			collapseBar.addEventListener("click", function () {
+				toggleHubCollapse();
+			});
 		}
 
 		// Restore attachments display
@@ -73,12 +106,44 @@ function init() {
  * Save webview state to persist across sidebar visibility changes
  */
 function saveWebviewState() {
+	saveActiveSessionComposerState();
 	vscode.setState({
 		inputValue: chatInput ? chatInput.value : "",
 		attachments: currentAttachments.filter(function (a) {
 			return !a.isTemporary;
 		}), // Don't persist temp images
+		sessionComposerState: sessionComposerState,
+		splitViewEnabled: splitViewEnabled,
+		splitRatio: splitRatio,
+		vertSplitRatio: vertSplitRatio,
 	});
+}
+
+function getComposerStateKey() {
+	return activeSessionId || "__hub__";
+}
+
+function saveActiveSessionComposerState() {
+	var key = getComposerStateKey();
+	sessionComposerState[key] = {
+		inputValue: chatInput ? chatInput.value : "",
+	};
+}
+
+function restoreActiveSessionComposerState() {
+	if (!chatInput) return;
+	var key = getComposerStateKey();
+	var saved = sessionComposerState[key];
+	var nextValue =
+		saved && typeof saved.inputValue === "string"
+			? saved.inputValue
+			: !activeSessionId && persistedInputValue
+				? persistedInputValue
+				: "";
+	chatInput.value = nextValue;
+	autoResizeTextarea();
+	updateInputHighlighter();
+	updateSendButtonState();
 }
 
 function cacheDOMElements() {
@@ -104,29 +169,22 @@ function cacheDOMElements() {
 	welcomeSection = document.getElementById("welcome-section");
 	cardVibe = document.getElementById("card-vibe");
 	cardSpec = document.getElementById("card-spec");
+	changesModalOverlay = document.getElementById("changes-modal-overlay");
 	changesSection = document.getElementById("changes-section");
 	changesRefreshBtn = document.getElementById("changes-refresh-btn");
 	changesCloseBtn = document.getElementById("changes-close-btn");
 	changesSummary = document.getElementById("changes-summary");
+	changesLoadingSpinner = document.getElementById("changes-loading-spinner");
 	changesStatus = document.getElementById("changes-status");
 	changesUnstagedGroup = document.getElementById("changes-unstaged-group");
 	changesUnstagedList = document.getElementById("changes-unstaged-list");
 	changesDiffTitle = document.getElementById("changes-diff-title");
 	changesDiffMeta = document.getElementById("changes-diff-meta");
 	changesDiffOutput = document.getElementById("changes-diff-output");
-	remoteSessionTimerEl = document.getElementById("remote-session-timer");
-	if (!remoteSessionTimerEl && isRemoteMode) {
-		var remoteHeaderLeft = document.querySelector(".remote-header-left");
-		if (remoteHeaderLeft) {
-			var timerSpan = document.createElement("span");
-			timerSpan.id = "remote-session-timer";
-			timerSpan.className = "remote-session-timer inactive";
-			timerSpan.textContent = "0s";
-			timerSpan.title = "Session timer (idle)";
-			remoteHeaderLeft.appendChild(timerSpan);
-			remoteSessionTimerEl = timerSpan;
-		}
-	}
+	threadBackBtn = document.getElementById("thread-back-btn");
+	threadResetBtn = document.getElementById("thread-reset-btn");
+	threadSettingsBtn = document.getElementById("thread-settings-btn");
+	remoteSessionTimerEl = document.getElementById("thread-sub");
 	autopilotToggle = document.getElementById("autopilot-toggle");
 	toolHistoryArea = document.getElementById("tool-history-area");
 	chatStreamArea = document.getElementById("chat-stream-area");
@@ -370,29 +428,19 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(sendShortcutSection);
 
-	// Auto Append section - appends configured guidance to every ask_user response.
-	let autoAppendSection = document.createElement("div");
-	autoAppendSection.className = "settings-section";
-	autoAppendSection.innerHTML =
+	// AskUser reminder section - global reminder appended to every response.
+	let reminderSection = document.createElement("div");
+	reminderSection.className = "settings-section";
+	reminderSection.innerHTML =
 		'<div class="settings-section-header">' +
 		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
-		'<span class="settings-info-icon" title="When enabled, TaskSync appends this text directly to every ask_user response (manual, queue, autopilot, timeout).\n\nThis increases context usage, so keep it concise.">' +
+		'<span class="codicon codicon-comment-discussion"></span> AskUser Reminder' +
+		'<span class="settings-info-icon" title="Always append the built-in askUser reminder to every response. Useful when the model tends to stop without calling askUser, especially with GPT 5.4.">' +
 		'<span class="codicon codicon-info"></span></span>' +
 		"</div>" +
-		'<div class="toggle-switch" id="auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append" tabindex="0"></div>' +
-		"</div>" +
-		'<div class="form-row hidden" id="auto-append-text-row">' +
-		'<label class="form-label" for="auto-append-text-input">Auto Append Text</label>' +
-		'<textarea class="form-input form-textarea" id="auto-append-text-input" placeholder="Text appended to every ask_user response" maxlength="2000"></textarea>' +
-		'<div class="auto-append-reminder-row">' +
-		'<label class="form-label-inline" for="always-append-reminder-toggle">Always append askUser reminder' +
-		'<span class="settings-info-icon-inline" title="Auto Append = YOUR custom rules (e.g. &quot;follow SOLID principles&quot;). If empty, nothing is appended.\n\nAuto Reminder = predefined instruction that tells the AI to call askUser. Enable this if your AI keeps ending without asking for feedback (common with GPT 5.4).\n\nBoth can be ON together.">' +
-		'<span class="codicon codicon-question"></span></span></label>' +
-		'<div class="toggle-switch-small" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Always append askUser reminder" tabindex="0"></div>' +
-		"</div>" +
+		'<div class="toggle-switch" id="always-append-reminder-toggle" role="switch" aria-checked="false" aria-label="Enable AskUser reminder" tabindex="0"></div>' +
 		"</div>";
-	modalContent.appendChild(autoAppendSection);
+	modalContent.appendChild(reminderSection);
 
 	// Human-Like Delay section - toggle + min/max inputs
 	let humanDelaySection = document.createElement("div");
@@ -445,30 +493,6 @@ function createSettingsModal() {
 		'" />' +
 		"</div>";
 	modalContent.appendChild(remoteMaxDevicesSection);
-
-	// Autopilot section with cycling prompts list
-	let autopilotSection = document.createElement("div");
-	autopilotSection.className = "settings-section";
-	autopilotSection.innerHTML =
-		'<div class="settings-section-header">' +
-		'<div class="settings-section-title">' +
-		'<span class="codicon codicon-rocket"></span> Autopilot Prompts' +
-		'<span class="settings-info-icon" title="Prompts cycle in order (1→2→3→1...) with human-like delay.\n\nHow it works:\n• The agent calls ask_user → Autopilot sends the next prompt in sequence\n• Add multiple prompts to alternate between different instructions\n• Drag to reorder, edit or delete individual prompts\n\nQueue Priority:\n• Queued prompts ALWAYS take priority over Autopilot\n• Autopilot only activates when the queue is empty">' +
-		'<span class="codicon codicon-info"></span></span>' +
-		"</div>" +
-		'<button class="add-prompt-btn-inline" id="autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
-		"</div>" +
-		'<div class="autopilot-prompts-list" id="autopilot-prompts-list"></div>' +
-		'<div class="add-autopilot-prompt-form hidden" id="add-autopilot-prompt-form">' +
-		'<div class="form-row">' +
-		'<textarea class="form-input form-textarea" id="autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
-		"</div>" +
-		'<div class="form-actions">' +
-		'<button class="form-btn form-btn-cancel" id="cancel-autopilot-prompt-btn">Cancel</button>' +
-		'<button class="form-btn form-btn-save" id="save-autopilot-prompt-btn">Save</button>' +
-		"</div>" +
-		"</div>";
-	modalContent.appendChild(autopilotSection);
 
 	// Response Timeout section - dropdown for 10-120 minutes
 	let timeoutSection = document.createElement("div");
@@ -581,21 +605,10 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
-	autoAppendToggle = document.getElementById("auto-append-toggle");
-	autoAppendTextRow = document.getElementById("auto-append-text-row");
-	autoAppendTextInput = document.getElementById("auto-append-text-input");
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
 	sendShortcutToggle = document.getElementById("send-shortcut-toggle");
-	autopilotPromptsList = document.getElementById("autopilot-prompts-list");
-	autopilotAddBtn = document.getElementById("autopilot-add-btn");
-	addAutopilotPromptForm = document.getElementById("add-autopilot-prompt-form");
-	autopilotPromptInput = document.getElementById("autopilot-prompt-input");
-	saveAutopilotPromptBtn = document.getElementById("save-autopilot-prompt-btn");
-	cancelAutopilotPromptBtn = document.getElementById(
-		"cancel-autopilot-prompt-btn",
-	);
 	responseTimeoutSelect = document.getElementById("response-timeout-select");
 	sessionWarningHoursSelect = document.getElementById(
 		"session-warning-hours-select",
@@ -609,6 +622,140 @@ function createSettingsModal() {
 	promptsList = document.getElementById("prompts-list");
 	addPromptBtn = document.getElementById("add-prompt-btn");
 	addPromptForm = document.getElementById("add-prompt-form");
+}
+
+// ===== SESSION SETTINGS MINI-MODAL =====
+
+function createSessionSettingsModal() {
+	sessionSettingsOverlay = document.createElement("div");
+	sessionSettingsOverlay.className = "settings-modal-overlay hidden";
+	sessionSettingsOverlay.id = "session-settings-overlay";
+
+	sessionSettingsModal = document.createElement("div");
+	sessionSettingsModal.className = "settings-modal session-settings-modal";
+	sessionSettingsModal.id = "session-settings-modal";
+	sessionSettingsModal.setAttribute("role", "dialog");
+	sessionSettingsModal.setAttribute(
+		"aria-labelledby",
+		"session-settings-title",
+	);
+
+	// Modal header
+	var ssHeader = document.createElement("div");
+	ssHeader.className = "settings-modal-header";
+
+	var ssTitleSpan = document.createElement("span");
+	ssTitleSpan.className = "settings-modal-title";
+	ssTitleSpan.id = "session-settings-title";
+	ssTitleSpan.textContent = "Session Settings";
+	ssHeader.appendChild(ssTitleSpan);
+
+	var ssHeaderBtns = document.createElement("div");
+	ssHeaderBtns.className = "settings-modal-header-buttons";
+
+	var ssResetBtn = document.createElement("button");
+	ssResetBtn.className = "settings-modal-header-btn";
+	ssResetBtn.innerHTML = '<span class="codicon codicon-discard"></span>';
+	ssResetBtn.title = "Reset this session's settings";
+	ssResetBtn.setAttribute("aria-label", "Reset this session's settings");
+	ssResetBtn.id = "ss-reset-btn";
+	ssHeaderBtns.appendChild(ssResetBtn);
+
+	var ssCloseBtn = document.createElement("button");
+	ssCloseBtn.className = "settings-modal-header-btn";
+	ssCloseBtn.innerHTML = '<span class="codicon codicon-close"></span>';
+	ssCloseBtn.title = "Close";
+	ssCloseBtn.setAttribute("aria-label", "Close session settings");
+	ssCloseBtn.id = "ss-close-btn";
+	ssHeaderBtns.appendChild(ssCloseBtn);
+
+	ssHeader.appendChild(ssHeaderBtns);
+
+	// Modal content
+	var ssContent = document.createElement("div");
+	ssContent.className = "settings-modal-content";
+
+	// Description
+	var ssDesc = document.createElement("div");
+	ssDesc.className = "session-settings-desc";
+	ssDesc.textContent =
+		"Configure Autopilot and Auto Append for this session only.";
+	ssContent.appendChild(ssDesc);
+
+	// Autopilot toggle section
+	var ssAutopilotSection = document.createElement("div");
+	ssAutopilotSection.className = "settings-section";
+	ssAutopilotSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-rocket"></span> Autopilot</div>' +
+		'<div class="toggle-switch" id="ss-autopilot-toggle" role="switch" aria-checked="false" aria-label="Enable Autopilot for this session" tabindex="0"></div>' +
+		"</div>";
+	ssContent.appendChild(ssAutopilotSection);
+
+	// Autopilot Prompts section
+	var ssPromptsSection = document.createElement("div");
+	ssPromptsSection.className = "settings-section";
+	ssPromptsSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title"><span class="codicon codicon-list-ordered"></span> Autopilot Prompts</div>' +
+		'<button class="add-prompt-btn-inline" id="ss-autopilot-add-btn" title="Add Autopilot prompt" aria-label="Add Autopilot prompt"><span class="codicon codicon-add"></span></button>' +
+		"</div>" +
+		'<div class="autopilot-prompts-list" id="ss-autopilot-prompts-list"></div>' +
+		'<div class="add-autopilot-prompt-form hidden" id="ss-add-autopilot-prompt-form">' +
+		'<div class="form-row">' +
+		'<textarea class="form-input form-textarea" id="ss-autopilot-prompt-input" placeholder="Enter Autopilot prompt text..." maxlength="2000"></textarea>' +
+		"</div>" +
+		'<div class="form-actions">' +
+		'<button class="form-btn form-btn-cancel" id="ss-cancel-autopilot-prompt-btn">Cancel</button>' +
+		'<button class="form-btn form-btn-save" id="ss-save-autopilot-prompt-btn">Save</button>' +
+		"</div>" +
+		"</div>";
+	ssContent.appendChild(ssPromptsSection);
+
+	// Auto Append section
+	var ssAutoAppendSection = document.createElement("div");
+	ssAutoAppendSection.className = "settings-section";
+	ssAutoAppendSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-symbol-structure"></span> Auto Append' +
+		'<span class="settings-info-icon" title="Append custom instructions to every ask_user response in this session. The AskUser reminder is configured globally in Settings.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch" id="ss-auto-append-toggle" role="switch" aria-checked="false" aria-label="Enable Auto Append for this session" tabindex="0"></div>' +
+		"</div>" +
+		'<div class="form-row hidden" id="ss-auto-append-text-row">' +
+		'<textarea class="form-input form-textarea" id="ss-auto-append-text-input" placeholder="Text appended to every ask_user response in this session" maxlength="2000"></textarea>' +
+		'<div class="ss-auto-append-error hidden" id="ss-auto-append-error">Enter text to append, or disable Auto Append.</div>' +
+		'<button class="form-btn form-btn-secondary ss-save-default-btn hidden" id="ss-save-as-default-btn" title="Save these Auto Append settings as the default for all new sessions">' +
+		'<span class="codicon codicon-save"></span> Save as Workspace Default</button>' +
+		"</div>";
+	ssContent.appendChild(ssAutoAppendSection);
+
+	// Assemble
+	sessionSettingsModal.appendChild(ssHeader);
+	sessionSettingsModal.appendChild(ssContent);
+	sessionSettingsOverlay.appendChild(sessionSettingsModal);
+	document.body.appendChild(sessionSettingsOverlay);
+
+	// Cache inner elements
+	ssAutopilotToggle = document.getElementById("ss-autopilot-toggle");
+	ssAutoAppendToggle = document.getElementById("ss-auto-append-toggle");
+	ssAutoAppendTextInput = document.getElementById("ss-auto-append-text-input");
+	ssAutoAppendError = document.getElementById("ss-auto-append-error");
+	ssSaveAsDefaultBtn = document.getElementById("ss-save-as-default-btn");
+	ssAutopilotPromptsList = document.getElementById("ss-autopilot-prompts-list");
+	ssAddAutopilotPromptBtn = document.getElementById("ss-autopilot-add-btn");
+	ssAddAutopilotPromptForm = document.getElementById(
+		"ss-add-autopilot-prompt-form",
+	);
+	ssAutopilotPromptInput = document.getElementById("ss-autopilot-prompt-input");
+	ssSaveAutopilotPromptBtn = document.getElementById(
+		"ss-save-autopilot-prompt-btn",
+	);
+	ssCancelAutopilotPromptBtn = document.getElementById(
+		"ss-cancel-autopilot-prompt-btn",
+	);
 }
 
 // ===== NEW SESSION MODAL =====
@@ -668,26 +815,32 @@ function createSessionActionModal(config) {
 
 	var btnRow = document.createElement("div");
 	btnRow.className = "new-session-btn-row";
-	var cancelBtn = document.createElement("button");
-	cancelBtn.className = "form-btn form-btn-cancel";
-	cancelBtn.textContent = "Cancel";
-	cancelBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-	});
-	btnRow.appendChild(cancelBtn);
 
-	var confirmBtn = document.createElement("button");
-	confirmBtn.className = "form-btn form-btn-save";
-	confirmBtn.textContent = config.confirmLabel;
-	confirmBtn.addEventListener("click", function () {
-		closeSessionActionModal(overlay);
-		if (config.onConfirm) {
-			config.onConfirm();
-		} else {
-			vscode.postMessage({ type: config.messageType });
-		}
+	var actions = Array.isArray(config.actions)
+		? config.actions
+		: [
+				{
+					label: config.confirmLabel,
+					className: "form-btn form-btn-save",
+					onClick: config.onConfirm,
+					messageType: config.messageType,
+				},
+			];
+	actions.forEach(function (action) {
+		var actionBtn = document.createElement("button");
+		actionBtn.className = action.className || "form-btn form-btn-save";
+		actionBtn.textContent = action.label;
+		if (action.id) actionBtn.id = action.id;
+		actionBtn.addEventListener("click", function () {
+			closeSessionActionModal(overlay);
+			if (typeof action.onClick === "function") {
+				action.onClick();
+			} else if (action.messageType) {
+				vscode.postMessage({ type: action.messageType });
+			}
+		});
+		btnRow.appendChild(actionBtn);
 	});
-	btnRow.appendChild(confirmBtn);
 	content.appendChild(btnRow);
 
 	modal.appendChild(header);
@@ -747,30 +900,69 @@ function createNewSessionModal() {
 		noteHtml:
 			'<span class="codicon codicon-info"></span> Please check the model and agent preselected in VS Code Chat before starting.',
 		warningText:
-			"This will clear the current session history and start a fresh Copilot chat session.",
-		confirmLabel: "New Session",
+			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
-		onConfirm: function () {
-			var promptInput = document.getElementById("new-session-prompt");
-			var queueCheckbox = document.getElementById("new-session-use-queue");
-			var initialPrompt = promptInput ? promptInput.value.trim() : "";
-			var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
-			var msg = { type: "newSession" };
-			if (initialPrompt) {
-				msg.initialPrompt = initialPrompt;
-			}
-			if (promptQueue.length > 0) {
-				msg.useQueuedPrompt = useQueuedPrompt;
-			}
-			vscode.postMessage(msg);
-			// Clear textarea for next open
-			if (promptInput) promptInput.value = "";
-		},
+		actions: [
+			{
+				label: "New Session",
+				className: "form-btn form-btn-save",
+				onClick: function () {
+					submitNewSessionAction(false);
+				},
+			},
+			{
+				label: "End & New Session",
+				id: "new-session-end-btn",
+				className: "form-btn form-btn-save",
+				onClick: function () {
+					submitNewSessionAction(true);
+				},
+			},
+		],
 	});
+}
+
+function submitNewSessionAction(stopCurrentSession) {
+	var promptInput = document.getElementById("new-session-prompt");
+	var queueCheckbox = document.getElementById("new-session-use-queue");
+	var initialPrompt = promptInput ? promptInput.value.trim() : "";
+	var useQueuedPrompt = queueCheckbox ? queueCheckbox.checked : false;
+	requestFollowServerActiveSession();
+	var msg = { type: "newSession" };
+	if (initialPrompt) {
+		msg.initialPrompt = initialPrompt;
+	}
+	if (promptQueue.length > 0) {
+		msg.useQueuedPrompt = useQueuedPrompt;
+	}
+	if (stopCurrentSession) {
+		msg.stopCurrentSession = true;
+	}
+	vscode.postMessage(msg);
+	if (promptInput) promptInput.value = "";
 }
 
 function openNewSessionModal() {
 	if (!newSessionModalOverlay) return;
+	// Show "End & New Session" only when the active session is non-terminated
+	var endBtn = document.getElementById("new-session-end-btn"); // ssot-id-allowed — dynamically created in createSessionActionModal
+	var activeSession =
+		activeSessionId &&
+		Array.isArray(sessions) &&
+		sessions.find(function (s) {
+			return s.id === activeSessionId;
+		});
+	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	if (endBtn) {
+		endBtn.classList.toggle("hidden", !hasActiveSession);
+	}
+	// Update warning text based on whether there's an active session
+	var warningEl = newSessionModalOverlay.querySelector(".new-session-warning");
+	if (warningEl) {
+		warningEl.textContent = hasActiveSession
+			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
+			: "Start a fresh Copilot chat session.";
+	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
 	var queueLabel = document.getElementById("new-session-queue-label");
@@ -992,5 +1184,106 @@ function confirmTimeoutWarning() {
 	// Restore focus to dropdown
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.focus();
+	}
+}
+
+// ==================== Simple Alert Modal (reusable) ====================
+
+/**
+ * Create a reusable simple alert modal for info messages.
+ * Can be shown with different content via showSimpleAlert().
+ */
+function createSimpleAlertModal() {
+	simpleAlertModalOverlay = document.createElement("div");
+	simpleAlertModalOverlay.className = "settings-modal-overlay hidden";
+	simpleAlertModalOverlay.id = "simple-alert-modal-overlay";
+
+	var modal = document.createElement("div");
+	modal.className = "settings-modal simple-alert-modal";
+	modal.setAttribute("role", "alertdialog");
+	modal.setAttribute("aria-modal", "true");
+	modal.setAttribute("aria-labelledby", "simple-alert-modal-title");
+	modal.setAttribute("aria-describedby", "simple-alert-modal-desc");
+	modal.id = "simple-alert-modal";
+
+	// Header with icon
+	var header = document.createElement("div");
+	header.className = "settings-modal-header simple-alert-header";
+	var title = document.createElement("span");
+	title.className = "settings-modal-title simple-alert-title";
+	title.id = "simple-alert-modal-title";
+	title.innerHTML =
+		'<span class="codicon codicon-info" id="simple-alert-icon"></span> <span id="simple-alert-title-text">Info</span>';
+	header.appendChild(title);
+
+	// Content
+	var content = document.createElement("div");
+	content.className = "settings-modal-content simple-alert-content";
+	content.id = "simple-alert-modal-desc";
+
+	var messageText = document.createElement("p");
+	messageText.className = "simple-alert-text";
+	messageText.id = "simple-alert-text";
+	content.appendChild(messageText);
+
+	// Button row
+	var btnRow = document.createElement("div");
+	btnRow.className = "new-session-btn-row";
+
+	var okBtn = document.createElement("button");
+	okBtn.className = "form-btn form-btn-primary";
+	okBtn.id = "simple-alert-ok-btn";
+	okBtn.textContent = "OK";
+	okBtn.addEventListener("click", closeSimpleAlert);
+	btnRow.appendChild(okBtn);
+
+	content.appendChild(btnRow);
+	modal.appendChild(header);
+	modal.appendChild(content);
+	simpleAlertModalOverlay.appendChild(modal);
+	document.body.appendChild(simpleAlertModalOverlay);
+
+	// Close on overlay click
+	simpleAlertModalOverlay.addEventListener("click", function (e) {
+		if (e.target === simpleAlertModalOverlay) closeSimpleAlert();
+	});
+
+	// Keyboard handling: Escape or Enter to close
+	simpleAlertModalOverlay.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" || e.key === "Enter") {
+			closeSimpleAlert();
+		}
+	});
+}
+
+/**
+ * Show the simple alert modal with custom content.
+ * @param {string} title - The title text
+ * @param {string} message - The message to display
+ * @param {string} [iconClass] - Optional codicon class (default: codicon-info)
+ */
+function showSimpleAlert(title, message, iconClass) {
+	if (!simpleAlertModalOverlay) return;
+
+	var titleText = document.getElementById("simple-alert-title-text");
+	var alertText = document.getElementById("simple-alert-text");
+	var alertIcon = document.getElementById("simple-alert-icon");
+
+	if (titleText) titleText.textContent = title;
+	if (alertText) alertText.textContent = message;
+	if (alertIcon) {
+		alertIcon.className = "codicon " + (iconClass || "codicon-info");
+	}
+
+	simpleAlertModalOverlay.classList.remove("hidden");
+
+	// Focus the OK button for keyboard accessibility
+	var okBtn = document.getElementById("simple-alert-ok-btn");
+	if (okBtn) okBtn.focus();
+}
+
+function closeSimpleAlert() {
+	if (simpleAlertModalOverlay) {
+		simpleAlertModalOverlay.classList.add("hidden");
 	}
 }

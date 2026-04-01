@@ -16,7 +16,7 @@ on:
 
 jobs:
   detect_prepare_context:
-    if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version')
+    if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -59,7 +59,7 @@ jobs:
 
   prepare_release:
     needs: detect_prepare_context
-    if: github.event_name == 'push' && needs.detect_prepare_context.outputs.should_prepare == 'true'
+    if: ${{ github.event_name == 'push' && needs.detect_prepare_context.outputs.should_prepare == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -217,7 +217,7 @@ jobs:
             }
 
   publish_release:
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'chore/release-')
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'chore/release-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

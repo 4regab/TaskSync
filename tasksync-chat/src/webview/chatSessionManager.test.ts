@@ -319,14 +319,107 @@ describe("ChatSessionManager", () => {
 		expect(manager.getNextSessionId()).toBe("5");
 	});
 
-	test("ensureSession with deleted ID creates session with fresh ID", () => {
+	test("ensureSession with deleted ID assigns a fresh ID instead of reusing", () => {
 		const manager = new ChatSessionManager();
 		manager.createSession("Agent 1"); // "1"
 		manager.createSession("Agent 2"); // "2"
 		manager.deleteSession("2");
-		// Trying to ensure deleted "2" should not resurrect it
 		const session = manager.ensureSession("2", "Ghost");
-		expect(session.id).not.toBe("2");
+		// Fresh ID: max of live {1} and deleted {2} is 2 → fresh is "3"
 		expect(session.id).toBe("3");
+		expect(session.sessionTerminated).toBe(false);
+		expect(manager.getAllSessions().length).toBe(2);
+	});
+
+	test("isDeletedSessionId returns true for tombstoned IDs", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1"
+		manager.createSession("Agent 2"); // "2"
+		expect(manager.isDeletedSessionId("2")).toBe(false);
+		manager.deleteSession("2");
+		expect(manager.isDeletedSessionId("2")).toBe(true);
+		expect(manager.isDeletedSessionId("1")).toBe(false);
+		expect(manager.isDeletedSessionId("999")).toBe(false);
+	});
+
+	test("ensureSession with deleted ID keeps tombstone in set", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1"
+		manager.createSession("Agent 2"); // "2"
+		manager.deleteSession("2");
+		manager.ensureSession("2", "Ghost"); // gets fresh ID "3"
+		// Tombstone must still exist so boundary rejection continues to work
+		expect(manager.isDeletedSessionId("2")).toBe(true);
+		const json = manager.toJSON();
+		expect(json.deletedSessionIds).toContain("2");
+	});
+
+	test("repeated ensureSession with deleted ID creates fresh session each time", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1"
+		manager.createSession("Agent 2"); // "2"
+		manager.deleteSession("2");
+		const first = manager.ensureSession("2", "Ghost"); // gets "3"
+		const second = manager.ensureSession("2", "Ghost Again"); // gets "4"
+		expect(first.id).toBe("3");
+		expect(second.id).toBe("4");
+		// Tombstone still blocks the deleted ID
+		expect(manager.isDeletedSessionId("2")).toBe(true);
+	});
+
+	test("getActiveSessions does not include deleted sessions", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1"
+		manager.createSession("Agent 2"); // "2"
+		manager.deleteSession("2");
+		manager.createSession("Agent 3"); // "3"
+		manager.archiveSession("3");
+		// "1" active, "2" deleted (not in sessions map), "3" archived
+		const active = manager.getActiveSessions();
+		expect(active.length).toBe(1);
+		expect(active[0].id).toBe("1");
+	});
+
+	test("tombstone persists through toJSON/fromJSON round-trip", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1"
+		manager.createSession("Agent 2"); // "2"
+		manager.deleteSession("2");
+
+		const json = manager.toJSON();
+		expect(json.deletedSessionIds).toContain("2");
+
+		const manager2 = new ChatSessionManager();
+		manager2.fromJSON(json);
+		expect(manager2.isDeletedSessionId("2")).toBe(true);
+		expect(manager2.getAllSessions().length).toBe(1);
+	});
+
+	test("deleting another session does not make stale deleted ID active via fallback", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1", active
+		manager.createSession("Agent 2"); // "2", active
+		manager.deleteSession("2");
+		// Tombstone for "2" exists, only "1" remains
+		expect(manager.getActiveSessions().length).toBe(1);
+		// Delete "1" — no fallback should resurrect "2"
+		manager.deleteSession("1");
+		expect(manager.getActiveSessionId()).toBeNull();
+		expect(manager.getActiveSessions().length).toBe(0);
+		// Tombstones still intact
+		expect(manager.isDeletedSessionId("2")).toBe(true);
+		expect(manager.isDeletedSessionId("1")).toBe(true);
+	});
+
+	test("archiving all sessions does not make stale deleted ID active via fallback", () => {
+		const manager = new ChatSessionManager();
+		manager.createSession("Agent 1"); // "1", active
+		manager.createSession("Agent 2"); // "2", active
+		manager.deleteSession("2");
+		manager.archiveSession("1");
+		// No active sessions remain — deleted ID "2" must NOT become active
+		expect(manager.getActiveSessionId()).toBeNull();
+		expect(manager.getActiveSessions().length).toBe(0);
+		expect(manager.isDeletedSessionId("2")).toBe(true);
 	});
 });

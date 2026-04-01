@@ -419,6 +419,200 @@ describe("askUser cancellation handling", () => {
 
 		await expect(promise).rejects.toBeInstanceOf(MockCancellationError);
 	});
+});
+
+describe("askUser session_id coercion", () => {
+	it("coerces numeric session_id to string instead of crashing on .trim()", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "OK",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		// Simulate LLM sending session_id as a number (common with numeric IDs)
+		const result = await askUser(
+			{ question: "Hello", session_id: 7 as unknown as string },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Hello", "7");
+		expect(result.response).toBe("OK");
+	});
+
+	it("coerces session_id 0 (falsy number) to string '0' instead of auto-assigning", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Zero",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		const result = await askUser(
+			{ question: "Falsy?", session_id: 0 as unknown as string },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Falsy?", "0");
+		expect(result.response).toBe("Zero");
+	});
+
+	it("treats null session_id as missing and auto-assigns", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "5" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Assigned",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		const result = await askUser(
+			{ question: "Null?", session_id: null as unknown as string },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Null?", "5");
+		expect(result.response).toContain("auto-assigned session_id");
+	});
+
+	it("treats undefined session_id as missing and auto-assigns", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "6" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Assigned",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		const result = await askUser(
+			{ question: "Undef?", session_id: undefined as unknown as string },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Undef?", "6");
+		expect(result.response).toContain("auto-assigned session_id");
+	});
+
+	it("treats object session_id as missing and auto-assigns", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "8" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Assigned",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		const result = await askUser(
+			{ question: "Obj?", session_id: {} as unknown as string },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(result.response).toContain("auto-assigned session_id");
+	});
+
+	it("treats whitespace-only session_id as missing and auto-assigns", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "10" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Assigned",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		const result = await askUser(
+			{ question: "Spaces?", session_id: "   " },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(result.response).toContain("auto-assigned session_id");
+	});
+
+	it("invoke handler coerces numeric session_id before passing to askUser", async () => {
+		const { registerTools } = await import("./tools");
+		const provider = {
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Invoked",
+				attachments: [],
+				queue: false,
+			}),
+			_autoAppendEnabled: false,
+			_autoAppendText: "",
+			_alwaysAppendReminder: false,
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+		const context = { subscriptions: [] as unknown[] };
+
+		registerTools(context as any, provider as any);
+
+		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
+		expect(toolDefinition).toBeTruthy();
+
+		// Invoke with numeric session_id — must not crash
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Via invoke", session_id: 3 } },
+			createToken() as any,
+		);
+
+		expect(result).toBeTruthy();
+		expect(result.parts).toBeDefined();
+		// Verify it coerced to string "3"
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith(
+			"Via invoke",
+			"3",
+		);
+	});
+
+	it("treats non-string non-number session_id as empty and auto-assigns", async () => {
+		const { askUser } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "9" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Assigned",
+				attachments: [],
+				queue: false,
+			}),
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+
+		// Simulate LLM sending session_id as a boolean
+		const result = await askUser(
+			{ question: "Test", session_id: true as unknown as string },
+			provider as any,
+			createToken() as any,
+		);
+
+		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
+		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Test", "9");
+		expect(result.response).toContain("auto-assigned session_id");
+	});
 
 	it("auto-assigns a session_id when the tool is invoked without one", async () => {
 		const { askUser } = await import("./tools");

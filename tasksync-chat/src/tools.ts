@@ -86,7 +86,14 @@ export async function askUser(
 	provider: TaskSyncWebviewProvider,
 	token: vscode.CancellationToken,
 ): Promise<AskUserToolResult> {
-	let effectiveSessionId = params.session_id?.trim() || "";
+	const rawSessionId = params.session_id;
+	let effectiveSessionId =
+		(typeof rawSessionId === "string"
+			? rawSessionId
+			: typeof rawSessionId === "number"
+				? String(rawSessionId)
+				: ""
+		).trim() || "";
 	// Treat "auto" as a bootstrap signal — same as missing
 	if (effectiveSessionId.toLowerCase() === "auto") {
 		effectiveSessionId = "";
@@ -277,8 +284,15 @@ export function registerTools(
 				safeQuestion.slice(0, 60),
 			);
 			try {
+				const rawSid = params?.session_id;
+				const safeSessionId =
+					typeof rawSid === "string"
+						? rawSid
+						: typeof rawSid === "number"
+							? String(rawSid)
+							: "";
 				const result = await askUser(
-					{ question: safeQuestion, session_id: params?.session_id },
+					{ question: safeQuestion, session_id: safeSessionId },
 					provider,
 					token,
 				);

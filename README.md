@@ -15,7 +15,10 @@ Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop wo
 
 ### Option 1: [TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat) (VS Code Extension) - Recommended
 
-https://github.com/user-attachments/assets/f7e5a694-9cfe-4e7a-9065-6cc826f89031
+
+
+https://github.com/user-attachments/assets/53290a1c-3193-4830-8f13-cb6ae9682a58
+
 
 A dedicated VS Code sidebar extension with smart prompt queue system. _Setup instructions here: [tasksync-chat](https://github.com/4regab/TaskSync/tree/main/tasksync-chat) folder._
 

@@ -11,13 +11,13 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
   id-token: write
   attestations: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Skip if commit message contains [skip ci] or is a version bump
     if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version')"
     defaults:
       run:
@@ -48,38 +48,29 @@ jobs:
       - name: Bump version
         id: bump
         run: |
-          # Get current version
           CURRENT=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT"
           echo "prev_version=$CURRENT" >> $GITHUB_OUTPUT
-          
-          # Bump patch version
+
           IFS='.' read -r major minor patch <<< "$CURRENT"
           NEW_VERSION="$major.$minor.$((patch + 1))"
           echo "New version: $NEW_VERSION"
-          
-          # Update package.json
+
           npm version $NEW_VERSION --no-git-tag-version
-          
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Get meaningful commit message
         id: commit_info
         run: |
           cd ..
-          # Get the commit message, handling merge commits by getting the merged commit's message
           HEAD_MSG="${{ github.event.head_commit.message }}"
-          
-          # Check if this is a merge commit (starts with "Merge")
+
           if [[ "$HEAD_MSG" == Merge* ]]; then
-            # Get the first parent's first non-merge commit message from the merged branch
-            # For a merge commit, the second parent is the merged branch
             MEANINGFUL_MSG=$(git log --format=%s --no-merges -1 HEAD^2 2>/dev/null || echo "$HEAD_MSG")
           else
             MEANINGFUL_MSG="$HEAD_MSG"
           fi
-          
-          # Use heredoc with delimiter for multi-line output (proper GitHub Actions syntax)
+
           {
             echo "message<<EOF"
             echo "$MEANINGFUL_MSG"
@@ -91,39 +82,65 @@ jobs:
           cd ..
           DATE=$(date +%m-%d-%y)
           VERSION="${{ steps.bump.outputs.version }}"
-          
-          # Create new changelog entry
+
           TEMP_FILE=$(mktemp)
           echo "# Changelog" > $TEMP_FILE
           echo "" >> $TEMP_FILE
           echo "All notable changes to this project will be documented in this file." >> $TEMP_FILE
           echo "" >> $TEMP_FILE
           echo "## TaskSync v$VERSION ($DATE)" >> $TEMP_FILE
-          # Write multi-line commit message, indenting continuation lines
           echo '${{ steps.commit_info.outputs.message }}' | while IFS= read -r line; do
             if [ -n "$line" ]; then
               echo "- $line" >> $TEMP_FILE
             fi
           done
           echo "" >> $TEMP_FILE
-          
-          # Append existing changelog (skip header)
           tail -n +4 CHANGELOG.md >> $TEMP_FILE
           mv $TEMP_FILE CHANGELOG.md
+
+      - name: Create release branch
+        run: |
+          cd ..
+          BRANCH="chore/release-${{ steps.bump.outputs.version }}"
+          git checkout -b "$BRANCH"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
       - name: Commit version bump
         run: |
           cd ..
           git add tasksync-chat/package.json tasksync-chat/package-lock.json CHANGELOG.md
-          # Skip local git hooks in CI to avoid generated-file side effects leaving a dirty worktree.
           git commit --no-verify -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
-          # Rebase onto latest main to avoid non-fast-forward push failures when main advances during the run.
-          # If rebase conflicts, abort and fail this step explicitly.
-          if ! git pull --rebase origin main; then
-            git rebase --abort || true
-            exit 1
-          fi
-          git push origin HEAD:main
+
+      - name: Push release branch
+        run: |
+          cd ..
+          git push origin HEAD:${{ steps.create_release_branch.outputs.branch }}
+
+      - name: Open pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { repo, owner } = context.repo;
+            const branch = `${{ steps.create_release_branch.outputs.branch }}`;
+            const version = `${{ steps.bump.outputs.version }}`;
+
+            const existing = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`,
+            });
+
+            if (existing.data.length) return;
+
+            await github.rest.pulls.create({
+              owner,
+              repo,
+              title: `chore: bump version to ${version}`,
+              head: branch,
+              base: 'main',
+              body: `Automated release prep for TaskSync v${version}.`,
+            });
 
       - name: Build extension
         run: npm run build
@@ -145,13 +162,13 @@ jobs:
           generate_release_notes: false
           body: |
             ## TaskSync v${{ steps.bump.outputs.version }}
-            
+
             ${{ steps.commit_info.outputs.message }}
-            
+
             ### Install
             - **Marketplace**: [Install TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat)
             - **Manual**: Download `.vsix` below → `Extensions: Install from VSIX...`
-            
+
             **Full Changelog**: https://github.com/4regab/TaskSync/compare/v${{ steps.bump.outputs.prev_version }}...v${{ steps.bump.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

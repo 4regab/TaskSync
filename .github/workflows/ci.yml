@@ -4,8 +4,9 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'tasksync-chat/**'
-      - '.github/workflows/ci.yml'
+      - "tasksync-chat/**"
+      - ".github/workflows/auto-release.yml"
+      - ".github/workflows/ci.yml"
 
 jobs:
   validate:
@@ -20,8 +21,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: tasksync-chat/package-lock.json
 
       - name: Install dependencies

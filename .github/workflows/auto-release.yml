@@ -8,17 +8,62 @@ on:
       - "tasksync-chat/**"
       - ".github/workflows/auto-release.yml"
       - "!tasksync-chat/package.json" # Prevent infinite loop
-
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
-  attestations: write
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
 
 jobs:
-  release:
+  detect_prepare_context:
+    if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version')
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version')"
+    permissions:
+      contents: read
+    outputs:
+      should_prepare: ${{ steps.changes.outputs.should_prepare }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect release-only changes
+        id: changes
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "should_prepare=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          CHANGED_FILES="$(git diff --name-only "$BEFORE" "$AFTER")"
+          printf 'Changed files:\n%s\n' "$CHANGED_FILES"
+
+          SHOULD_PREPARE=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              CHANGELOG.md|tasksync-chat/package.json|tasksync-chat/package-lock.json)
+                ;;
+              *)
+                SHOULD_PREPARE=true
+                break
+                ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          echo "should_prepare=$SHOULD_PREPARE" >> $GITHUB_OUTPUT
+
+  prepare_release:
+    needs: detect_prepare_context
+    if: github.event_name == 'push' && needs.detect_prepare_context.outputs.should_prepare == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     defaults:
       run:
         working-directory: tasksync-chat
@@ -26,7 +71,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -39,28 +83,42 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
-
-      - name: Bump version
-        id: bump
+      - name: Compute release metadata
+        id: release_meta
         run: |
           CURRENT=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT"
-          echo "prev_version=$CURRENT" >> $GITHUB_OUTPUT
 
           IFS='.' read -r major minor patch <<< "$CURRENT"
           NEW_VERSION="$major.$minor.$((patch + 1))"
-          echo "New version: $NEW_VERSION"
+          BRANCH="chore/release-$NEW_VERSION"
 
-          npm version $NEW_VERSION --no-git-tag-version
+          echo "New version: $NEW_VERSION"
+          echo "Release branch: $BRANCH"
+
+          echo "prev_version=$CURRENT" >> $GITHUB_OUTPUT
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Check for existing release branch
+        id: branch_check
+        run: |
+          cd ..
+          if git ls-remote --exit-code --heads origin "${{ steps.release_meta.outputs.branch }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "::notice title=Release branch already exists::${{ steps.release_meta.outputs.branch }} already exists on origin. Reusing that branch instead of overwriting it."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump version
+        if: steps.branch_check.outputs.exists != 'true'
+        run: |
+          npm version ${{ steps.release_meta.outputs.version }} --no-git-tag-version
 
       - name: Get meaningful commit message
         id: commit_info
+        if: steps.branch_check.outputs.exists != 'true'
         run: |
           cd ..
           HEAD_MSG="${{ github.event.head_commit.message }}"
@@ -78,10 +136,11 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Update CHANGELOG
+        if: steps.branch_check.outputs.exists != 'true'
         run: |
           cd ..
           DATE=$(date +%m-%d-%y)
-          VERSION="${{ steps.bump.outputs.version }}"
+          VERSION="${{ steps.release_meta.outputs.version }}"
 
           TEMP_FILE=$(mktemp)
           echo "# Changelog" > $TEMP_FILE
@@ -99,42 +158,45 @@ jobs:
           mv $TEMP_FILE CHANGELOG.md
 
       - name: Create release branch
-        id: create_release_branch
+        if: steps.branch_check.outputs.exists != 'true'
         run: |
           cd ..
-          BRANCH="chore/release-${{ steps.bump.outputs.version }}"
-          git checkout -B "$BRANCH"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          git checkout -b "${{ steps.release_meta.outputs.branch }}"
 
       - name: Commit version bump
+        if: steps.branch_check.outputs.exists != 'true'
         run: |
           cd ..
           git add tasksync-chat/package.json tasksync-chat/package-lock.json CHANGELOG.md
-          git commit --no-verify -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git commit --no-verify -m "chore: bump version to ${{ steps.release_meta.outputs.version }} [skip ci]"
 
       - name: Push release branch
+        if: steps.branch_check.outputs.exists != 'true'
         run: |
           cd ..
-          git push --set-upstream origin "${{ steps.create_release_branch.outputs.branch }}"
+          git push --set-upstream origin "${{ steps.release_meta.outputs.branch }}"
 
-      - name: Open pull request
+      - name: Open or reuse pull request
         uses: actions/github-script@v7
         with:
           script: |
             const { repo, owner } = context.repo;
-            const branch = `${{ steps.create_release_branch.outputs.branch }}`;
-            const version = `${{ steps.bump.outputs.version }}`;
+            const branch = `${{ steps.release_meta.outputs.branch }}`;
+            const version = `${{ steps.release_meta.outputs.version }}`;
+            const existing = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`,
+            });
+
+            if (existing.data.length) {
+              core.notice(`Release PR already open: ${existing.data[0].html_url}`);
+              return;
+            }
+
             try {
-              const existing = await github.rest.pulls.list({
-                owner,
-                repo,
-                state: 'open',
-                head: `${owner}:${branch}`,
-              });
-
-              if (existing.data.length) return;
-
-              await github.rest.pulls.create({
+              const created = await github.rest.pulls.create({
                 owner,
                 repo,
                 title: `chore: bump version to ${version}`,
@@ -142,6 +204,8 @@ jobs:
                 base: 'main',
                 body: `Automated release prep for TaskSync v${version}.`,
               });
+
+              core.notice(`Created release PR: ${created.data.html_url}`);
             } catch (error) {
               const msg = String(error?.response?.data?.message || error?.message || "");
               const blocked = error?.status === 403 && msg.includes("GitHub Actions is not permitted to create or approve pull requests.");
@@ -152,11 +216,84 @@ jobs:
               core.notice(`Create the release PR manually: ${compareUrl}`);
             }
 
+  publish_release:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' && startsWith(github.event.pull_request.head.ref, 'chore/release-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        working-directory: tasksync-chat
+    steps:
+      - name: Checkout merged main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: tasksync-chat/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Read release metadata
+        id: release_meta
+        run: |
+          cd ..
+          VERSION=$(node -p "require('./tasksync-chat/package.json').version")
+          PREV_TAG=$(git tag --sort=-version:refname | grep '^v' | head -n 1 || true)
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "compare_url=https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...v$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "compare_url=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build extension
         run: npm run build
 
       - name: Package extension
         run: vsce package
+
+      - name: Compose release notes
+        id: release_notes
+        run: |
+          COMPARE_URL="${{ steps.release_meta.outputs.compare_url }}"
+          BODY_FILE=$(mktemp)
+
+          {
+            echo "## TaskSync v${{ steps.release_meta.outputs.version }}"
+            echo
+            echo "Released from merged PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo
+            echo "### Install"
+            echo "- **Marketplace**: [Install TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat)"
+            echo "- **Manual**: Download \`.vsix\` below -> \`Extensions: Install from VSIX...\`"
+
+            if [ -n "$COMPARE_URL" ]; then
+              echo
+              echo "**Full Changelog**: $COMPARE_URL"
+            fi
+          } > "$BODY_FILE"
+
+          {
+            echo "body<<EOF"
+            cat "$BODY_FILE"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Publish to VS Code Marketplace
         run: vsce publish
@@ -166,20 +303,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.bump.outputs.version }}
-          name: TaskSync v${{ steps.bump.outputs.version }}
+          tag_name: v${{ steps.release_meta.outputs.version }}
+          name: TaskSync v${{ steps.release_meta.outputs.version }}
           files: tasksync-chat/*.vsix
           generate_release_notes: false
-          body: |
-            ## TaskSync v${{ steps.bump.outputs.version }}
-
-            ${{ steps.commit_info.outputs.message }}
-
-            ### Install
-            - **Marketplace**: [Install TaskSync](https://marketplace.visualstudio.com/items?itemName=4regab.tasksync-chat)
-            - **Manual**: Download `.vsix` below → `Extensions: Install from VSIX...`
-
-            **Full Changelog**: https://github.com/4regab/TaskSync/compare/v${{ steps.bump.outputs.prev_version }}...v${{ steps.bump.outputs.version }}
+          body: ${{ steps.release_notes.outputs.body }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -124,24 +124,33 @@ jobs:
             const { repo, owner } = context.repo;
             const branch = `${{ steps.create_release_branch.outputs.branch }}`;
             const version = `${{ steps.bump.outputs.version }}`;
+            try {
+              const existing = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                head: `${owner}:${branch}`,
+              });
 
-            const existing = await github.rest.pulls.list({
-              owner,
-              repo,
-              state: 'open',
-              head: `${owner}:${branch}`,
-            });
+              if (existing.data.length) return;
 
-            if (existing.data.length) return;
+              await github.rest.pulls.create({
+                owner,
+                repo,
+                title: `chore: bump version to ${version}`,
+                head: branch,
+                base: 'main',
+                body: `Automated release prep for TaskSync v${version}.`,
+              });
+            } catch (error) {
+              const msg = String(error?.response?.data?.message || error?.message || "");
+              const blocked = error?.status === 403 && msg.includes("GitHub Actions is not permitted to create or approve pull requests.");
+              if (!blocked) throw error;
 
-            await github.rest.pulls.create({
-              owner,
-              repo,
-              title: `chore: bump version to ${version}`,
-              head: branch,
-              base: 'main',
-              body: `Automated release prep for TaskSync v${version}.`,
-            });
+              const compareUrl = `https://github.com/${owner}/${repo}/compare/main...${branch}?expand=1`;
+              core.warning("Skipping automatic PR creation: repository settings block GitHub Actions from creating PRs.");
+              core.notice(`Create the release PR manually: ${compareUrl}`);
+            }
 
       - name: Build extension
         run: npm run build

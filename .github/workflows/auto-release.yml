@@ -5,9 +5,9 @@ on:
     branches:
       - main
     paths:
-      - 'tasksync-chat/**'
-      - '.github/workflows/auto-release.yml'
-      - '!tasksync-chat/package.json'  # Prevent infinite loop
+      - "tasksync-chat/**"
+      - ".github/workflows/auto-release.yml"
+      - "!tasksync-chat/package.json" # Prevent infinite loop
 
 permissions:
   contents: write
@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Configure Git
         run: |
@@ -99,10 +99,11 @@ jobs:
           mv $TEMP_FILE CHANGELOG.md
 
       - name: Create release branch
+        id: create_release_branch
         run: |
           cd ..
           BRANCH="chore/release-${{ steps.bump.outputs.version }}"
-          git checkout -b "$BRANCH"
+          git checkout -B "$BRANCH"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
       - name: Commit version bump
@@ -114,7 +115,7 @@ jobs:
       - name: Push release branch
         run: |
           cd ..
-          git push origin HEAD:${{ steps.create_release_branch.outputs.branch }}
+          git push --set-upstream origin "${{ steps.create_release_branch.outputs.branch }}"
 
       - name: Open pull request
         uses: actions/github-script@v7

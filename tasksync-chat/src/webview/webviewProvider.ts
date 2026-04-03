@@ -153,6 +153,7 @@ export class TaskSyncWebviewProvider
 
 	// Interactive approval buttons enabled (loaded from VS Code settings)
 	_interactiveApprovalEnabled: boolean = true;
+	_agentOrchestrationEnabled: boolean = true;
 	// Mirrors the ACTIVE session's Auto Append state.
 	_autoAppendEnabled: boolean = false;
 	_autoAppendText: string = "";
@@ -253,35 +254,45 @@ export class TaskSyncWebviewProvider
 		// Listen for settings changes
 		this._disposables.push(
 			vscode.workspace.onDidChangeConfiguration((e) => {
-				// Skip reload if we're the ones updating config (prevents race condition)
-				if (this._isUpdatingConfig) {
-					return;
-				}
-				if (
-					e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
-					e.affectsConfiguration(
-						`${CONFIG_SECTION}.alwaysAppendAskUserReminder`,
-					) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.sessionWarningHours`) ||
-					e.affectsConfiguration(
-						`${CONFIG_SECTION}.maxConsecutiveAutoResponses`,
-					) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelay`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMin`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMax`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.sendWithCtrlEnter`)
-				) {
-					this._loadSettings();
-					this._updateSettingsUI();
-					// Broadcast all settings to remote clients
-					settingsH.broadcastAllSettingsToRemote(this);
-				}
+				this._handleConfigurationChange(e);
 			}),
 		);
+	}
+
+	public _handleConfigurationChange(e: vscode.ConfigurationChangeEvent): void {
+		if (this._isUpdatingConfig) {
+			return;
+		}
+		if (
+			e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.agentOrchestration`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.alwaysAppendAskUserReminder`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.sessionWarningHours`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.maxConsecutiveAutoResponses`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelay`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMin`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMax`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.sendWithCtrlEnter`)
+		) {
+			this._loadSettings();
+			if (
+				!this._agentOrchestrationEnabled &&
+				settingsH.getWaitingActiveSessions(this).length > 1
+			) {
+				vscode.window.showWarningMessage(
+					settingsH.AGENT_ORCHESTRATION_MULTI_WAITING_WARNING,
+				);
+				void settingsH.handleUpdateAgentOrchestrationSetting(this, true);
+				return;
+			}
+			this._updateSettingsUI();
+			settingsH.sendSessionSettingsToWebview(this);
+			settingsH.broadcastAllSettingsToRemote(this);
+		}
 	}
 
 	/**
@@ -387,6 +398,10 @@ export class TaskSyncWebviewProvider
 	}
 
 	public _setActiveSession(sessionId: string | null): boolean {
+		if (!this._agentOrchestrationEnabled) {
+			this._getSingleSession();
+			return true;
+		}
 		const switched = this._sessionManager.setActiveSession(sessionId);
 		if (switched) {
 			this._syncActiveSessionState();
@@ -449,7 +464,45 @@ export class TaskSyncWebviewProvider
 		this._updateSettingsUI();
 	}
 
+	public _getSingleSession(): ChatSession {
+		const activeSession = this._sessionManager.getActiveSession();
+		const preferredSession = settingsH.getWaitingActiveSessions(this)[0];
+		if (
+			activeSession &&
+			!activeSession.sessionTerminated &&
+			(!preferredSession || preferredSession.id === activeSession.id)
+		) {
+			return activeSession;
+		}
+
+		const fallbackSession =
+			preferredSession ??
+			this._sessionManager
+				.getActiveSessions()
+				.find((session) => !session.sessionTerminated);
+		if (fallbackSession) {
+			this._sessionManager.setActiveSession(fallbackSession.id);
+			this._syncActiveSessionState();
+			this._updateSessionsUI();
+			this._saveSessionsToDisk();
+			return fallbackSession;
+		}
+
+		const session = this._sessionManager.createSession(
+			this._sessionManager.getNextAgentTitle(),
+			undefined,
+			this._sessionDefaults(),
+		);
+		this._syncActiveSessionState();
+		this._updateSessionsUI();
+		this._saveSessionsToDisk();
+		return session;
+	}
+
 	public _bindSession(sessionId: string): ChatSession {
+		if (!this._agentOrchestrationEnabled) {
+			return this._getSingleSession();
+		}
 		return this._ensureSession(
 			sessionId,
 			this._sessionManager.getNextAgentTitle(),
@@ -457,6 +510,9 @@ export class TaskSyncWebviewProvider
 	}
 
 	public createSessionForMissingId(): ChatSession {
+		if (!this._agentOrchestrationEnabled) {
+			return this._getSingleSession();
+		}
 		const session = this._sessionManager.createSession(
 			this._sessionManager.getNextAgentTitle(),
 			this._sessionManager.getNextSessionId(),
@@ -488,7 +544,9 @@ export class TaskSyncWebviewProvider
 		useQueuedPrompt?: boolean;
 		stopCurrentSession?: boolean;
 	}): Promise<void> {
-		const previousActiveSession = this._sessionManager.getActiveSession();
+		const previousActiveSession = this._agentOrchestrationEnabled
+			? this._sessionManager.getActiveSession()
+			: this._getSingleSession();
 		let queuedPromptFromPrevious: QueuedPrompt | undefined;
 		const useQueuedPrompt = options?.useQueuedPrompt;
 
@@ -499,6 +557,46 @@ export class TaskSyncWebviewProvider
 			) {
 				notifyQueueChanged(this);
 			}
+		}
+
+		if (!this._agentOrchestrationEnabled && previousActiveSession) {
+			lifecycle.startNewSession(this, {
+				statusMessage: NEW_SESSION_STATUS_MESSAGE,
+				remoteEventType: "newSession",
+			});
+
+			let chatQuery: string;
+			const trimmedPrompt = options?.initialPrompt?.trim();
+
+			if (trimmedPrompt) {
+				chatQuery = buildAskUserRequestQuery(
+					trimmedPrompt.slice(0, MAX_QUEUE_PROMPT_LENGTH),
+				);
+			} else if (useQueuedPrompt !== false) {
+				const queuedPrompt = queuedPromptFromPrevious?.prompt.slice(
+					0,
+					MAX_QUEUE_PROMPT_LENGTH,
+				);
+				chatQuery = queuedPrompt
+					? buildAskUserRequestQuery(queuedPrompt)
+					: DEFAULT_REMOTE_SESSION_QUERY;
+			} else {
+				chatQuery = DEFAULT_REMOTE_SESSION_QUERY;
+			}
+
+			const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+			const chatCommand = config.get<string>(
+				"remoteChatCommand",
+				DEFAULT_REMOTE_CHAT_COMMAND,
+			);
+
+			await startNewSessionChat(
+				previousActiveSession.id,
+				chatCommand,
+				chatQuery,
+				DEFAULT_REMOTE_CHAT_COMMAND,
+			);
+			return;
 		}
 
 		if (options?.stopCurrentSession && previousActiveSession) {

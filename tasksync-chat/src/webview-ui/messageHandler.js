@@ -68,6 +68,15 @@ function handleExtensionMessage(event) {
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+			agentOrchestrationEnabled = message.agentOrchestrationEnabled !== false;
+			if (!agentOrchestrationEnabled) {
+				splitViewEnabled = false;
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(
+						serverActiveSessionId || activeSessionId || null,
+					);
+				}
+			}
 			autoAppendEnabled = message.autoAppendEnabled === true;
 			autoAppendText =
 				typeof message.autoAppendText === "string"
@@ -110,6 +119,7 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
+			updateAgentOrchestrationToggleUI();
 			updateAutoAppendToggleUI();
 			updateAutoAppendTextUI();
 			updateAlwaysAppendReminderToggleUI();
@@ -122,6 +132,8 @@ function handleExtensionMessage(event) {
 			updateRemoteMaxDevicesUI();
 			updateHumanDelayUI();
 			renderPromptsList();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
 			break;
 		case "slashCommandResults":
 			showSlashDropdown(message.prompts || []);

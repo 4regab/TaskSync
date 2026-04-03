@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "3.0.9",
+  "version": "3.0.10",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -242,6 +242,12 @@
           "default": true,
           "description": "Show interactive approval and choice buttons for Yes/No questions and multiple choice options."
         },
+        "tasksync.agentOrchestration": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Enable multiple TaskSync agent sessions with the sessions list, switching, and split view. Turn off to keep TaskSync in a single-session lane."
+        },
         "tasksync.autoAppendText": {
           "type": "string",
           "default": "",
@@ -350,7 +356,7 @@
         },
         {
           "command": "tasksync.toggleSplitView",
-          "when": "view == taskSyncView",
+          "when": "view == taskSyncView && config.tasksync.agentOrchestration",
           "group": "navigation@1.1"
         },
         {

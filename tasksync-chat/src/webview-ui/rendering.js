@@ -518,6 +518,13 @@ function renderMermaidDiagrams() {
  * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
  */
 function toggleSplitView() {
+	if (!agentOrchestrationEnabled) {
+		splitViewEnabled = false;
+		syncSplitViewLayout();
+		updateWelcomeSectionVisibility();
+		saveWebviewState();
+		return;
+	}
 	splitViewEnabled = !splitViewEnabled;
 	syncSplitViewLayout();
 	updateWelcomeSectionVisibility();
@@ -673,6 +680,16 @@ function syncHiddenListUnreadIndicators() {
 	var backBtn = document.getElementById("thread-back-btn");
 	var collapseBar = document.getElementById("sessions-collapse-bar");
 	var hubEl = document.getElementById("workspace-hub");
+	if (!agentOrchestrationEnabled) {
+		if (backBtn) {
+			backBtn.classList.remove("has-unread-indicator");
+		}
+		if (collapseBar) {
+			collapseBar.classList.remove("has-unread-indicator");
+			collapseBar.classList.add("hidden");
+		}
+		return;
+	}
 	var hasOpenSession = !!activeSessionId;
 	var hasUnreadOtherSession = (sessions || []).some(function (session) {
 		return session.id !== activeSessionId && session.unread === true;
@@ -722,7 +739,8 @@ function syncSplitViewLayout() {
 		resizer.classList.toggle("hidden", !effectiveSplitView);
 	}
 	if (remoteSplitBtn) {
-		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+		remoteSplitBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+		remoteSplitBtn.classList.toggle("active", effectiveSplitView);
 	}
 
 	if (effectiveSplitView) {
@@ -754,6 +772,15 @@ function updateWelcomeSectionVisibility() {
 	var placeholderEl = document.getElementById("split-placeholder");
 	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
+	var backBtn = document.getElementById("thread-back-btn");
+	var editBtn = document.getElementById("thread-edit-btn");
+
+	if (backBtn) {
+		backBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
+	if (editBtn) {
+		editBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
 
 	syncSplitViewLayout();
 
@@ -827,16 +854,29 @@ function scrollToBottom() {
 function renderSessionsList() {
 	var sessionsListEl = document.getElementById("sessions-list");
 	var sessionsPanelEl = document.getElementById("sessions-panel");
+	var visibleSessions = getVisibleSessions();
 	if (!sessionsListEl) return;
 
 	// Update collapse bar session count
 	var countEl = document.getElementById("sessions-collapse-count");
 	if (countEl) {
 		countEl.textContent =
-			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+			agentOrchestrationEnabled && visibleSessions.length > 0
+				? "(" + visibleSessions.length + ")"
+				: "";
 	}
 
-	if (!sessions || sessions.length === 0) {
+	if (!agentOrchestrationEnabled) {
+		sessionsListEl.innerHTML = "";
+		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) {
+			welcomeSection.classList.toggle("hidden", visibleSessions.length > 0);
+		}
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (!visibleSessions || visibleSessions.length === 0) {
 		sessionsListEl.innerHTML = "";
 		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
 		if (welcomeSection) welcomeSection.classList.remove("hidden");
@@ -848,7 +888,7 @@ function renderSessionsList() {
 	if (welcomeSection) welcomeSection.classList.add("hidden");
 
 	// Sort: active sessions first (newest first), then archived
-	var sorted = sessions.slice().sort(function (a, b) {
+	var sorted = visibleSessions.slice().sort(function (a, b) {
 		if (a.status !== b.status) {
 			return a.status === "active" ? -1 : 1;
 		}

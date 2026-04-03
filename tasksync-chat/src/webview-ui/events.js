@@ -87,6 +87,7 @@ function bindEventListeners() {
 	// Hub & Thread Shell events
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
+			if (!agentOrchestrationEnabled) return;
 			saveActiveSessionComposerState();
 			activeSessionId = null;
 			restoreActiveSessionComposerState();
@@ -105,6 +106,7 @@ function bindEventListeners() {
 	var threadEditBtn = document.getElementById("thread-edit-btn");
 	if (threadEditBtn) {
 		threadEditBtn.addEventListener("click", function () {
+			if (!agentOrchestrationEnabled) return;
 			var titleEl = document.getElementById("thread-title");
 			if (!titleEl || !activeSessionId) return;
 			var currentTitle = titleEl.textContent || "";
@@ -190,6 +192,18 @@ function bindEventListeners() {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
 				toggleInteractiveApprovalSetting();
+			}
+		});
+	}
+	if (agentOrchestrationToggle) {
+		agentOrchestrationToggle.addEventListener(
+			"click",
+			toggleAgentOrchestrationSetting,
+		);
+		agentOrchestrationToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAgentOrchestrationSetting();
 			}
 		});
 	}

@@ -60,7 +60,7 @@ export const HUMAN_DELAY_MAX_UPPER = 60; // maximum allowed for "max delay" inpu
 // Superseded ask_user directive — returned as normal tool result (not CancellationError)
 // so the ToolCallingLoop keeps running. Instructs the LLM to re-ask the same question.
 export const ASKUSER_SUPERSEDED_MESSAGE =
-	"[CANCELLED: This ask_user request was superseded internally. When you call ask_user again, re-ask the exact same question — do not rephrase or summarize differently.]";
+	"[CANCELLED. THIS ask_user WAS SUPERSEDED. CALL ask_user AGAIN NOW. RE-ASK THE EXACT SAME QUESTION. DO NOT REPHRASE. DO NOT REPLY IN PLAIN CHAT.]";
 
 // Shared askUser prompt fragments (used by both local and remote session starts)
 export const ASKUSER_VISIBILITY_TEXT =

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "../__mocks__/vscode";
+import * as vscode from "../__mocks__/vscode";
 import { ChatSessionManager } from "./chatSessionManager";
+import * as settingsH from "./settingsHandlers";
 
 const loadSessionsFromDiskAsyncMock = vi.fn();
 
@@ -36,6 +38,7 @@ function createProviderHarness(manager: ChatSessionManager) {
 		_updateAttachmentsUI: vi.fn(),
 		_loadSettings: vi.fn(),
 		_updateSettingsUI: vi.fn(),
+		_saveSessionsToDisk: vi.fn(),
 		_startSessionTimerInterval: vi.fn(),
 		_stopSessionTimerInterval: vi.fn(),
 		_updateSessionsUI: vi.fn(),
@@ -212,5 +215,164 @@ describe("TaskSyncWebviewProvider unread shared state", () => {
 			status: "pending",
 		});
 		expect(provider._updateSessionsUI).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("TaskSyncWebviewProvider single-session helpers", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+		loadSessionsFromDiskAsyncMock.mockReset();
+	});
+
+	it("reuses the active singleton for missing session ids when orchestration is off", async () => {
+		const { TaskSyncWebviewProvider } = await import("./webviewProvider");
+		const manager = new ChatSessionManager();
+		const activeSession = manager.createSession("Agent 1");
+
+		const provider = Object.assign(
+			Object.create(TaskSyncWebviewProvider.prototype),
+			createProviderHarness(manager),
+			{
+				_agentOrchestrationEnabled: false,
+			},
+		);
+
+		const resolvedSession = provider.createSessionForMissingId();
+
+		expect(resolvedSession.id).toBe(activeSession.id);
+		expect(manager.size).toBe(1);
+	});
+
+	it("binds arbitrary incoming ids to the singleton session when orchestration is off", async () => {
+		const { TaskSyncWebviewProvider } = await import("./webviewProvider");
+		const manager = new ChatSessionManager();
+		const activeSession = manager.createSession("Agent 1");
+
+		const provider = Object.assign(
+			Object.create(TaskSyncWebviewProvider.prototype),
+			createProviderHarness(manager),
+			{
+				_agentOrchestrationEnabled: false,
+			},
+		);
+
+		const resolvedSession = provider._bindSession("99");
+
+		expect(resolvedSession.id).toBe(activeSession.id);
+		expect(manager.size).toBe(1);
+	});
+
+	it("prefers the waiting session when collapsing into a singleton", async () => {
+		const { TaskSyncWebviewProvider } = await import("./webviewProvider");
+		const manager = new ChatSessionManager();
+		const activeSession = manager.createSession("Agent 1");
+		const waitingSession = manager.createSession("Agent 2");
+		waitingSession.waitingOnUser = true;
+		waitingSession.pendingToolCallId = "tc_waiting";
+		manager.setActiveSession(activeSession.id);
+
+		const provider = Object.assign(
+			Object.create(TaskSyncWebviewProvider.prototype),
+			createProviderHarness(manager),
+			{
+				_agentOrchestrationEnabled: false,
+			},
+		);
+
+		const resolvedSession = provider._getSingleSession();
+
+		expect(resolvedSession.id).toBe(waitingSession.id);
+		expect(manager.getActiveSessionId()).toBe(waitingSession.id);
+		expect(provider._updateSessionsUI).toHaveBeenCalledTimes(1);
+	});
+
+	it("creates a fresh singleton when the only active session is terminated", async () => {
+		const { TaskSyncWebviewProvider } = await import("./webviewProvider");
+		const manager = new ChatSessionManager();
+		const terminatedSession = manager.createSession("Agent 1");
+		terminatedSession.sessionTerminated = true;
+
+		const provider = Object.assign(
+			Object.create(TaskSyncWebviewProvider.prototype),
+			createProviderHarness(manager),
+			{
+				_agentOrchestrationEnabled: false,
+			},
+		);
+
+		const resolvedSession = provider._getSingleSession();
+
+		expect(resolvedSession.id).not.toBe(terminatedSession.id);
+		expect(resolvedSession.sessionTerminated).toBe(false);
+		expect(manager.size).toBe(2);
+	});
+
+	it("reloads settings when agentOrchestration changes through VS Code config", async () => {
+		const { TaskSyncWebviewProvider } = await import("./webviewProvider");
+		const manager = new ChatSessionManager();
+		const provider = Object.assign(
+			Object.create(TaskSyncWebviewProvider.prototype),
+			createProviderHarness(manager),
+			{
+				_isUpdatingConfig: false,
+			},
+		);
+		const broadcastSpy = vi
+			.spyOn(settingsH, "broadcastAllSettingsToRemote")
+			.mockImplementation(() => {});
+		const sessionSettingsSpy = vi
+			.spyOn(settingsH, "sendSessionSettingsToWebview")
+			.mockImplementation(() => {});
+
+		provider._handleConfigurationChange({
+			affectsConfiguration: (key: string) =>
+				key === "tasksync.agentOrchestration",
+		} as any);
+
+		expect(provider._loadSettings).toHaveBeenCalledTimes(1);
+		expect(provider._updateSettingsUI).toHaveBeenCalledTimes(1);
+		expect(sessionSettingsSpy).toHaveBeenCalledWith(provider);
+		expect(broadcastSpy).toHaveBeenCalledWith(provider);
+	});
+
+	it("reverts an external disable when multiple sessions are already waiting", async () => {
+		const { TaskSyncWebviewProvider } = await import("./webviewProvider");
+		const manager = new ChatSessionManager();
+		const firstWaitingSession = manager.createSession("Agent 1");
+		firstWaitingSession.waitingOnUser = true;
+		firstWaitingSession.pendingToolCallId = "tc_1";
+		const secondWaitingSession = manager.createSession("Agent 2");
+		secondWaitingSession.waitingOnUser = true;
+		secondWaitingSession.pendingToolCallId = "tc_2";
+		manager.setActiveSession(firstWaitingSession.id);
+
+		const provider = Object.assign(
+			Object.create(TaskSyncWebviewProvider.prototype),
+			createProviderHarness(manager),
+			{
+				_isUpdatingConfig: false,
+				_agentOrchestrationEnabled: true,
+			},
+		);
+		provider._loadSettings = vi.fn(() => {
+			provider._agentOrchestrationEnabled = false;
+		});
+		const warningSpy = vi
+			.spyOn(vscode.window, "showWarningMessage")
+			.mockResolvedValue(undefined as any);
+		const revertSpy = vi
+			.spyOn(settingsH, "handleUpdateAgentOrchestrationSetting")
+			.mockResolvedValue(undefined);
+
+		provider._handleConfigurationChange({
+			affectsConfiguration: (key: string) =>
+				key === "tasksync.agentOrchestration",
+		} as any);
+
+		expect(warningSpy).toHaveBeenCalledWith(
+			settingsH.AGENT_ORCHESTRATION_MULTI_WAITING_WARNING,
+		);
+		expect(revertSpy).toHaveBeenCalledWith(provider, true);
 	});
 });

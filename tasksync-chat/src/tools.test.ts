@@ -308,6 +308,13 @@ describe("askUser cancellation handling", () => {
 				attachments: [],
 				queue: false,
 				cancelled: true,
+				directive: {
+					kind: "cancelled",
+					reason: "superseded",
+					action: "call_ask_user_again",
+					sessionId: "1",
+					reaskExactSameQuestion: true,
+				},
 			}),
 		};
 
@@ -319,6 +326,13 @@ describe("askUser cancellation handling", () => {
 		expect(result.response).toBe(ASKUSER_SUPERSEDED_MESSAGE);
 		expect(result.attachments).toEqual([]);
 		expect(result.queue).toBe(false);
+		expect(result.directive).toMatchObject({
+			kind: "cancelled",
+			reason: "superseded",
+			action: "call_ask_user_again",
+			sessionId: "1",
+			reaskExactSameQuestion: true,
+		});
 	});
 
 	/**
@@ -333,6 +347,13 @@ describe("askUser cancellation handling", () => {
 				attachments: [],
 				queue: false,
 				cancelled: true,
+				directive: {
+					kind: "cancelled",
+					reason: "superseded",
+					action: "call_ask_user_again",
+					sessionId: "1",
+					reaskExactSameQuestion: true,
+				},
 			}),
 			_autoAppendEnabled: false,
 			_autoAppendText: "",
@@ -356,8 +377,85 @@ describe("askUser cancellation handling", () => {
 		// The response text should contain the cancelled message
 		const textPart = result.parts[0];
 		const parsed = JSON.parse(textPart.value);
+		expect(parsed.session_id).toBe("1");
 		expect(parsed.response).toBe(ASKUSER_SUPERSEDED_MESSAGE);
+		expect(parsed.directive).toEqual({
+			kind: "cancelled",
+			reason: "superseded",
+			action: "call_ask_user_again",
+			session_id: "1",
+			reask_exact_same_question: true,
+		});
 		expect(showErrorMessageMock).not.toHaveBeenCalled();
+	});
+
+	it("includes bootstrap directive in the registered tool payload when session_id is auto", async () => {
+		const { registerTools } = await import("./tools");
+		const provider = {
+			createSessionForMissingId: vi.fn(() => ({ id: "12" })),
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Handled",
+				attachments: [],
+				queue: false,
+			}),
+			_autoAppendEnabled: false,
+			_autoAppendText: "",
+			_alwaysAppendReminder: false,
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+		const context = { subscriptions: [] as unknown[] };
+
+		registerTools(context as any, provider as any);
+
+		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
+		expect(toolDefinition).toBeTruthy();
+
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Bootstrap", session_id: "auto" } },
+			createToken() as any,
+		);
+
+		const textPart = result.parts[0];
+		const parsed = JSON.parse(textPart.value);
+		expect(parsed.session_id).toBe("12");
+		expect(parsed.directive).toEqual({
+			kind: "bootstrap",
+			reason: "auto_assigned_session",
+			action: "call_ask_user_again",
+			session_id: "12",
+		});
+	});
+
+	it("always includes session_id in the registered tool payload", async () => {
+		const { registerTools } = await import("./tools");
+		const provider = {
+			waitForUserResponse: vi.fn().mockResolvedValue({
+				value: "Handled",
+				attachments: [],
+				queue: true,
+			}),
+			_autoAppendEnabled: false,
+			_autoAppendText: "",
+			_alwaysAppendReminder: false,
+			_sessionManager: { getSession: vi.fn(() => undefined) },
+		};
+		const context = { subscriptions: [] as unknown[] };
+
+		registerTools(context as any, provider as any);
+
+		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
+		expect(toolDefinition).toBeTruthy();
+
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Continue", session_id: "12" } },
+			createToken() as any,
+		);
+
+		const textPart = result.parts[0];
+		const parsed = JSON.parse(textPart.value);
+		expect(parsed.session_id).toBe("12");
+		expect(parsed.response).toBe("Handled");
+		expect(parsed.queued).toBe(true);
 	});
 
 	/**
@@ -442,6 +540,7 @@ describe("askUser session_id coercion", () => {
 
 		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Hello", "7");
 		expect(result.response).toBe("OK");
+		expect(result.sessionId).toBe("7");
 	});
 
 	it("coerces session_id 0 (falsy number) to string '0' instead of auto-assigning", async () => {
@@ -485,7 +584,15 @@ describe("askUser session_id coercion", () => {
 
 		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
 		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Null?", "5");
-		expect(result.response).toContain("auto-assigned session_id");
+		expect(result.response).toContain("TaskSync assigned session_id");
+		expect(result.response).toContain("Do not reply in plain chat");
+		expect(result.response).toContain("CALL ask_user again now");
+		expect(result.directive).toMatchObject({
+			kind: "bootstrap",
+			reason: "auto_assigned_session",
+			action: "call_ask_user_again",
+			sessionId: "5",
+		});
 	});
 
 	it("treats undefined session_id as missing and auto-assigns", async () => {
@@ -508,7 +615,7 @@ describe("askUser session_id coercion", () => {
 
 		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
 		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Undef?", "6");
-		expect(result.response).toContain("auto-assigned session_id");
+		expect(result.response).toContain("TaskSync assigned session_id");
 	});
 
 	it("treats object session_id as missing and auto-assigns", async () => {
@@ -530,7 +637,7 @@ describe("askUser session_id coercion", () => {
 		);
 
 		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
-		expect(result.response).toContain("auto-assigned session_id");
+		expect(result.response).toContain("TaskSync assigned session_id");
 	});
 
 	it("treats whitespace-only session_id as missing and auto-assigns", async () => {
@@ -552,7 +659,7 @@ describe("askUser session_id coercion", () => {
 		);
 
 		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
-		expect(result.response).toContain("auto-assigned session_id");
+		expect(result.response).toContain("TaskSync assigned session_id");
 	});
 
 	it("invoke handler coerces numeric session_id before passing to askUser", async () => {
@@ -611,7 +718,7 @@ describe("askUser session_id coercion", () => {
 
 		expect(provider.createSessionForMissingId).toHaveBeenCalledTimes(1);
 		expect(provider.waitForUserResponse).toHaveBeenCalledWith("Test", "9");
-		expect(result.response).toContain("auto-assigned session_id");
+		expect(result.response).toContain("TaskSync assigned session_id");
 	});
 
 	it("auto-assigns a session_id when the tool is invoked without one", async () => {
@@ -636,9 +743,18 @@ describe("askUser session_id coercion", () => {
 			"Start from Copilot chat",
 			"7",
 		);
-		expect(result.response).toContain('TaskSync auto-assigned session_id "7"');
+		expect(result.response).toContain('TaskSync assigned session_id "7"');
 		expect(result.response).toContain(
-			"Use this exact session_id on every future ask_user call in this chat.",
+			"Use this exact session_id on every ask_user call.",
 		);
+		expect(result.response).toContain(
+			'CALL ask_user again now with session_id "7".',
+		);
+		expect(result.directive).toMatchObject({
+			kind: "bootstrap",
+			reason: "auto_assigned_session",
+			action: "call_ask_user_again",
+			sessionId: "7",
+		});
 	});
 });

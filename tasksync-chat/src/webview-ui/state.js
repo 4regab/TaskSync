@@ -109,6 +109,7 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
+let agentOrchestrationEnabled = true;
 let autoAppendEnabled = false;
 let autoAppendText = ""; // Custom text appended to responses for the active session
 let alwaysAppendReminder = false; // Global AskUser reminder toggle
@@ -210,6 +211,7 @@ let simpleAlertModalOverlay = null;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
+	agentOrchestrationToggle,
 	autoAppendToggle,
 	autoAppendTextRow,
 	autoAppendTextInput,
@@ -255,12 +257,57 @@ function sessionExists(sessionId) {
 	);
 }
 
+function resolveSingleSessionId() {
+	if (sessionExists(serverActiveSessionId)) {
+		return serverActiveSessionId;
+	}
+	if (sessionExists(activeSessionId)) {
+		return activeSessionId;
+	}
+	var fallbackSession = Array.isArray(sessions)
+		? sessions.find(function (session) {
+				return session.status === "active";
+			})
+		: null;
+	return fallbackSession ? fallbackSession.id : null;
+}
+
+function getVisibleSessions() {
+	if (agentOrchestrationEnabled) {
+		return Array.isArray(sessions) ? sessions : [];
+	}
+	var singletonSessionId = resolveSingleSessionId();
+	if (!singletonSessionId) {
+		return [];
+	}
+	return sessions.filter(function (session) {
+		return session.id === singletonSessionId;
+	});
+}
+
+function getWaitingActiveSessions() {
+	return Array.isArray(sessions)
+		? sessions.filter(function (session) {
+				return (
+					session.status === "active" &&
+					(session.waitingOnUser || !!session.pendingToolCallId)
+				);
+			})
+		: [];
+}
+
 function requestFollowServerActiveSession() {
 	followServerActiveSessionOnce = true;
 }
 
 function syncClientSessionSelection(nextServerActiveSessionId) {
 	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!agentOrchestrationEnabled) {
+		activeSessionId = resolveSingleSessionId();
+		followServerActiveSessionOnce = false;
+		return;
+	}
 
 	if (!sessionExists(activeSessionId)) {
 		activeSessionId = null;
@@ -290,5 +337,9 @@ function getSubmitSessionId() {
 }
 
 function isSplitViewLayoutActive() {
-	return splitViewEnabled && sessionExists(activeSessionId);
+	return (
+		agentOrchestrationEnabled &&
+		splitViewEnabled &&
+		sessionExists(activeSessionId)
+	);
 }

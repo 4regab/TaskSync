@@ -4,6 +4,7 @@
  */
 import * as vscode from "vscode";
 import {
+	ASKUSER_SUPERSEDED_MESSAGE,
 	CONFIG_SECTION,
 	DEFAULT_MAX_CONSECUTIVE_AUTO_RESPONSES,
 } from "../constants/remoteConstants";
@@ -11,6 +12,7 @@ import {
 import { isApprovalQuestion, parseChoices } from "./choiceParser";
 import * as settingsH from "./settingsHandlers";
 import type {
+	AskUserDirective,
 	ChatSession,
 	P,
 	ToolCallEntry,
@@ -42,13 +44,27 @@ function persistSessionState(p: P, session: ChatSession): void {
 function buildRejectedResult(
 	session: ChatSession | undefined,
 	message: string,
+	directive?: AskUserDirective,
 ): UserResponseResult {
 	return {
 		value: message,
 		queue: session ? sessionHasQueuedItems(session) : false,
 		attachments: [],
 		cancelled: true,
+		directive,
 	};
+}
+
+function buildMissingSessionIdRejectedMessage(): string {
+	return "REJECTED. session_id IS REQUIRED. CALL ask_user AGAIN WITH A VALID session_id.";
+}
+
+function buildDeletedSessionRejectedMessage(sessionId: string): string {
+	return `REJECTED. session_id "${sessionId}" WAS DELETED. DO NOT REUSE IT. CALL ask_user AGAIN WITH session_id "auto".`;
+}
+
+function buildTerminatedSessionRejectedMessage(sessionId: string): string {
+	return `REJECTED. session_id "${sessionId}" IS TERMINATED. DO NOT REUSE IT. CALL ask_user AGAIN WITH session_id "auto".`;
 }
 
 function isSessionActive(p: P, sessionId: string): boolean {
@@ -97,11 +113,17 @@ function replacePendingToolCallForSession(p: P, session: ChatSession): void {
 
 	if (previousResolve) {
 		previousResolve({
-			value:
-				"TaskSync replaced a previous unanswered ask_user in this same session because a newer ask_user arrived.",
+			value: ASKUSER_SUPERSEDED_MESSAGE,
 			queue: sessionHasQueuedItems(session),
 			attachments: [],
 			cancelled: true,
+			directive: {
+				kind: "cancelled",
+				reason: "superseded",
+				action: "call_ask_user_again",
+				sessionId: session.id,
+				reaskExactSameQuestion: true,
+			},
 		} satisfies UserResponseResult);
 	}
 }
@@ -143,6 +165,7 @@ export async function waitForUserResponse(
 ): Promise<UserResponseResult> {
 	const normalizedSessionId =
 		typeof sessionId === "string" ? sessionId.trim() : undefined;
+	const agentOrchestrationEnabled = p._agentOrchestrationEnabled !== false;
 	debugLog(
 		"[TaskSync] waitForUserResponse — question:",
 		question.slice(0, 80),
@@ -153,16 +176,30 @@ export async function waitForUserResponse(
 	if (!normalizedSessionId) {
 		return buildRejectedResult(
 			undefined,
-			"TaskSync rejected ask_user because session_id is required. Start a TaskSync conversation and pass that exact session_id on every ask_user call.",
+			buildMissingSessionIdRejectedMessage(),
+			{
+				kind: "rejected",
+				reason: "missing_session_id",
+				action: "pass_exact_session_id",
+			},
 		);
 	}
 
 	// Reject stale deleted session IDs at the boundary — before creating
 	// any session object — so tombstoned IDs never leak into the session pool.
-	if (p._sessionManager.isDeletedSessionId(normalizedSessionId)) {
+	if (
+		agentOrchestrationEnabled &&
+		p._sessionManager.isDeletedSessionId(normalizedSessionId)
+	) {
 		return buildRejectedResult(
 			undefined,
-			`TaskSync rejected ask_user for session_id ${normalizedSessionId} because this session was deleted. Start a new Copilot chat that uses a new session_id instead of reusing this one.`,
+			buildDeletedSessionRejectedMessage(normalizedSessionId),
+			{
+				kind: "rejected",
+				reason: "deleted_session",
+				action: "call_ask_user_again_with_auto_session",
+				sessionId: "auto",
+			},
 		);
 	}
 
@@ -176,7 +213,13 @@ export async function waitForUserResponse(
 	if (session.sessionTerminated) {
 		return buildRejectedResult(
 			session,
-			`TaskSync rejected ask_user for session_id ${session.id} because this conversation is already terminated. Start a new Copilot chat that uses a new session_id instead of reusing this one.`,
+			buildTerminatedSessionRejectedMessage(session.id),
+			{
+				kind: "rejected",
+				reason: "terminated_session",
+				action: "call_ask_user_again_with_auto_session",
+				sessionId: "auto",
+			},
 		);
 	}
 

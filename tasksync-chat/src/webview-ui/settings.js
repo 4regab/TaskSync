@@ -35,6 +35,66 @@ function updateInteractiveApprovalToggleUI() {
 	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
 }
 
+function showAgentOrchestrationDisableAlert(waitingSessions) {
+	var message =
+		waitingSessions.length === 1
+			? "There is still 1 session waiting on you."
+			: "There are still " +
+				waitingSessions.length +
+				" sessions waiting on you.";
+	showSimpleAlert(
+		"Keep Agent Orchestration On",
+		message +
+			" Reply to them or stop those sessions before turning Agent Orchestration off.",
+		"codicon-warning",
+	);
+}
+
+function stopSessionsAndDisableAgentOrchestration() {
+	vscode.postMessage({ type: "disableAgentOrchestrationAndStopSessions" });
+}
+
+function toggleAgentOrchestrationSetting() {
+	if (agentOrchestrationEnabled) {
+		var waitingSessions =
+			typeof getWaitingActiveSessions === "function"
+				? getWaitingActiveSessions()
+				: [];
+		if (waitingSessions.length > 1) {
+			if (
+				typeof openStopSessionsAndDisableAgentOrchestrationModal === "function"
+			) {
+				openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions);
+			} else {
+				showAgentOrchestrationDisableAlert(waitingSessions);
+			}
+			return;
+		}
+	}
+	agentOrchestrationEnabled = !agentOrchestrationEnabled;
+	if (!agentOrchestrationEnabled) {
+		splitViewEnabled = false;
+	}
+	if (typeof syncClientSessionSelection === "function") {
+		syncClientSessionSelection(
+			serverActiveSessionId || activeSessionId || null,
+		);
+	}
+	updateAgentOrchestrationToggleUI();
+	renderSessionsList();
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+	vscode.postMessage({
+		type: "updateAgentOrchestrationSetting",
+		enabled: agentOrchestrationEnabled,
+	});
+}
+
+function updateAgentOrchestrationToggleUI() {
+	if (!agentOrchestrationToggle) return;
+	setToggle(agentOrchestrationToggle, agentOrchestrationEnabled);
+}
+
 function toggleAutoAppendSetting() {
 	autoAppendEnabled = !autoAppendEnabled;
 	updateAutoAppendToggleUI();

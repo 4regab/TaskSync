@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "../__mocks__/vscode";
+import { ASKUSER_SUPERSEDED_MESSAGE } from "../constants/remoteConstants";
 import { handleResponseTimeout, waitForUserResponse } from "./toolCallHandler";
 
 describe("waitForUserResponse", () => {
@@ -93,7 +94,15 @@ describe("waitForUserResponse", () => {
 
 		expect(oldResolve).toHaveBeenCalledWith(
 			expect.objectContaining({
+				value: ASKUSER_SUPERSEDED_MESSAGE,
 				cancelled: true,
+				directive: expect.objectContaining({
+					kind: "cancelled",
+					reason: "superseded",
+					action: "call_ask_user_again",
+					sessionId: "1",
+					reaskExactSameQuestion: true,
+				}),
 			}),
 		);
 		expect(session.pendingToolCallId).not.toBe("tc_old");
@@ -473,6 +482,94 @@ describe("waitForUserResponse", () => {
 		});
 	});
 
+	it("routes stale explicit session ids into the singleton session when orchestration is off", async () => {
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+			get: vi.fn((key: string, defaultValue?: unknown) =>
+				key === "responseTimeout" ? "0" : defaultValue,
+			),
+			inspect: vi.fn(),
+		} as any);
+
+		const session = {
+			id: "1",
+			title: "Agent 1",
+			status: "active",
+			queue: [],
+			queueEnabled: true,
+			history: [],
+			attachments: [],
+			autopilotEnabled: false,
+			waitingOnUser: false,
+			unread: false,
+			createdAt: Date.now(),
+			pendingToolCallId: null,
+			sessionStartTime: null,
+			sessionFrozenElapsed: null,
+			sessionTerminated: false,
+			sessionWarningShown: false,
+			aiTurnActive: false,
+			consecutiveAutoResponses: 0,
+			autopilotIndex: 0,
+		};
+
+		const p = {
+			_agentOrchestrationEnabled: false,
+			_bindSession: vi.fn(() => session),
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => true,
+			},
+			_pendingRequests: new Map(),
+			_toolCallSessionMap: new Map(),
+			_currentSessionCallsMap: new Map(),
+			_currentToolCallId: null,
+			_webviewReady: true,
+			_view: {
+				webview: {
+					postMessage: vi.fn(),
+				},
+				show: vi.fn(),
+			},
+			playNotificationSound: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+			_saveSessionsToDisk: vi.fn(),
+			_syncActiveSessionState: vi.fn(() => {
+				p._currentToolCallId = session.pendingToolCallId;
+			}),
+			_clearResponseTimeoutTimer: vi.fn(),
+			_applyHumanLikeDelay: vi.fn(),
+			_remoteServer: { broadcast: vi.fn() },
+		} as any;
+
+		const promise = waitForUserResponse(
+			p,
+			"Stay in the singleton",
+			"deleted-99",
+		);
+
+		expect(p._bindSession).toHaveBeenCalledWith("deleted-99");
+		expect(session.history[0]).toMatchObject({
+			sessionId: "1",
+			prompt: "Stay in the singleton",
+			status: "pending",
+		});
+		expect(session.unread).toBe(false);
+
+		const resolvePending = p._pendingRequests.get(session.pendingToolCallId);
+		expect(typeof resolvePending).toBe("function");
+		resolvePending({
+			value: "Answer",
+			queue: false,
+			attachments: [],
+		});
+
+		await expect(promise).resolves.toMatchObject({
+			value: "Answer",
+			queue: false,
+			attachments: [],
+		});
+	});
+
 	it("does not create unread when queue auto-responds without a real pending entry", async () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
 			get: vi.fn((key: string, defaultValue?: unknown) =>
@@ -707,7 +804,15 @@ describe("waitForUserResponse — session_id defensive validation", () => {
 		const p = {} as any;
 		const result = await waitForUserResponse(p, "Test?", undefined);
 		expect(result.cancelled).toBe(true);
-		expect(result.value).toContain("session_id is required");
+		expect(result.value).toContain("REJECTED. session_id IS REQUIRED.");
+		expect(result.value).toContain(
+			"CALL ask_user AGAIN WITH A VALID session_id.",
+		);
+		expect(result.directive).toMatchObject({
+			kind: "rejected",
+			reason: "missing_session_id",
+			action: "pass_exact_session_id",
+		});
 	});
 
 	it("rejects when sessionId is a number (defensive — should be coerced upstream)", async () => {
@@ -718,7 +823,7 @@ describe("waitForUserResponse — session_id defensive validation", () => {
 			42 as unknown as string,
 		);
 		expect(result.cancelled).toBe(true);
-		expect(result.value).toContain("session_id is required");
+		expect(result.value).toContain("REJECTED. session_id IS REQUIRED.");
 	});
 
 	it("rejects when sessionId is null", async () => {
@@ -729,7 +834,7 @@ describe("waitForUserResponse — session_id defensive validation", () => {
 			null as unknown as string,
 		);
 		expect(result.cancelled).toBe(true);
-		expect(result.value).toContain("session_id is required");
+		expect(result.value).toContain("REJECTED. session_id IS REQUIRED.");
 	});
 
 	it("rejects with terminated message when session is terminated", async () => {
@@ -750,7 +855,16 @@ describe("waitForUserResponse — session_id defensive validation", () => {
 
 		const result = await waitForUserResponse(p, "Test?", "5");
 		expect(result.cancelled).toBe(true);
-		expect(result.value).toContain("already terminated");
+		expect(result.value).toContain('REJECTED. session_id "5" IS TERMINATED.');
+		expect(result.value).toContain(
+			'CALL ask_user AGAIN WITH session_id "auto".',
+		);
+		expect(result.directive).toMatchObject({
+			kind: "rejected",
+			reason: "terminated_session",
+			action: "call_ask_user_again_with_auto_session",
+			sessionId: "auto",
+		});
 	});
 
 	it("rejects at boundary when session ID is tombstoned (before creating session)", async () => {
@@ -763,7 +877,18 @@ describe("waitForUserResponse — session_id defensive validation", () => {
 
 		const result = await waitForUserResponse(p, "Test?", "deleted-99");
 		expect(result.cancelled).toBe(true);
-		expect(result.value).toContain("session was deleted");
+		expect(result.value).toContain(
+			'REJECTED. session_id "deleted-99" WAS DELETED.',
+		);
+		expect(result.value).toContain(
+			'CALL ask_user AGAIN WITH session_id "auto".',
+		);
+		expect(result.directive).toMatchObject({
+			kind: "rejected",
+			reason: "deleted_session",
+			action: "call_ask_user_again_with_auto_session",
+			sessionId: "auto",
+		});
 		// _bindSession must NOT have been called — no session object created
 		expect(p._bindSession).not.toHaveBeenCalled();
 	});

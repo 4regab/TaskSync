@@ -25,6 +25,7 @@ A dedicated VS Code sidebar extension with smart prompt queue system. _Setup ins
 **Features:**
 - Smart Queue Mode - batch responses for AI agents
 - Autopilot - let agents work autonomously with customizable auto-responses
+- Agent orchestration toggle - switch between multi-session routing and a single-session lane per workspace
 - Remote Access - control from your phone via LAN or Tailscale, with PWA and code review
 - Give new tasks/feedback using ask_user tool
 - File, folder, tool, and context references with `#` autocomplete

@@ -10,6 +10,7 @@ function init() {
 		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
+		createDisableAgentOrchestrationModal();
 		createTimeoutWarningModal();
 		createSimpleAlertModal();
 		bindEventListeners();
@@ -418,6 +419,20 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(approvalSection);
 
+	// Agent orchestration section - toggle between multi-session and single-session mode
+	let agentOrchestrationSection = document.createElement("div");
+	agentOrchestrationSection.className = "settings-section";
+	agentOrchestrationSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-layers"></span> Agent Orchestration' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync keeps separate agent sessions with the sessions list, switching, and split view. When disabled, TaskSync stays in one single-session lane and routes all ask_user calls into that session.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch active" id="agent-orchestration-toggle" role="switch" aria-checked="true" aria-label="Enable agent orchestration" tabindex="0"></div>' +
+		"</div>";
+	modalContent.appendChild(agentOrchestrationSection);
+
 	// Send shortcut section - switch between Enter and Ctrl/Cmd+Enter send
 	let sendShortcutSection = document.createElement("div");
 	sendShortcutSection.className = "settings-section";
@@ -605,6 +620,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
+	agentOrchestrationToggle = document.getElementById(
+		"agent-orchestration-toggle",
+	);
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
@@ -762,6 +780,7 @@ function createSessionSettingsModal() {
 
 var newSessionModalOverlay = null;
 var resetSessionModalOverlay = null;
+var disableAgentOrchestrationModalOverlay = null;
 
 function createSessionActionModal(config) {
 	var overlay = document.createElement("div");
@@ -952,7 +971,10 @@ function openNewSessionModal() {
 		sessions.find(function (s) {
 			return s.id === activeSessionId;
 		});
-	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	var hasActiveSession =
+		agentOrchestrationEnabled &&
+		!!activeSession &&
+		!activeSession.sessionTerminated;
 	if (endBtn) {
 		endBtn.classList.toggle("hidden", !hasActiveSession);
 	}
@@ -961,7 +983,9 @@ function openNewSessionModal() {
 	if (warningEl) {
 		warningEl.textContent = hasActiveSession
 			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
-			: "Start a fresh Copilot chat session.";
+			: agentOrchestrationEnabled
+				? "Start a fresh Copilot chat session."
+				: "Start a fresh Copilot chat using the current TaskSync session.";
 	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
@@ -996,6 +1020,45 @@ function createResetSessionModal() {
 		confirmLabel: "Reset Session",
 		messageType: "resetSession",
 	});
+}
+
+function createDisableAgentOrchestrationModal() {
+	disableAgentOrchestrationModalOverlay = createSessionActionModal({
+		overlayId: "disable-agent-orchestration-modal-overlay",
+		titleId: "disable-agent-orchestration-modal-title",
+		title: "Turn Off Agent Orchestration",
+		warningText: "",
+		actions: [
+			{
+				label: "Cancel",
+				className: "form-btn form-btn-cancel",
+			},
+			{
+				id: "disable-agent-orchestration-confirm-btn",
+				label: "Stop current session(s) and turn off Agent Orchestration",
+				className: "form-btn form-btn-danger",
+				onClick: stopSessionsAndDisableAgentOrchestration,
+			},
+		],
+	});
+}
+
+function openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions) {
+	if (!disableAgentOrchestrationModalOverlay) {
+		showAgentOrchestrationDisableAlert(waitingSessions);
+		return;
+	}
+	var warningEl = disableAgentOrchestrationModalOverlay.querySelector(
+		".new-session-warning",
+	);
+	if (warningEl) {
+		warningEl.textContent =
+			waitingSessions.length === 1
+				? "1 session is still waiting on you. Stopping it will cancel that pending ask_user and then turn Agent Orchestration off."
+				: waitingSessions.length +
+					" sessions are still waiting on you. Stopping them will cancel those pending ask_user calls and then turn Agent Orchestration off.";
+	}
+	openSessionActionModal(disableAgentOrchestrationModalOverlay);
 }
 
 function openResetSessionModal() {

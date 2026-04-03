@@ -293,6 +293,16 @@ function mapToRemoteMessage(msg) {
 			return null;
 		// Multi-session operations — forward to server as-is
 		case "switchSession":
+			if (!agentOrchestrationEnabled) {
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(
+						serverActiveSessionId || activeSessionId || null,
+					);
+				}
+				renderSessionsList();
+				updateWelcomeSectionVisibility();
+				return null;
+			}
 			if (!msg.sessionId) {
 				// Back to hub — handle locally, no server round-trip needed
 				if (typeof saveActiveSessionComposerState === "function") {
@@ -741,6 +751,17 @@ function applySettingsData(s) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
 	}
+	if (s.agentOrchestrationEnabled !== undefined) {
+		agentOrchestrationEnabled = s.agentOrchestrationEnabled;
+		if (!agentOrchestrationEnabled) {
+			splitViewEnabled = false;
+			if (typeof syncClientSessionSelection === "function") {
+				syncClientSessionSelection(
+					serverActiveSessionId || activeSessionId || null,
+				);
+			}
+		}
+	}
 	if (s.autoAppendEnabled !== undefined) {
 		autoAppendEnabled = s.autoAppendEnabled;
 	}
@@ -889,6 +910,7 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
+	updateAgentOrchestrationToggleUI();
 	updateAutoAppendToggleUI();
 	updateAutoAppendTextUI();
 	updateSendWithCtrlEnterToggleUI();
@@ -901,6 +923,8 @@ function applySettingsToUI() {
 	workspacePromptListUI.render();
 	renderPromptsList();
 	updateQueueVisibility();
+	renderSessionsList();
+	updateWelcomeSectionVisibility();
 }
 
 // ==================== End Communication Adapter ====================
@@ -1015,6 +1039,7 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
+let agentOrchestrationEnabled = true;
 let autoAppendEnabled = false;
 let autoAppendText = ""; // Custom text appended to responses for the active session
 let alwaysAppendReminder = false; // Global AskUser reminder toggle
@@ -1116,6 +1141,7 @@ let simpleAlertModalOverlay = null;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
+	agentOrchestrationToggle,
 	autoAppendToggle,
 	autoAppendTextRow,
 	autoAppendTextInput,
@@ -1161,12 +1187,57 @@ function sessionExists(sessionId) {
 	);
 }
 
+function resolveSingleSessionId() {
+	if (sessionExists(serverActiveSessionId)) {
+		return serverActiveSessionId;
+	}
+	if (sessionExists(activeSessionId)) {
+		return activeSessionId;
+	}
+	var fallbackSession = Array.isArray(sessions)
+		? sessions.find(function (session) {
+				return session.status === "active";
+			})
+		: null;
+	return fallbackSession ? fallbackSession.id : null;
+}
+
+function getVisibleSessions() {
+	if (agentOrchestrationEnabled) {
+		return Array.isArray(sessions) ? sessions : [];
+	}
+	var singletonSessionId = resolveSingleSessionId();
+	if (!singletonSessionId) {
+		return [];
+	}
+	return sessions.filter(function (session) {
+		return session.id === singletonSessionId;
+	});
+}
+
+function getWaitingActiveSessions() {
+	return Array.isArray(sessions)
+		? sessions.filter(function (session) {
+				return (
+					session.status === "active" &&
+					(session.waitingOnUser || !!session.pendingToolCallId)
+				);
+			})
+		: [];
+}
+
 function requestFollowServerActiveSession() {
 	followServerActiveSessionOnce = true;
 }
 
 function syncClientSessionSelection(nextServerActiveSessionId) {
 	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!agentOrchestrationEnabled) {
+		activeSessionId = resolveSingleSessionId();
+		followServerActiveSessionOnce = false;
+		return;
+	}
 
 	if (!sessionExists(activeSessionId)) {
 		activeSessionId = null;
@@ -1196,7 +1267,11 @@ function getSubmitSessionId() {
 }
 
 function isSplitViewLayoutActive() {
-	return splitViewEnabled && sessionExists(activeSessionId);
+	return (
+		agentOrchestrationEnabled &&
+		splitViewEnabled &&
+		sessionExists(activeSessionId)
+	);
 }
 function init() {
 	try {
@@ -1210,6 +1285,7 @@ function init() {
 		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
+		createDisableAgentOrchestrationModal();
 		createTimeoutWarningModal();
 		createSimpleAlertModal();
 		bindEventListeners();
@@ -1618,6 +1694,20 @@ function createSettingsModal() {
 		"</div>";
 	modalContent.appendChild(approvalSection);
 
+	// Agent orchestration section - toggle between multi-session and single-session mode
+	let agentOrchestrationSection = document.createElement("div");
+	agentOrchestrationSection.className = "settings-section";
+	agentOrchestrationSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-layers"></span> Agent Orchestration' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync keeps separate agent sessions with the sessions list, switching, and split view. When disabled, TaskSync stays in one single-session lane and routes all ask_user calls into that session.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch active" id="agent-orchestration-toggle" role="switch" aria-checked="true" aria-label="Enable agent orchestration" tabindex="0"></div>' +
+		"</div>";
+	modalContent.appendChild(agentOrchestrationSection);
+
 	// Send shortcut section - switch between Enter and Ctrl/Cmd+Enter send
 	let sendShortcutSection = document.createElement("div");
 	sendShortcutSection.className = "settings-section";
@@ -1805,6 +1895,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
+	agentOrchestrationToggle = document.getElementById(
+		"agent-orchestration-toggle",
+	);
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
@@ -1962,6 +2055,7 @@ function createSessionSettingsModal() {
 
 var newSessionModalOverlay = null;
 var resetSessionModalOverlay = null;
+var disableAgentOrchestrationModalOverlay = null;
 
 function createSessionActionModal(config) {
 	var overlay = document.createElement("div");
@@ -2019,13 +2113,13 @@ function createSessionActionModal(config) {
 	var actions = Array.isArray(config.actions)
 		? config.actions
 		: [
-				{
-					label: config.confirmLabel,
-					className: "form-btn form-btn-save",
-					onClick: config.onConfirm,
-					messageType: config.messageType,
-				},
-			];
+			{
+				label: config.confirmLabel,
+				className: "form-btn form-btn-save",
+				onClick: config.onConfirm,
+				messageType: config.messageType,
+			},
+		];
 	actions.forEach(function (action) {
 		var actionBtn = document.createElement("button");
 		actionBtn.className = action.className || "form-btn form-btn-save";
@@ -2152,7 +2246,10 @@ function openNewSessionModal() {
 		sessions.find(function (s) {
 			return s.id === activeSessionId;
 		});
-	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	var hasActiveSession =
+		agentOrchestrationEnabled &&
+		!!activeSession &&
+		!activeSession.sessionTerminated;
 	if (endBtn) {
 		endBtn.classList.toggle("hidden", !hasActiveSession);
 	}
@@ -2161,7 +2258,9 @@ function openNewSessionModal() {
 	if (warningEl) {
 		warningEl.textContent = hasActiveSession
 			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
-			: "Start a fresh Copilot chat session.";
+			: agentOrchestrationEnabled
+				? "Start a fresh Copilot chat session."
+				: "Start a fresh Copilot chat using the current TaskSync session.";
 	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
@@ -2196,6 +2295,45 @@ function createResetSessionModal() {
 		confirmLabel: "Reset Session",
 		messageType: "resetSession",
 	});
+}
+
+function createDisableAgentOrchestrationModal() {
+	disableAgentOrchestrationModalOverlay = createSessionActionModal({
+		overlayId: "disable-agent-orchestration-modal-overlay",
+		titleId: "disable-agent-orchestration-modal-title",
+		title: "Turn Off Agent Orchestration",
+		warningText: "",
+		actions: [
+			{
+				label: "Cancel",
+				className: "form-btn form-btn-cancel",
+			},
+			{
+				id: "disable-agent-orchestration-confirm-btn",
+				label: "Stop current session(s) and turn off Agent Orchestration",
+				className: "form-btn form-btn-danger",
+				onClick: stopSessionsAndDisableAgentOrchestration,
+			},
+		],
+	});
+}
+
+function openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions) {
+	if (!disableAgentOrchestrationModalOverlay) {
+		showAgentOrchestrationDisableAlert(waitingSessions);
+		return;
+	}
+	var warningEl = disableAgentOrchestrationModalOverlay.querySelector(
+		".new-session-warning",
+	);
+	if (warningEl) {
+		warningEl.textContent =
+			waitingSessions.length === 1
+				? "1 session is still waiting on you. Stopping it will cancel that pending ask_user and then turn Agent Orchestration off."
+				: waitingSessions.length +
+				" sessions are still waiting on you. Stopping them will cancel those pending ask_user calls and then turn Agent Orchestration off.";
+	}
+	openSessionActionModal(disableAgentOrchestrationModalOverlay);
 }
 
 function openResetSessionModal() {
@@ -2576,6 +2714,7 @@ function bindEventListeners() {
 	// Hub & Thread Shell events
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
+			if (!agentOrchestrationEnabled) return;
 			saveActiveSessionComposerState();
 			activeSessionId = null;
 			restoreActiveSessionComposerState();
@@ -2594,6 +2733,7 @@ function bindEventListeners() {
 	var threadEditBtn = document.getElementById("thread-edit-btn");
 	if (threadEditBtn) {
 		threadEditBtn.addEventListener("click", function () {
+			if (!agentOrchestrationEnabled) return;
 			var titleEl = document.getElementById("thread-title");
 			if (!titleEl || !activeSessionId) return;
 			var currentTitle = titleEl.textContent || "";
@@ -2679,6 +2819,18 @@ function bindEventListeners() {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
 				toggleInteractiveApprovalSetting();
+			}
+		});
+	}
+	if (agentOrchestrationToggle) {
+		agentOrchestrationToggle.addEventListener(
+			"click",
+			toggleAgentOrchestrationSetting,
+		);
+		agentOrchestrationToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAgentOrchestrationSetting();
 			}
 		});
 	}
@@ -3593,6 +3745,15 @@ function handleExtensionMessage(event) {
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+			agentOrchestrationEnabled = message.agentOrchestrationEnabled !== false;
+			if (!agentOrchestrationEnabled) {
+				splitViewEnabled = false;
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(
+						serverActiveSessionId || activeSessionId || null,
+					);
+				}
+			}
 			autoAppendEnabled = message.autoAppendEnabled === true;
 			autoAppendText =
 				typeof message.autoAppendText === "string"
@@ -3635,6 +3796,7 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
+			updateAgentOrchestrationToggleUI();
 			updateAutoAppendToggleUI();
 			updateAutoAppendTextUI();
 			updateAlwaysAppendReminderToggleUI();
@@ -3647,6 +3809,8 @@ function handleExtensionMessage(event) {
 			updateRemoteMaxDevicesUI();
 			updateHumanDelayUI();
 			renderPromptsList();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
 			break;
 		case "slashCommandResults":
 			showSlashDropdown(message.prompts || []);
@@ -4551,6 +4715,13 @@ function renderMermaidDiagrams() {
  * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
  */
 function toggleSplitView() {
+	if (!agentOrchestrationEnabled) {
+		splitViewEnabled = false;
+		syncSplitViewLayout();
+		updateWelcomeSectionVisibility();
+		saveWebviewState();
+		return;
+	}
 	splitViewEnabled = !splitViewEnabled;
 	syncSplitViewLayout();
 	updateWelcomeSectionVisibility();
@@ -4706,6 +4877,16 @@ function syncHiddenListUnreadIndicators() {
 	var backBtn = document.getElementById("thread-back-btn");
 	var collapseBar = document.getElementById("sessions-collapse-bar");
 	var hubEl = document.getElementById("workspace-hub");
+	if (!agentOrchestrationEnabled) {
+		if (backBtn) {
+			backBtn.classList.remove("has-unread-indicator");
+		}
+		if (collapseBar) {
+			collapseBar.classList.remove("has-unread-indicator");
+			collapseBar.classList.add("hidden");
+		}
+		return;
+	}
 	var hasOpenSession = !!activeSessionId;
 	var hasUnreadOtherSession = (sessions || []).some(function (session) {
 		return session.id !== activeSessionId && session.unread === true;
@@ -4755,7 +4936,8 @@ function syncSplitViewLayout() {
 		resizer.classList.toggle("hidden", !effectiveSplitView);
 	}
 	if (remoteSplitBtn) {
-		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+		remoteSplitBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+		remoteSplitBtn.classList.toggle("active", effectiveSplitView);
 	}
 
 	if (effectiveSplitView) {
@@ -4787,6 +4969,15 @@ function updateWelcomeSectionVisibility() {
 	var placeholderEl = document.getElementById("split-placeholder");
 	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
+	var backBtn = document.getElementById("thread-back-btn");
+	var editBtn = document.getElementById("thread-edit-btn");
+
+	if (backBtn) {
+		backBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
+	if (editBtn) {
+		editBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
 
 	syncSplitViewLayout();
 
@@ -4860,16 +5051,29 @@ function scrollToBottom() {
 function renderSessionsList() {
 	var sessionsListEl = document.getElementById("sessions-list");
 	var sessionsPanelEl = document.getElementById("sessions-panel");
+	var visibleSessions = getVisibleSessions();
 	if (!sessionsListEl) return;
 
 	// Update collapse bar session count
 	var countEl = document.getElementById("sessions-collapse-count");
 	if (countEl) {
 		countEl.textContent =
-			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+			agentOrchestrationEnabled && visibleSessions.length > 0
+				? "(" + visibleSessions.length + ")"
+				: "";
 	}
 
-	if (!sessions || sessions.length === 0) {
+	if (!agentOrchestrationEnabled) {
+		sessionsListEl.innerHTML = "";
+		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) {
+			welcomeSection.classList.toggle("hidden", visibleSessions.length > 0);
+		}
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (!visibleSessions || visibleSessions.length === 0) {
 		sessionsListEl.innerHTML = "";
 		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
 		if (welcomeSection) welcomeSection.classList.remove("hidden");
@@ -4881,7 +5085,7 @@ function renderSessionsList() {
 	if (welcomeSection) welcomeSection.classList.add("hidden");
 
 	// Sort: active sessions first (newest first), then archived
-	var sorted = sessions.slice().sort(function (a, b) {
+	var sorted = visibleSessions.slice().sort(function (a, b) {
 		if (a.status !== b.status) {
 			return a.status === "active" ? -1 : 1;
 		}
@@ -5781,6 +5985,66 @@ function toggleInteractiveApprovalSetting() {
 
 function updateInteractiveApprovalToggleUI() {
 	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
+}
+
+function showAgentOrchestrationDisableAlert(waitingSessions) {
+	var message =
+		waitingSessions.length === 1
+			? "There is still 1 session waiting on you."
+			: "There are still " +
+			waitingSessions.length +
+			" sessions waiting on you.";
+	showSimpleAlert(
+		"Keep Agent Orchestration On",
+		message +
+		" Reply to them or stop those sessions before turning Agent Orchestration off.",
+		"codicon-warning",
+	);
+}
+
+function stopSessionsAndDisableAgentOrchestration() {
+	vscode.postMessage({ type: "disableAgentOrchestrationAndStopSessions" });
+}
+
+function toggleAgentOrchestrationSetting() {
+	if (agentOrchestrationEnabled) {
+		var waitingSessions =
+			typeof getWaitingActiveSessions === "function"
+				? getWaitingActiveSessions()
+				: [];
+		if (waitingSessions.length > 1) {
+			if (
+				typeof openStopSessionsAndDisableAgentOrchestrationModal === "function"
+			) {
+				openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions);
+			} else {
+				showAgentOrchestrationDisableAlert(waitingSessions);
+			}
+			return;
+		}
+	}
+	agentOrchestrationEnabled = !agentOrchestrationEnabled;
+	if (!agentOrchestrationEnabled) {
+		splitViewEnabled = false;
+	}
+	if (typeof syncClientSessionSelection === "function") {
+		syncClientSessionSelection(
+			serverActiveSessionId || activeSessionId || null,
+		);
+	}
+	updateAgentOrchestrationToggleUI();
+	renderSessionsList();
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+	vscode.postMessage({
+		type: "updateAgentOrchestrationSetting",
+		enabled: agentOrchestrationEnabled,
+	});
+}
+
+function updateAgentOrchestrationToggleUI() {
+	if (!agentOrchestrationToggle) return;
+	setToggle(agentOrchestrationToggle, agentOrchestrationEnabled);
 }
 
 function toggleAutoAppendSetting() {

@@ -110,11 +110,13 @@ type RenderingBaseContext = {
 	sessions: SessionSummary[];
 	activeSessionId: string | null;
 	splitViewEnabled: boolean;
+	agentOrchestrationEnabled: boolean;
 	splitRatio: number;
 	vertSplitRatio: number;
 	welcomeSection: FakeElement;
 	vscode: { postMessage: ReturnType<typeof vi.fn> };
 	requestFollowServerActiveSession: ReturnType<typeof vi.fn>;
+	getVisibleSessions: () => SessionSummary[];
 	isSplitViewLayoutActive: () => boolean;
 	escapeHtml: (value: string) => string;
 	convertMarkdownLists: (value: string) => string;
@@ -194,13 +196,17 @@ function createRenderingHarness() {
 		sessions: [],
 		activeSessionId: null,
 		splitViewEnabled: false,
+		agentOrchestrationEnabled: true,
 		splitRatio: 38,
 		vertSplitRatio: 35,
 		welcomeSection,
 		vscode: { postMessage: vi.fn() },
 		requestFollowServerActiveSession: vi.fn(),
+		getVisibleSessions: () => baseContext.sessions,
 		isSplitViewLayoutActive: () =>
-			baseContext.splitViewEnabled && baseContext.activeSessionId !== null,
+			baseContext.agentOrchestrationEnabled &&
+			baseContext.splitViewEnabled &&
+			baseContext.activeSessionId !== null,
 		escapeHtml: (value: string) => value,
 		convertMarkdownLists: (value: string) => value,
 		processTableBuffer: (lines: string[]) => lines.join("\n"),

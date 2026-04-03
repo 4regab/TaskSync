@@ -3710,10 +3710,14 @@ button#send-btn:disabled {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23888' d='M4.5 5.5L8 9l3.5-3.5z'/%3E%3C/svg%3E");
+    background-image:
+        linear-gradient(45deg, transparent 50%, #888 50%),
+        linear-gradient(135deg, #888 50%, transparent 50%);
     background-repeat: no-repeat;
-    background-position: right 8px center;
-    background-size: 12px;
+    background-position:
+        calc(100% - 13px) calc(50% - 2px),
+        calc(100% - 8px) calc(50% - 2px);
+    background-size: 6px 6px, 6px 6px;
     padding-right: 28px;
     cursor: pointer;
     width: 100%;

@@ -17,8 +17,17 @@ import {
 	SESSION_WARNING_HOURS_MAX,
 	SESSION_WARNING_HOURS_MIN,
 } from "../constants/remoteConstants";
-import type { P, ReusablePrompt, ToWebviewMessage } from "./webviewTypes";
-import { buildFinalResponseText, generateId } from "./webviewUtils";
+import type {
+	ChatSession,
+	P,
+	ReusablePrompt,
+	ToWebviewMessage,
+} from "./webviewTypes";
+import {
+	buildFinalResponseText,
+	generateId,
+	markSessionTerminated,
+} from "./webviewUtils";
 
 let vscode: typeof vscodeTypes;
 try {
@@ -175,6 +184,10 @@ export function loadSettings(p: P): void {
 		"interactiveApproval",
 		true,
 	);
+	p._agentOrchestrationEnabled = config.get<boolean>(
+		"agentOrchestration",
+		true,
+	);
 	p._autoAppendEnabled = activeSession?.autoAppendEnabled === true;
 	p._autoAppendText =
 		typeof activeSession?.autoAppendText === "string"
@@ -240,6 +253,12 @@ export function loadSettings(p: P): void {
 			)
 		: DEFAULT_SESSION_WARNING_HOURS;
 	p._sendWithCtrlEnter = config.get<boolean>("sendWithCtrlEnter", false);
+	if (
+		!p._agentOrchestrationEnabled &&
+		p._sessionManager.getActiveSessions().length
+	) {
+		p._getSingleSession();
+	}
 	// Ensure min <= max
 	if (p._humanLikeDelayMin > p._humanLikeDelayMax) {
 		p._humanLikeDelayMin = p._humanLikeDelayMax;
@@ -265,6 +284,7 @@ export async function saveReusablePrompts(p: P): Promise<void> {
 export function buildSettingsPayload(p: P): {
 	soundEnabled: boolean;
 	interactiveApprovalEnabled: boolean;
+	agentOrchestrationEnabled: boolean;
 	autoAppendEnabled: boolean;
 	autoAppendText: string;
 	alwaysAppendReminder: boolean;
@@ -286,6 +306,7 @@ export function buildSettingsPayload(p: P): {
 	return {
 		soundEnabled: p._soundEnabled,
 		interactiveApprovalEnabled: p._interactiveApprovalEnabled,
+		agentOrchestrationEnabled: p._agentOrchestrationEnabled,
 		autoAppendEnabled: p._autoAppendEnabled,
 		autoAppendText: p._autoAppendText,
 		alwaysAppendReminder: p._alwaysAppendReminder,
@@ -309,6 +330,20 @@ export function buildSettingsPayload(p: P): {
 		queueEnabled: p._queueEnabled,
 	};
 }
+
+export const AGENT_ORCHESTRATION_MULTI_WAITING_WARNING =
+	"TaskSync can't disable Agent Orchestration while multiple sessions are waiting on you. Reply to or clear those prompts first.";
+
+export function getWaitingActiveSessions(
+	p: Pick<P, "_sessionManager">,
+): ChatSession[] {
+	return p._sessionManager
+		.getActiveSessions()
+		.filter((session) => session.waitingOnUser || !!session.pendingToolCallId);
+}
+
+const STOP_AND_DISABLE_REASON =
+	"[Session stopped before disabling Agent Orchestration]";
 
 export function updateSettingsUI(p: P): void {
 	const payload = buildSettingsPayload(p);
@@ -359,6 +394,51 @@ export async function handleUpdateInteractiveApprovalSetting(
 			vscode.ConfigurationTarget.Global,
 		);
 	});
+}
+
+export async function handleUpdateAgentOrchestrationSetting(
+	p: P,
+	enabled: boolean,
+): Promise<void> {
+	if (!enabled && getWaitingActiveSessions(p).length > 1) {
+		p._agentOrchestrationEnabled = true;
+		vscode.window.showWarningMessage(AGENT_ORCHESTRATION_MULTI_WAITING_WARNING);
+		updateSettingsUI(p);
+		sendSessionSettingsToWebview(p);
+		p._updateSessionsUI();
+		broadcastAllSettingsToRemote(p);
+		return;
+	}
+	p._agentOrchestrationEnabled = enabled;
+	await withConfigGuard(p, async () => {
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+		await config.update(
+			"agentOrchestration",
+			enabled,
+			vscode.ConfigurationTarget.Workspace,
+		);
+	});
+	if (!enabled) {
+		p._getSingleSession();
+	}
+	updateSettingsUI(p);
+	sendSessionSettingsToWebview(p);
+	p._updateSessionsUI();
+	broadcastAllSettingsToRemote(p);
+}
+
+export async function handleStopSessionsAndDisableAgentOrchestration(
+	p: P,
+): Promise<void> {
+	const waitingSessions = getWaitingActiveSessions(p);
+	for (const session of waitingSessions) {
+		if (session.pendingToolCallId) {
+			p.cancelPendingToolCall(STOP_AND_DISABLE_REASON, session.id);
+		}
+		markSessionTerminated(p, session);
+	}
+	p._saveSessionsToDisk?.();
+	await handleUpdateAgentOrchestrationSetting(p, false);
 }
 
 export async function handleUpdateAutoAppendSetting(

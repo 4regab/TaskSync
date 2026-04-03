@@ -772,9 +772,13 @@ function updateWelcomeSectionVisibility() {
 	var placeholderEl = document.getElementById("split-placeholder");
 	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
+	var threadTitle = document.getElementById("thread-title");
 	var backBtn = document.getElementById("thread-back-btn");
 	var editBtn = document.getElementById("thread-edit-btn");
 
+	if (threadTitle) {
+		threadTitle.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
 	if (backBtn) {
 		backBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
 	}
@@ -797,7 +801,6 @@ function updateWelcomeSectionVisibility() {
 			var activeSession = (sessions || []).find(function (s) {
 				return s.id === activeSessionId;
 			});
-			var threadTitle = document.getElementById("thread-title");
 			if (activeSession && threadTitle) {
 				threadTitle.textContent = activeSession.title;
 			}
@@ -824,7 +827,6 @@ function updateWelcomeSectionVisibility() {
 		var activeSession = (sessions || []).find(function (s) {
 			return s.id === activeSessionId;
 		});
-		var threadTitle = document.getElementById("thread-title");
 		if (activeSession) {
 			if (threadTitle) threadTitle.textContent = activeSession.title;
 		}

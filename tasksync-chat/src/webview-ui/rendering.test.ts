@@ -424,4 +424,19 @@ describe("rendering unread indicators", () => {
 			elements.sessionsCollapseBar.classList.contains("has-unread-indicator"),
 		).toBe(false);
 	});
+
+	it("hides the thread title when agent orchestration is off", () => {
+		const { context, elements } = createRenderingHarness();
+
+		context.sessions = [{ id: "session-1", title: "Agent 1", unread: false }];
+		context.activeSessionId = "session-1";
+
+		context.agentOrchestrationEnabled = false;
+		context.updateWelcomeSectionVisibility();
+		expect(elements.threadTitle.classList.contains("hidden")).toBe(true);
+
+		context.agentOrchestrationEnabled = true;
+		context.updateWelcomeSectionVisibility();
+		expect(elements.threadTitle.classList.contains("hidden")).toBe(false);
+	});
 });

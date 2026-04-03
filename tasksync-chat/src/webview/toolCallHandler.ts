@@ -275,7 +275,7 @@ export async function waitForUserResponse(
 			return buildRejectedResult(
 				undefined,
 				buildStaleSingleSessionRejectedMessage(normalizedSessionId),
-				buildSingleSessionNewChatDirective("missing_session_id"),
+				buildSingleSessionNewChatDirective("stale_session_id"),
 			);
 		}
 	}

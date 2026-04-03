@@ -9,6 +9,37 @@ function createClassListStub() {
 	};
 }
 
+function normalizeSelectorList(selectorText: string) {
+	return selectorText
+		.split(",")
+		.map((selector) => selector.trim())
+		.filter(Boolean)
+		.sort()
+		.join(",");
+}
+
+function findCssDeclarations(
+	css: string,
+	expectedSelectors: string[],
+): string | undefined {
+	const normalizedExpected = normalizeSelectorList(expectedSelectors.join(","));
+
+	for (const block of css.split("}")) {
+		const parts = block.split("{");
+		if (parts.length !== 2) continue;
+
+		const selectorText = parts[0]?.trim();
+		const declarations = parts[1]?.trim();
+		if (!selectorText || !declarations) continue;
+
+		if (normalizeSelectorList(selectorText) === normalizedExpected) {
+			return declarations;
+		}
+	}
+
+	return undefined;
+}
+
 function loadSettingsHarness(options?: {
 	agentOrchestrationEnabled?: boolean;
 	splitViewEnabled?: boolean;
@@ -125,6 +156,31 @@ describe("openSettingsModal", () => {
 			"#settings-modal",
 		);
 		expect(vscode.postMessage).not.toHaveBeenCalled();
+	});
+});
+
+describe("dialog focus visibility", () => {
+	it("keeps dialog surfaces visible while overlays stay outline-free", () => {
+		const mainCss = readFileSync(
+			join(__dirname, "../../media/main.css"),
+			"utf8",
+		);
+		const overlayDeclarations = findCssDeclarations(mainCss, [
+			".settings-modal-overlay:focus",
+			".settings-modal-overlay:focus-visible",
+			".history-modal-overlay:focus",
+			".history-modal-overlay:focus-visible",
+		]);
+		const dialogDeclarations = findCssDeclarations(mainCss, [
+			".settings-modal:focus",
+			".settings-modal:focus-visible",
+			".history-modal:focus",
+			".history-modal:focus-visible",
+		]);
+
+		expect(overlayDeclarations).toContain("outline: none;");
+		expect(dialogDeclarations).toContain("outline: none;");
+		expect(dialogDeclarations).toContain("outline: none;");
 	});
 });
 

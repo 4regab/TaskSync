@@ -603,6 +603,48 @@ describe("askUser cancellation handling", () => {
 	});
 
 	/**
+	 * Generic stale single-session recovery must keep its own directive reason so
+	 * the payload does not pretend the session_id was missing.
+	 */
+	it("returns stale single-session recovery with a dedicated stale_session_id directive reason", async () => {
+		const { registerTools } = await import("./tools");
+		const { waitForUserResponse } = await import("./webview/toolCallHandler");
+		const provider = createSingleSessionInvokeProvider({
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+				getSession: vi.fn(() => undefined),
+				isDeletedSessionId: () => false,
+			},
+		});
+		provider.waitForUserResponse = (question: string, sessionId: string) =>
+			waitForUserResponse(provider as any, question, sessionId);
+		const context = { subscriptions: [] as unknown[] };
+
+		registerTools(context as any, provider as any);
+
+		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
+		expect(toolDefinition).toBeTruthy();
+
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Recover stale", session_id: "stale-99" } },
+			createToken() as any,
+		);
+
+		const textPart = result.parts[0];
+		const parsed = JSON.parse(textPart.value);
+		expect(parsed.session_id).toBe("stale-99");
+		expect(parsed.response).toContain(
+			'REJECTED. session_id "stale-99" IS STALE FOR THE CURRENT SINGLE SESSION.',
+		);
+		expect(parsed.directive).toEqual({
+			kind: "rejected",
+			reason: "stale_session_id",
+			action: "start_new_chat_with_new_session_id",
+		});
+		expect(provider._bindSession).not.toHaveBeenCalled();
+	});
+
+	/**
 	 * Real token cancellation (CancellationToken fires) must still throw CancellationError.
 	 */
 	it("throws CancellationError when token is already cancelled before starting", async () => {

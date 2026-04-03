@@ -53,6 +53,7 @@ export interface AskUserDirective {
 		| "auto_assigned_session"
 		| "superseded"
 		| "missing_session_id"
+		| "stale_session_id"
 		| "deleted_session"
 		| "terminated_session";
 	action:

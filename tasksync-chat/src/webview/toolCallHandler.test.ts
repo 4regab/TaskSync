@@ -565,6 +565,7 @@ describe("waitForUserResponse", () => {
 			value: expect.stringContaining('REJECTED. session_id "stale-99"'),
 			directive: expect.objectContaining({
 				kind: "rejected",
+				reason: "stale_session_id",
 				action: "start_new_chat_with_new_session_id",
 			}),
 		});

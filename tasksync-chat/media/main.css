@@ -3208,10 +3208,13 @@ button#send-btn:disabled {
 
 .settings-modal-overlay:focus,
 .settings-modal-overlay:focus-visible,
+.history-modal-overlay:focus,
+.history-modal-overlay:focus-visible {
+    outline: none;
+}
+
 .settings-modal:focus,
 .settings-modal:focus-visible,
-.history-modal-overlay:focus,
-.history-modal-overlay:focus-visible,
 .history-modal:focus,
 .history-modal:focus-visible {
     outline: none;

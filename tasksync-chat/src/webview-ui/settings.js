@@ -2,14 +2,17 @@
 
 function openSettingsModal() {
 	if (!settingsModalOverlay) return;
-	vscode.postMessage({ type: "openSettingsModal" });
+	// Keep modal opening local so a stale settings refresh cannot override
+	// a user's first orchestration toggle while the modal is already opening.
 	settingsModalOverlay.classList.remove("hidden");
+	focusDialogSurface(settingsModalOverlay, "#settings-modal");
 }
 
 function closeSettingsModal() {
 	if (!settingsModalOverlay) return;
 	settingsModalOverlay.classList.add("hidden");
 	hideAddPromptForm();
+	restoreDialogFocus(settingsModalOverlay);
 }
 
 function toggleSoundSetting() {

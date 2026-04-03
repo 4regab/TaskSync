@@ -403,6 +403,39 @@ describe("loadSettings", () => {
 		expect(p._autopilotPrompts).toEqual([]);
 		expect(p._autopilotText).toBe("Continue");
 	});
+
+	it("keeps default singleton collapse but can skip it for config refresh", () => {
+		const config = createMockConfig({
+			notificationSound: false,
+			interactiveApproval: false,
+			agentOrchestration: false,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+
+		// Default callers must keep the existing collapse behavior.
+		loadSettings(p);
+		expect(p._soundEnabled).toBe(false);
+		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(p._getSingleSession).toHaveBeenCalledTimes(1);
+
+		p._getSingleSession.mockClear();
+		p._soundEnabled = true;
+		p._interactiveApprovalEnabled = true;
+		p._agentOrchestrationEnabled = true;
+
+		// The config-refresh opt-in should still reload settings while skipping collapse.
+		loadSettings(p, { skipSingleSessionCollapse: true });
+		expect(p._soundEnabled).toBe(false);
+		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(p._getSingleSession).not.toHaveBeenCalled();
+	});
 });
 
 // ─── buildSettingsPayload ───────────────────────────────────
@@ -550,8 +583,11 @@ describe("handleUpdateAgentOrchestrationSetting", () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
+		const broadcast = vi.fn();
 
-		const p = createMockP();
+		const p = createMockP({
+			_remoteServer: { broadcast },
+		});
 		await handleUpdateAgentOrchestrationSetting(p, false);
 
 		expect(p._agentOrchestrationEnabled).toBe(false);
@@ -562,6 +598,11 @@ describe("handleUpdateAgentOrchestrationSetting", () => {
 		);
 		expect(p._getSingleSession).toHaveBeenCalledTimes(1);
 		expect(p._updateSessionsUI).toHaveBeenCalledTimes(1);
+		expect(broadcast).toHaveBeenCalledTimes(1);
+		expect(broadcast).toHaveBeenCalledWith(
+			"settingsChanged",
+			expect.objectContaining({ agentOrchestrationEnabled: false }),
+		);
 	});
 
 	it("does not resolve a singleton session when left enabled", async () => {
@@ -617,8 +658,11 @@ describe("handleUpdateAgentOrchestrationSetting", () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
 			config as any,
 		);
+		const broadcast = vi.fn();
 
-		const p = createMockP();
+		const p = createMockP({
+			_remoteServer: { broadcast },
+		});
 		const activeSession = p._sessionManager.getActiveSession();
 		activeSession.waitingOnUser = true;
 		activeSession.pendingToolCallId = "tc_1";
@@ -656,6 +700,11 @@ describe("handleUpdateAgentOrchestrationSetting", () => {
 			vscode.ConfigurationTarget.Workspace,
 		);
 		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(broadcast).toHaveBeenCalledTimes(1);
+		expect(broadcast).toHaveBeenCalledWith(
+			"settingsChanged",
+			expect.objectContaining({ agentOrchestrationEnabled: false }),
+		);
 	});
 });
 

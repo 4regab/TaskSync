@@ -281,6 +281,49 @@ function createToken() {
 }
 
 /**
+ * Build a minimal single-session provider stub for invoke() regressions that
+ * must exercise the real stale-session boundary without reaching singleton rebinding.
+ */
+function createSingleSessionInvokeProvider(
+	overrides: Record<string, unknown> = {},
+) {
+	return {
+		_agentOrchestrationEnabled: false,
+		_bindSession: vi.fn(() => {
+			throw new Error(
+				"_bindSession should not run for stale single-session rejections",
+			);
+		}),
+		_getSession: vi.fn(() => undefined),
+		_sessionManager: {
+			getActiveSessionId: () => "1",
+			getSession: vi.fn(() => undefined),
+			isDeletedSessionId: () => false,
+		},
+		_pendingRequests: new Map(),
+		_toolCallSessionMap: new Map(),
+		_currentSessionCallsMap: new Map(),
+		_currentToolCallId: null,
+		_webviewReady: true,
+		_view: {
+			webview: {
+				postMessage: vi.fn(),
+			},
+			show: vi.fn(),
+		},
+		_alwaysAppendReminder: false,
+		playNotificationSound: vi.fn(),
+		_updateSessionsUI: vi.fn(),
+		_saveSessionsToDisk: vi.fn(),
+		_syncActiveSessionState: vi.fn(),
+		_clearResponseTimeoutTimer: vi.fn(),
+		_applyHumanLikeDelay: vi.fn(),
+		_remoteServer: { broadcast: vi.fn() },
+		...overrides,
+	} as any;
+}
+
+/**
  * Reload the tools module cleanly so each test gets a fresh registerTool capture.
  */
 beforeEach(() => {
@@ -456,6 +499,107 @@ describe("askUser cancellation handling", () => {
 		expect(parsed.session_id).toBe("12");
 		expect(parsed.response).toBe("Handled");
 		expect(parsed.queued).toBe(true);
+	});
+
+	/**
+	 * Deleted single-session stale recovery must not leak the old auto-bootstrap
+	 * wording through the final registered ask_user payload.
+	 */
+	it("returns deleted single-session stale recovery without auto bootstrap text from the registered tool invoke handler", async () => {
+		const { registerTools } = await import("./tools");
+		const { waitForUserResponse } = await import("./webview/toolCallHandler");
+		const provider = createSingleSessionInvokeProvider({
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+				getSession: vi.fn(() => undefined),
+				isDeletedSessionId: vi.fn((id: string) => id === "deleted-99"),
+			},
+		});
+		provider.waitForUserResponse = (question: string, sessionId: string) =>
+			waitForUserResponse(provider as any, question, sessionId);
+		const context = { subscriptions: [] as unknown[] };
+
+		registerTools(context as any, provider as any);
+
+		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
+		expect(toolDefinition).toBeTruthy();
+
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Recover deleted", session_id: "deleted-99" } },
+			createToken() as any,
+		);
+
+		const textPart = result.parts[0];
+		const parsed = JSON.parse(textPart.value);
+		expect(parsed.session_id).toBe("deleted-99");
+		expect(parsed.response).toContain(
+			'REJECTED. session_id "deleted-99" WAS DELETED.',
+		);
+		expect(parsed.response).toContain(
+			"START A NEW CHAT TO GET A NEW session_id.",
+		);
+		expect(parsed.response).not.toContain(
+			'CALL ask_user AGAIN WITH session_id "auto".',
+		);
+		expect(parsed.directive).toEqual({
+			kind: "rejected",
+			reason: "deleted_session",
+			action: "start_new_chat_with_new_session_id",
+		});
+		expect(provider._bindSession).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * Terminated single-session stale recovery must stay aligned with the new-chat
+	 * directive so the model is not pointed back at the singleton bootstrap path.
+	 */
+	it("returns terminated single-session stale recovery without auto bootstrap text from the registered tool invoke handler", async () => {
+		const { registerTools } = await import("./tools");
+		const { waitForUserResponse } = await import("./webview/toolCallHandler");
+		const terminatedSession = {
+			id: "terminated-5",
+			sessionTerminated: true,
+			pendingToolCallId: null,
+			queue: [],
+			queueEnabled: false,
+		};
+		const provider = createSingleSessionInvokeProvider({
+			_getSession: vi.fn((id: string) =>
+				id === "terminated-5" ? terminatedSession : undefined,
+			),
+		});
+		provider.waitForUserResponse = (question: string, sessionId: string) =>
+			waitForUserResponse(provider as any, question, sessionId);
+		const context = { subscriptions: [] as unknown[] };
+
+		registerTools(context as any, provider as any);
+
+		const toolDefinition = registerToolMock.mock.calls[0]?.[1];
+		expect(toolDefinition).toBeTruthy();
+
+		const result = await toolDefinition.invoke(
+			{ input: { question: "Recover terminated", session_id: "terminated-5" } },
+			createToken() as any,
+		);
+
+		const textPart = result.parts[0];
+		const parsed = JSON.parse(textPart.value);
+		expect(parsed.session_id).toBe("terminated-5");
+		expect(parsed.response).toContain(
+			'REJECTED. session_id "terminated-5" IS TERMINATED.',
+		);
+		expect(parsed.response).toContain(
+			"START A NEW CHAT TO GET A NEW session_id.",
+		);
+		expect(parsed.response).not.toContain(
+			'CALL ask_user AGAIN WITH session_id "auto".',
+		);
+		expect(parsed.directive).toEqual({
+			kind: "rejected",
+			reason: "terminated_session",
+			action: "start_new_chat_with_new_session_id",
+		});
+		expect(provider._bindSession).not.toHaveBeenCalled();
 	});
 
 	/**

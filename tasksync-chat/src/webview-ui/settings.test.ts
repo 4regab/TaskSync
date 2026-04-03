@@ -1,6 +1,13 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+function createClassListStub() {
+	return {
+		add: vi.fn(),
+		remove: vi.fn(),
+	};
+}
 
 function loadSettingsHarness(options?: {
 	agentOrchestrationEnabled?: boolean;
@@ -9,9 +16,13 @@ function loadSettingsHarness(options?: {
 }) {
 	const source = readFileSync(join(__dirname, "settings.js"), "utf8");
 	const vscode = { postMessage: vi.fn() };
+	const settingsModalOverlay = { classList: createClassListStub() };
+	const hideAddPromptForm = vi.fn();
 	const showSimpleAlert = vi.fn();
 	const openStopSessionsAndDisableAgentOrchestrationModal = vi.fn();
 	const setToggle = vi.fn();
+	const focusDialogSurface = vi.fn();
+	const restoreDialogFocus = vi.fn();
 	const syncClientSessionSelection = vi.fn();
 	const renderSessionsList = vi.fn();
 	const updateWelcomeSectionVisibility = vi.fn();
@@ -22,6 +33,8 @@ function loadSettingsHarness(options?: {
 	const factory = new Function(
 		"setToggle",
 		"settingsModalOverlay",
+		"focusDialogSurface",
+		"restoreDialogFocus",
 		"hideAddPromptForm",
 		"soundEnabled",
 		"soundToggle",
@@ -45,13 +58,15 @@ function loadSettingsHarness(options?: {
 		"vscode",
 		"createPromptListUI",
 		source +
-			"\nreturn { toggleAgentOrchestrationSetting, stopSessionsAndDisableAgentOrchestration, getAgentOrchestrationEnabled: function () { return agentOrchestrationEnabled; }, getSplitViewEnabled: function () { return splitViewEnabled; } };",
+			"\nreturn { openSettingsModal, closeSettingsModal, toggleAgentOrchestrationSetting, stopSessionsAndDisableAgentOrchestration, getAgentOrchestrationEnabled: function () { return agentOrchestrationEnabled; }, getSplitViewEnabled: function () { return splitViewEnabled; } };",
 	);
 
 	const harness = factory(
 		setToggle,
-		null,
-		vi.fn(),
+		settingsModalOverlay,
+		focusDialogSurface,
+		restoreDialogFocus,
+		hideAddPromptForm,
 		true,
 		null,
 		true,
@@ -77,6 +92,10 @@ function loadSettingsHarness(options?: {
 
 	return {
 		harness,
+		settingsModalOverlay,
+		focusDialogSurface,
+		restoreDialogFocus,
+		hideAddPromptForm,
 		showSimpleAlert,
 		openStopSessionsAndDisableAgentOrchestrationModal,
 		vscode,
@@ -86,6 +105,28 @@ function loadSettingsHarness(options?: {
 		saveWebviewState,
 	};
 }
+
+beforeEach(() => {
+	vi.restoreAllMocks();
+});
+
+describe("openSettingsModal", () => {
+	it("opens the modal locally without triggering a redundant settings refresh round-trip", () => {
+		const { harness, settingsModalOverlay, focusDialogSurface, vscode } =
+			loadSettingsHarness();
+
+		harness.openSettingsModal();
+
+		expect(settingsModalOverlay.classList.remove).toHaveBeenCalledWith(
+			"hidden",
+		);
+		expect(focusDialogSurface).toHaveBeenCalledWith(
+			settingsModalOverlay,
+			"#settings-modal",
+		);
+		expect(vscode.postMessage).not.toHaveBeenCalled();
+	});
+});
 
 describe("toggleAgentOrchestrationSetting", () => {
 	it("shows a blocking modal when multiple sessions are already waiting", () => {

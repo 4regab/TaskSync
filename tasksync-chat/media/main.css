@@ -297,7 +297,7 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--vscode-panel-border);
 }
 
@@ -3204,6 +3204,17 @@ button#send-btn:disabled {
     flex-direction: column;
     overflow: hidden;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.settings-modal-overlay:focus,
+.settings-modal-overlay:focus-visible,
+.settings-modal:focus,
+.settings-modal:focus-visible,
+.history-modal-overlay:focus,
+.history-modal-overlay:focus-visible,
+.history-modal:focus,
+.history-modal:focus-visible {
+    outline: none;
 }
 
 .settings-modal-header {

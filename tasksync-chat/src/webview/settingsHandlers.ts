@@ -176,7 +176,14 @@ export function normalizeRemoteMaxDevices(value: unknown): number {
 	return Math.max(MIN_REMOTE_MAX_DEVICES, parsedValue);
 }
 
-export function loadSettings(p: P): void {
+/**
+ * Keep config-refresh reads side-effect free until the caller decides whether singleton collapse is valid.
+ */
+export type LoadSettingsOptions = {
+	skipSingleSessionCollapse?: boolean;
+};
+
+export function loadSettings(p: P, options: LoadSettingsOptions = {}): void {
 	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 	const activeSession = p._sessionManager?.getActiveSession?.();
 	p._soundEnabled = config.get<boolean>("notificationSound", true);
@@ -254,6 +261,7 @@ export function loadSettings(p: P): void {
 		: DEFAULT_SESSION_WARNING_HOURS;
 	p._sendWithCtrlEnter = config.get<boolean>("sendWithCtrlEnter", false);
 	if (
+		!options.skipSingleSessionCollapse &&
 		!p._agentOrchestrationEnabled &&
 		p._sessionManager.getActiveSessions().length
 	) {

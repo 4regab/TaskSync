@@ -9,16 +9,14 @@ describe("dispatchSettingsMessage", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("handles updateAgentOrchestrationSetting and broadcasts updated settings", async () => {
+	it("handles updateAgentOrchestrationSetting without a duplicate dispatcher broadcast", async () => {
 		const ws = { send: vi.fn() } as unknown as WebSocket;
 		const provider = {} as any;
 		const broadcast = vi.fn();
-		const payload = { agentOrchestrationEnabled: false };
 
 		const updateSpy = vi
 			.spyOn(settingsH, "handleUpdateAgentOrchestrationSetting")
 			.mockResolvedValue(undefined);
-		vi.spyOn(settingsH, "buildSettingsPayload").mockReturnValue(payload as any);
 
 		const handled = await dispatchSettingsMessage(ws, provider, broadcast, {
 			type: "updateAgentOrchestrationSetting",
@@ -27,19 +25,17 @@ describe("dispatchSettingsMessage", () => {
 
 		expect(handled).toBe(true);
 		expect(updateSpy).toHaveBeenCalledWith(provider, false);
-		expect(broadcast).toHaveBeenCalledWith("settingsChanged", payload);
+		expect(broadcast).not.toHaveBeenCalled();
 	});
 
-	it("handles disableAgentOrchestrationAndStopSessions and broadcasts updated settings", async () => {
+	it("handles disableAgentOrchestrationAndStopSessions without a duplicate dispatcher broadcast", async () => {
 		const ws = { send: vi.fn() } as unknown as WebSocket;
 		const provider = {} as any;
 		const broadcast = vi.fn();
-		const payload = { agentOrchestrationEnabled: false };
 
 		const stopSpy = vi
 			.spyOn(settingsH, "handleStopSessionsAndDisableAgentOrchestration")
 			.mockResolvedValue(undefined);
-		vi.spyOn(settingsH, "buildSettingsPayload").mockReturnValue(payload as any);
 
 		const handled = await dispatchSettingsMessage(ws, provider, broadcast, {
 			type: "disableAgentOrchestrationAndStopSessions",
@@ -47,6 +43,6 @@ describe("dispatchSettingsMessage", () => {
 
 		expect(handled).toBe(true);
 		expect(stopSpy).toHaveBeenCalledWith(provider);
-		expect(broadcast).toHaveBeenCalledWith("settingsChanged", payload);
+		expect(broadcast).not.toHaveBeenCalled();
 	});
 });

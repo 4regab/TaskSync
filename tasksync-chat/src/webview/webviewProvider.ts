@@ -263,10 +263,13 @@ export class TaskSyncWebviewProvider
 		if (this._isUpdatingConfig) {
 			return;
 		}
+		const orchestrationChanged = e.affectsConfiguration(
+			`${CONFIG_SECTION}.agentOrchestration`,
+		);
 		if (
 			e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
 			e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
-			e.affectsConfiguration(`${CONFIG_SECTION}.agentOrchestration`) ||
+			orchestrationChanged ||
 			e.affectsConfiguration(`${CONFIG_SECTION}.alwaysAppendAskUserReminder`) ||
 			e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
 			e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
@@ -278,8 +281,9 @@ export class TaskSyncWebviewProvider
 			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMax`) ||
 			e.affectsConfiguration(`${CONFIG_SECTION}.sendWithCtrlEnter`)
 		) {
-			this._loadSettings();
+			this._loadSettings({ skipSingleSessionCollapse: true });
 			if (
+				orchestrationChanged &&
 				!this._agentOrchestrationEnabled &&
 				settingsH.getWaitingActiveSessions(this).length > 1
 			) {
@@ -288,6 +292,9 @@ export class TaskSyncWebviewProvider
 				);
 				void settingsH.handleUpdateAgentOrchestrationSetting(this, true);
 				return;
+			}
+			if (orchestrationChanged && !this._agentOrchestrationEnabled) {
+				this._getSingleSession();
 			}
 			this._updateSettingsUI();
 			settingsH.sendSessionSettingsToWebview(this);
@@ -327,6 +334,7 @@ export class TaskSyncWebviewProvider
 	}
 
 	public openHistoryModal(): void {
+		this._view?.show(false);
 		this._view?.webview.postMessage({
 			type: "openHistoryModal",
 		} satisfies ToWebviewMessage);
@@ -334,6 +342,7 @@ export class TaskSyncWebviewProvider
 	}
 
 	public openSettingsModal(): void {
+		this._view?.show(false);
 		this._view?.webview.postMessage({
 			type: "openSettingsModal",
 		} satisfies ToWebviewMessage);
@@ -483,6 +492,8 @@ export class TaskSyncWebviewProvider
 		if (fallbackSession) {
 			this._sessionManager.setActiveSession(fallbackSession.id);
 			this._syncActiveSessionState();
+			// Keep remote clients aligned with the newly active singleton's full state.
+			this._remoteServer?.broadcast("state", this.getRemoteState());
 			this._updateSessionsUI();
 			this._saveSessionsToDisk();
 			return fallbackSession;
@@ -494,6 +505,8 @@ export class TaskSyncWebviewProvider
 			this._sessionDefaults(),
 		);
 		this._syncActiveSessionState();
+		// Keep remote clients aligned with the newly created singleton's full state.
+		this._remoteServer?.broadcast("state", this.getRemoteState());
 		this._updateSessionsUI();
 		this._saveSessionsToDisk();
 		return session;
@@ -560,46 +573,32 @@ export class TaskSyncWebviewProvider
 		}
 
 		if (!this._agentOrchestrationEnabled && previousActiveSession) {
-			lifecycle.startNewSession(this, {
-				statusMessage: NEW_SESSION_STATUS_MESSAGE,
-				remoteEventType: "newSession",
-			});
-
-			let chatQuery: string;
-			const trimmedPrompt = options?.initialPrompt?.trim();
-
-			if (trimmedPrompt) {
-				chatQuery = buildAskUserRequestQuery(
-					trimmedPrompt.slice(0, MAX_QUEUE_PROMPT_LENGTH),
-				);
-			} else if (useQueuedPrompt !== false) {
-				const queuedPrompt = queuedPromptFromPrevious?.prompt.slice(
-					0,
-					MAX_QUEUE_PROMPT_LENGTH,
-				);
-				chatQuery = queuedPrompt
-					? buildAskUserRequestQuery(queuedPrompt)
-					: DEFAULT_REMOTE_SESSION_QUERY;
+			if (options?.stopCurrentSession) {
+				if (previousActiveSession.pendingToolCallId) {
+					this.cancelPendingToolCall(
+						"[Session stopped by user]",
+						previousActiveSession.id,
+					);
+				}
+				markSessionTerminated(this, previousActiveSession);
+				this._saveSessionsToDisk();
 			} else {
-				chatQuery = DEFAULT_REMOTE_SESSION_QUERY;
+				// Plain "New Session" must stop the old waiting state without
+				// terminating the old session, otherwise the singleton chooser can
+				// collapse back to the stale waiting session.
+				if (previousActiveSession.pendingToolCallId) {
+					this.cancelPendingToolCall(
+						"[Session reset by user]",
+						previousActiveSession.id,
+					);
+				}
+				previousActiveSession.pendingToolCallId = null;
+				previousActiveSession.waitingOnUser = false;
+				previousActiveSession.unread = false;
+				previousActiveSession.aiTurnActive = false;
+				this._saveSessionsToDisk();
 			}
-
-			const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-			const chatCommand = config.get<string>(
-				"remoteChatCommand",
-				DEFAULT_REMOTE_CHAT_COMMAND,
-			);
-
-			await startNewSessionChat(
-				previousActiveSession.id,
-				chatCommand,
-				chatQuery,
-				DEFAULT_REMOTE_CHAT_COMMAND,
-			);
-			return;
-		}
-
-		if (options?.stopCurrentSession && previousActiveSession) {
+		} else if (options?.stopCurrentSession && previousActiveSession) {
 			if (previousActiveSession.pendingToolCallId) {
 				this.cancelPendingToolCall(
 					"[Session stopped by user]",
@@ -677,6 +676,7 @@ export class TaskSyncWebviewProvider
 
 	public openNewSessionModal(): boolean {
 		if (!this._view) return false;
+		this._view.show(false);
 		this._view.webview.postMessage({
 			type: "openNewSessionModal",
 		} satisfies ToWebviewMessage);
@@ -685,6 +685,7 @@ export class TaskSyncWebviewProvider
 
 	public openResetSessionModal(): boolean {
 		if (!this._view) return false;
+		this._view.show(false);
 		this._view.webview.postMessage({
 			type: "openResetSessionModal",
 		} satisfies ToWebviewMessage);
@@ -707,8 +708,8 @@ export class TaskSyncWebviewProvider
 		session.stopSessionTimerInterval(this);
 	}
 
-	_loadSettings(): void {
-		settingsH.loadSettings(this);
+	_loadSettings(options?: settingsH.LoadSettingsOptions): void {
+		settingsH.loadSettings(this, options);
 	}
 
 	/**

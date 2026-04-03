@@ -482,7 +482,7 @@ describe("waitForUserResponse", () => {
 		});
 	});
 
-	it("routes stale explicit session ids into the singleton session when orchestration is off", async () => {
+	it("rejects stale explicit session ids before singleton rebinding when orchestration is off", async () => {
 		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
 			get: vi.fn((key: string, defaultValue?: unknown) =>
 				key === "responseTimeout" ? "0" : defaultValue,
@@ -515,9 +515,10 @@ describe("waitForUserResponse", () => {
 		const p = {
 			_agentOrchestrationEnabled: false,
 			_bindSession: vi.fn(() => session),
+			_getSession: vi.fn(() => undefined),
 			_sessionManager: {
 				getActiveSessionId: () => "1",
-				isDeletedSessionId: () => true,
+				isDeletedSessionId: () => false,
 			},
 			_pendingRequests: new Map(),
 			_toolCallSessionMap: new Map(),
@@ -543,31 +544,31 @@ describe("waitForUserResponse", () => {
 
 		const promise = waitForUserResponse(
 			p,
-			"Stay in the singleton",
-			"deleted-99",
+			"Stay out of the singleton",
+			"stale-99",
 		);
 
-		expect(p._bindSession).toHaveBeenCalledWith("deleted-99");
-		expect(session.history[0]).toMatchObject({
-			sessionId: "1",
-			prompt: "Stay in the singleton",
-			status: "pending",
-		});
-		expect(session.unread).toBe(false);
+		await Promise.resolve();
 
+		expect(p._bindSession).not.toHaveBeenCalled();
 		const resolvePending = p._pendingRequests.get(session.pendingToolCallId);
-		expect(typeof resolvePending).toBe("function");
-		resolvePending({
-			value: "Answer",
-			queue: false,
-			attachments: [],
-		});
+		if (typeof resolvePending === "function") {
+			resolvePending({
+				value: "Answer",
+				queue: false,
+				attachments: [],
+			});
+		}
 
 		await expect(promise).resolves.toMatchObject({
-			value: "Answer",
-			queue: false,
-			attachments: [],
+			cancelled: true,
+			value: expect.stringContaining('REJECTED. session_id "stale-99"'),
+			directive: expect.objectContaining({
+				kind: "rejected",
+				action: "start_new_chat_with_new_session_id",
+			}),
 		});
+		expect(session.history).toHaveLength(0);
 	});
 
 	it("does not create unread when queue auto-responds without a real pending entry", async () => {
@@ -865,6 +866,137 @@ describe("waitForUserResponse — session_id defensive validation", () => {
 			action: "call_ask_user_again_with_auto_session",
 			sessionId: "auto",
 		});
+	});
+
+	it("rejects stale deleted ids with a new-chat directive in single-session mode", async () => {
+		const reboundSession = {
+			id: "1",
+			sessionTerminated: false,
+			pendingToolCallId: null,
+			queue: [],
+			queueEnabled: true,
+			history: [],
+			attachments: [],
+			autopilotEnabled: false,
+			waitingOnUser: false,
+			unread: false,
+			createdAt: Date.now(),
+			sessionStartTime: null,
+			sessionFrozenElapsed: null,
+			sessionWarningShown: false,
+			aiTurnActive: false,
+			consecutiveAutoResponses: 0,
+			autopilotIndex: 0,
+		};
+		const p = {
+			_agentOrchestrationEnabled: false,
+			_bindSession: vi.fn(() => reboundSession),
+			_getSession: vi.fn(() => undefined),
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+				isDeletedSessionId: vi.fn((id: string) => id === "deleted-99"),
+			},
+			_pendingRequests: new Map(),
+			_toolCallSessionMap: new Map(),
+			_currentSessionCallsMap: new Map(),
+			_currentToolCallId: null,
+			_webviewReady: true,
+			_view: { webview: { postMessage: vi.fn() }, show: vi.fn() },
+			playNotificationSound: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+			_saveSessionsToDisk: vi.fn(),
+			_syncActiveSessionState: vi.fn(),
+			_clearResponseTimeoutTimer: vi.fn(),
+			_applyHumanLikeDelay: vi.fn(),
+			_remoteServer: { broadcast: vi.fn() },
+		} as any;
+
+		const result = await waitForUserResponse(p, "Test?", "deleted-99");
+
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain(
+			'REJECTED. session_id "deleted-99" WAS DELETED.',
+		);
+		expect(result.value).toContain("START A NEW CHAT TO GET A NEW session_id.");
+		expect(result.value).not.toContain(
+			'CALL ask_user AGAIN WITH session_id "auto".',
+		);
+		expect(result.directive).toMatchObject({
+			kind: "rejected",
+			reason: "deleted_session",
+			action: "start_new_chat_with_new_session_id",
+		});
+		expect(p._bindSession).not.toHaveBeenCalled();
+	});
+
+	it("rejects stale terminated ids with a new-chat directive in single-session mode", async () => {
+		const terminatedSession = {
+			id: "terminated-5",
+			sessionTerminated: true,
+			pendingToolCallId: null,
+			queue: [],
+			queueEnabled: false,
+		};
+		const reboundSession = {
+			id: "1",
+			sessionTerminated: false,
+			pendingToolCallId: null,
+			queue: [],
+			queueEnabled: true,
+			history: [],
+			attachments: [],
+			autopilotEnabled: false,
+			waitingOnUser: false,
+			unread: false,
+			createdAt: Date.now(),
+			sessionStartTime: null,
+			sessionFrozenElapsed: null,
+			sessionWarningShown: false,
+			aiTurnActive: false,
+			consecutiveAutoResponses: 0,
+			autopilotIndex: 0,
+		};
+		const p = {
+			_agentOrchestrationEnabled: false,
+			_bindSession: vi.fn(() => reboundSession),
+			_getSession: vi.fn((id: string) =>
+				id === "terminated-5" ? terminatedSession : undefined,
+			),
+			_sessionManager: {
+				getActiveSessionId: () => "1",
+				isDeletedSessionId: () => false,
+			},
+			_pendingRequests: new Map(),
+			_toolCallSessionMap: new Map(),
+			_currentSessionCallsMap: new Map(),
+			_currentToolCallId: null,
+			_webviewReady: true,
+			_view: { webview: { postMessage: vi.fn() }, show: vi.fn() },
+			playNotificationSound: vi.fn(),
+			_updateSessionsUI: vi.fn(),
+			_saveSessionsToDisk: vi.fn(),
+			_syncActiveSessionState: vi.fn(),
+			_clearResponseTimeoutTimer: vi.fn(),
+			_applyHumanLikeDelay: vi.fn(),
+			_remoteServer: { broadcast: vi.fn() },
+		} as any;
+
+		const result = await waitForUserResponse(p, "Test?", "terminated-5");
+
+		expect(result.cancelled).toBe(true);
+		expect(result.value).toContain(
+			'REJECTED. session_id "terminated-5" IS TERMINATED.',
+		);
+		expect(result.value).toContain("START A NEW CHAT TO GET A NEW session_id.");
+		expect(result.value).not.toContain(
+			'CALL ask_user AGAIN WITH session_id "auto".',
+		);
+		expect(result.directive).toMatchObject({
+			kind: "rejected",
+			reason: "terminated_session",
+			action: "start_new_chat_with_new_session_id",
+		});
+		expect(p._bindSession).not.toHaveBeenCalled();
 	});
 
 	it("rejects at boundary when session ID is tombstoned (before creating session)", async () => {

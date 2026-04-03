@@ -37,12 +37,10 @@ export async function dispatchSettingsMessage(
 				provider,
 				msg.enabled === true,
 			);
-			broadcastSettingsChanged(provider, broadcastFn);
 			return true;
 
 		case "disableAgentOrchestrationAndStopSessions":
 			await settingsH.handleStopSessionsAndDisableAgentOrchestration(provider);
-			broadcastSettingsChanged(provider, broadcastFn);
 			return true;
 
 		case "updateAutoAppendSetting":

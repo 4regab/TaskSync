@@ -67,8 +67,75 @@ function buildTerminatedSessionRejectedMessage(sessionId: string): string {
 	return `REJECTED. session_id "${sessionId}" IS TERMINATED. DO NOT REUSE IT. CALL ask_user AGAIN WITH session_id "auto".`;
 }
 
+/**
+ * Keep single-session stale recovery text aligned with the new-chat directive
+ * so the model is not pointed back at the singleton bootstrap path.
+ */
+function buildSingleSessionDeletedSessionRejectedMessage(
+	sessionId: string,
+): string {
+	return `REJECTED. session_id "${sessionId}" WAS DELETED. DO NOT REUSE IT. START A NEW CHAT TO GET A NEW session_id.`;
+}
+
+/**
+ * Keep single-session stale recovery text aligned with the new-chat directive
+ * so the model is not pointed back at the singleton bootstrap path.
+ */
+function buildSingleSessionTerminatedSessionRejectedMessage(
+	sessionId: string,
+): string {
+	return `REJECTED. session_id "${sessionId}" IS TERMINATED. DO NOT REUSE IT. START A NEW CHAT TO GET A NEW session_id.`;
+}
+
+function buildStaleSingleSessionRejectedMessage(sessionId: string): string {
+	return `REJECTED. session_id "${sessionId}" IS STALE FOR THE CURRENT SINGLE SESSION. DO NOT REUSE IT. START A NEW CHAT TO GET A NEW session_id.`;
+}
+
 function isSessionActive(p: P, sessionId: string): boolean {
 	return p._sessionManager.getActiveSessionId() === sessionId;
+}
+
+/**
+ * Resolve the single-session validation target without rebinding the request.
+ * This mirrors the singleton selection rules closely enough to reject stale
+ * explicit ids before `_bindSession()` can discard the caller's session_id.
+ */
+function getSingleSessionValidationTargetId(p: P): string | undefined {
+	const waitingSessions =
+		typeof p._sessionManager.getActiveSessions === "function"
+			? settingsH.getWaitingActiveSessions(p)
+			: [];
+	const preferredSession = waitingSessions[0];
+	if (preferredSession) {
+		return preferredSession.id;
+	}
+
+	const activeSession = p._sessionManager.getActiveSession?.();
+	if (activeSession && !activeSession.sessionTerminated) {
+		return activeSession.id;
+	}
+
+	return (
+		p._sessionManager
+			.getActiveSessions?.()
+			.find((session) => !session.sessionTerminated)?.id ??
+		p._sessionManager.getActiveSessionId?.() ??
+		undefined
+	);
+}
+
+/**
+ * Reuse the existing rejected-result transport for single-session stale ids
+ * instead of widening the tool protocol for this narrow fix.
+ */
+function buildSingleSessionNewChatDirective(
+	reason: AskUserDirective["reason"],
+): AskUserDirective {
+	return {
+		kind: "rejected",
+		reason,
+		action: "start_new_chat_with_new_session_id",
+	};
 }
 
 /**
@@ -183,6 +250,34 @@ export async function waitForUserResponse(
 				action: "pass_exact_session_id",
 			},
 		);
+	}
+
+	if (!agentOrchestrationEnabled) {
+		if (p._sessionManager.isDeletedSessionId(normalizedSessionId)) {
+			return buildRejectedResult(
+				undefined,
+				buildSingleSessionDeletedSessionRejectedMessage(normalizedSessionId),
+				buildSingleSessionNewChatDirective("deleted_session"),
+			);
+		}
+
+		const explicitSession = p._getSession?.(normalizedSessionId);
+		if (explicitSession?.sessionTerminated) {
+			return buildRejectedResult(
+				explicitSession,
+				buildSingleSessionTerminatedSessionRejectedMessage(normalizedSessionId),
+				buildSingleSessionNewChatDirective("terminated_session"),
+			);
+		}
+
+		const validationTargetId = getSingleSessionValidationTargetId(p);
+		if (validationTargetId && normalizedSessionId !== validationTargetId) {
+			return buildRejectedResult(
+				undefined,
+				buildStaleSingleSessionRejectedMessage(normalizedSessionId),
+				buildSingleSessionNewChatDirective("missing_session_id"),
+			);
+		}
 	}
 
 	// Reject stale deleted session IDs at the boundary — before creating

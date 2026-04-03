@@ -212,6 +212,7 @@ function createHistoryModal() {
 	historyModal.setAttribute("role", "dialog");
 	historyModal.setAttribute("aria-modal", "true");
 	historyModal.setAttribute("aria-label", "Session History");
+	historyModal.tabIndex = -1;
 
 	// Modal header
 	let modalHeader = document.createElement("div");
@@ -356,6 +357,7 @@ function createSettingsModal() {
 	settingsModal.id = "settings-modal";
 	settingsModal.setAttribute("role", "dialog");
 	settingsModal.setAttribute("aria-labelledby", "settings-modal-title");
+	settingsModal.tabIndex = -1;
 
 	// Modal header
 	let modalHeader = document.createElement("div");
@@ -657,6 +659,7 @@ function createSessionSettingsModal() {
 		"aria-labelledby",
 		"session-settings-title",
 	);
+	sessionSettingsModal.tabIndex = -1;
 
 	// Modal header
 	var ssHeader = document.createElement("div");
@@ -791,6 +794,7 @@ function createSessionActionModal(config) {
 	modal.className = "settings-modal new-session-modal";
 	modal.setAttribute("role", "dialog");
 	modal.setAttribute("aria-labelledby", config.titleId);
+	modal.tabIndex = -1;
 
 	var header = document.createElement("div");
 	header.className = "settings-modal-header";
@@ -866,6 +870,7 @@ function createSessionActionModal(config) {
 	modal.appendChild(content);
 	overlay.appendChild(modal);
 	document.body.appendChild(overlay);
+	overlay.__taskSyncInitialFocusSelector = config.initialFocusSelector || null;
 
 	overlay.addEventListener("click", function (e) {
 		if (e.target === overlay) closeSessionActionModal(overlay);
@@ -877,11 +882,13 @@ function createSessionActionModal(config) {
 function openSessionActionModal(overlay) {
 	if (!overlay) return;
 	overlay.classList.remove("hidden");
+	focusDialogSurface(overlay, overlay.__taskSyncInitialFocusSelector);
 }
 
 function closeSessionActionModal(overlay) {
 	if (!overlay) return;
 	overlay.classList.add("hidden");
+	restoreDialogFocus(overlay);
 }
 
 function createNewSessionModal() {
@@ -921,6 +928,7 @@ function createNewSessionModal() {
 		warningText:
 			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
+		initialFocusSelector: "#new-session-prompt",
 		actions: [
 			{
 				label: "New Session",
@@ -1018,6 +1026,7 @@ function createResetSessionModal() {
 		warningText:
 			"This will clear the current session history without starting a fresh Copilot chat.",
 		confirmLabel: "Reset Session",
+		initialFocusSelector: ".form-btn-save",
 		messageType: "resetSession",
 	});
 }
@@ -1028,6 +1037,7 @@ function createDisableAgentOrchestrationModal() {
 		titleId: "disable-agent-orchestration-modal-title",
 		title: "Turn Off Agent Orchestration",
 		warningText: "",
+		initialFocusSelector: ".form-btn-cancel",
 		actions: [
 			{
 				label: "Cancel",
@@ -1214,10 +1224,7 @@ function showTimeoutWarning(value) {
 	}
 
 	timeoutWarningModalOverlay.classList.remove("hidden");
-
-	// Focus the cancel button for accessibility
-	var cancelBtn = document.getElementById("timeout-warning-cancel-btn");
-	if (cancelBtn) cancelBtn.focus();
+	focusDialogSurface(timeoutWarningModalOverlay, "#timeout-warning-cancel-btn");
 }
 
 function cancelTimeoutWarning() {
@@ -1225,6 +1232,7 @@ function cancelTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(timeoutWarningModalOverlay);
 	// Revert dropdown to current value and restore focus
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.value = String(responseTimeout);
@@ -1244,6 +1252,7 @@ function confirmTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(timeoutWarningModalOverlay);
 	// Restore focus to dropdown
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.focus();
@@ -1339,14 +1348,12 @@ function showSimpleAlert(title, message, iconClass) {
 	}
 
 	simpleAlertModalOverlay.classList.remove("hidden");
-
-	// Focus the OK button for keyboard accessibility
-	var okBtn = document.getElementById("simple-alert-ok-btn");
-	if (okBtn) okBtn.focus();
+	focusDialogSurface(simpleAlertModalOverlay, "#simple-alert-ok-btn");
 }
 
 function closeSimpleAlert() {
 	if (simpleAlertModalOverlay) {
 		simpleAlertModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(simpleAlertModalOverlay);
 }

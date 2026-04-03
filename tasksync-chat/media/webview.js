@@ -2113,13 +2113,13 @@ function createSessionActionModal(config) {
 	var actions = Array.isArray(config.actions)
 		? config.actions
 		: [
-			{
-				label: config.confirmLabel,
-				className: "form-btn form-btn-save",
-				onClick: config.onConfirm,
-				messageType: config.messageType,
-			},
-		];
+				{
+					label: config.confirmLabel,
+					className: "form-btn form-btn-save",
+					onClick: config.onConfirm,
+					messageType: config.messageType,
+				},
+			];
 	actions.forEach(function (action) {
 		var actionBtn = document.createElement("button");
 		actionBtn.className = action.className || "form-btn form-btn-save";
@@ -2331,7 +2331,7 @@ function openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions) {
 			waitingSessions.length === 1
 				? "1 session is still waiting on you. Stopping it will cancel that pending ask_user and then turn Agent Orchestration off."
 				: waitingSessions.length +
-				" sessions are still waiting on you. Stopping them will cancel those pending ask_user calls and then turn Agent Orchestration off.";
+					" sessions are still waiting on you. Stopping them will cancel those pending ask_user calls and then turn Agent Orchestration off.";
 	}
 	openSessionActionModal(disableAgentOrchestrationModalOverlay);
 }
@@ -5992,12 +5992,12 @@ function showAgentOrchestrationDisableAlert(waitingSessions) {
 		waitingSessions.length === 1
 			? "There is still 1 session waiting on you."
 			: "There are still " +
-			waitingSessions.length +
-			" sessions waiting on you.";
+				waitingSessions.length +
+				" sessions waiting on you.";
 	showSimpleAlert(
 		"Keep Agent Orchestration On",
 		message +
-		" Reply to them or stop those sessions before turning Agent Orchestration off.",
+			" Reply to them or stop those sessions before turning Agent Orchestration off.",
 		"codicon-warning",
 	);
 }

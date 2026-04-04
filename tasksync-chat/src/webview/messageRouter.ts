@@ -112,6 +112,12 @@ export function handleWebviewMessage(p: P, message: FromWebviewMessage): void {
 		case "updateInteractiveApprovalSetting":
 			settingsH.handleUpdateInteractiveApprovalSetting(p, message.enabled);
 			break;
+		case "updateAgentOrchestrationSetting":
+			settingsH.handleUpdateAgentOrchestrationSetting(p, message.enabled);
+			break;
+		case "disableAgentOrchestrationAndStopSessions":
+			void settingsH.handleStopSessionsAndDisableAgentOrchestration(p);
+			break;
 		case "updateAutoAppendSetting":
 			settingsH.handleUpdateAutoAppendSetting(p, message.enabled);
 			break;

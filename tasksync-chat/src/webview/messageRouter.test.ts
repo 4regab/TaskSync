@@ -6,6 +6,7 @@ import {
 	handleWebviewMessage,
 	handleWebviewReady,
 } from "./messageRouter";
+import * as settingsH from "./settingsHandlers";
 
 /**
  * Create the smallest provider stub needed to verify session-routing behavior.
@@ -126,6 +127,35 @@ describe("handleWebviewMessage session actions", () => {
 
 		expect(p.startNewSession).toHaveBeenCalledTimes(1);
 		expect(p.startNewSessionAndResetCopilotChat).not.toHaveBeenCalled();
+	});
+});
+
+describe("handleWebviewMessage settings actions", () => {
+	it("routes updateAgentOrchestrationSetting to the settings handler", () => {
+		const p = createMockP();
+		const spy = vi
+			.spyOn(settingsH, "handleUpdateAgentOrchestrationSetting")
+			.mockResolvedValue(undefined);
+
+		handleWebviewMessage(p, {
+			type: "updateAgentOrchestrationSetting",
+			enabled: false,
+		});
+
+		expect(spy).toHaveBeenCalledWith(p, false);
+	});
+
+	it("routes disableAgentOrchestrationAndStopSessions to the settings handler", () => {
+		const p = createMockP();
+		const spy = vi
+			.spyOn(settingsH, "handleStopSessionsAndDisableAgentOrchestration")
+			.mockResolvedValue(undefined);
+
+		handleWebviewMessage(p, {
+			type: "disableAgentOrchestrationAndStopSessions",
+		});
+
+		expect(spy).toHaveBeenCalledWith(p);
 	});
 });
 

@@ -14,11 +14,13 @@ function openHistoryModal() {
 	}
 
 	historyModalOverlay.classList.remove("hidden");
+	focusDialogSurface(historyModalOverlay, "#history-modal");
 }
 
 function closeHistoryModal() {
 	if (!historyModalOverlay) return;
 	historyModalOverlay.classList.add("hidden");
+	restoreDialogFocus(historyModalOverlay);
 }
 
 function clearAllPersistedHistory() {

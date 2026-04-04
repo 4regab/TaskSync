@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import { getImageMimeType } from "./utils/imageUtils";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
+import type { AskUserDirective } from "./webview/webviewTypes";
 import {
 	appendAutoAppendText,
 	buildFinalResponseText,
@@ -37,10 +38,39 @@ export interface AskUserToolResult {
 	queue: boolean;
 	autoAppendEnabled: boolean;
 	autoAppendText: string;
+	sessionId: string;
+	directive?: AskUserDirective;
 }
 
 function buildAssignedSessionInstruction(sessionId: string): string {
-	return `TaskSync auto-assigned session_id "${sessionId}" for this Copilot chat because it was omitted. Use this exact session_id on every future ask_user call in this chat.`;
+	return `TaskSync assigned session_id "${sessionId}". Normal chat is invisible here. Use this exact session_id on every ask_user call. Do not reply in plain chat. CALL ask_user again now with session_id "${sessionId}".`;
+}
+
+function buildBootstrapDirective(sessionId: string): AskUserDirective {
+	return {
+		kind: "bootstrap",
+		reason: "auto_assigned_session",
+		action: "call_ask_user_again",
+		sessionId,
+	};
+}
+
+function toDirectivePayload(directive: AskUserDirective): {
+	kind: AskUserDirective["kind"];
+	reason: AskUserDirective["reason"];
+	action: AskUserDirective["action"];
+	session_id?: string;
+	reask_exact_same_question?: boolean;
+} {
+	return {
+		kind: directive.kind,
+		reason: directive.reason,
+		action: directive.action,
+		...(directive.sessionId ? { session_id: directive.sessionId } : {}),
+		...(directive.reaskExactSameQuestion
+			? { reask_exact_same_question: true }
+			: {}),
+	};
 }
 
 /**
@@ -156,6 +186,8 @@ export async function askUser(
 				queue: result.queue,
 				autoAppendEnabled: false,
 				autoAppendText: "",
+				sessionId: effectiveSessionId,
+				directive: result.directive,
 			};
 		}
 		debugLog(
@@ -218,6 +250,10 @@ export async function askUser(
 				typeof respondingSession?.autoAppendText === "string"
 					? respondingSession.autoAppendText
 					: "",
+			sessionId: effectiveSessionId,
+			directive: autoAssignedSessionId
+				? buildBootstrapDirective(effectiveSessionId)
+				: result.directive,
 		};
 	} catch (error) {
 		// Re-throw cancellation errors without logging (they're expected)
@@ -239,6 +275,7 @@ export async function askUser(
 			queue: false,
 			autoAppendEnabled: false,
 			autoAppendText: "",
+			sessionId: effectiveSessionId,
 		};
 	} finally {
 		// Always clean up the cancellation listener to prevent memory leaks
@@ -309,12 +346,25 @@ export function registerTools(
 				);
 
 				const resultPayload: {
+					session_id: string;
 					response: string;
+					directive?: {
+						kind: AskUserDirective["kind"];
+						reason: AskUserDirective["reason"];
+						action: AskUserDirective["action"];
+						session_id?: string;
+						reask_exact_same_question?: boolean;
+					};
 					queued?: boolean;
 					attachmentCount?: number;
 				} = {
+					session_id: result.sessionId,
 					response: finalResponse,
 				};
+
+				if (result.directive) {
+					resultPayload.directive = toDirectivePayload(result.directive);
+				}
 
 				if (result.queue) {
 					resultPayload.queued = true;

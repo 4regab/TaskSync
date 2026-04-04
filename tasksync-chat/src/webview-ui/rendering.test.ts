@@ -110,11 +110,13 @@ type RenderingBaseContext = {
 	sessions: SessionSummary[];
 	activeSessionId: string | null;
 	splitViewEnabled: boolean;
+	agentOrchestrationEnabled: boolean;
 	splitRatio: number;
 	vertSplitRatio: number;
 	welcomeSection: FakeElement;
 	vscode: { postMessage: ReturnType<typeof vi.fn> };
 	requestFollowServerActiveSession: ReturnType<typeof vi.fn>;
+	getVisibleSessions: () => SessionSummary[];
 	isSplitViewLayoutActive: () => boolean;
 	escapeHtml: (value: string) => string;
 	convertMarkdownLists: (value: string) => string;
@@ -194,13 +196,17 @@ function createRenderingHarness() {
 		sessions: [],
 		activeSessionId: null,
 		splitViewEnabled: false,
+		agentOrchestrationEnabled: true,
 		splitRatio: 38,
 		vertSplitRatio: 35,
 		welcomeSection,
 		vscode: { postMessage: vi.fn() },
 		requestFollowServerActiveSession: vi.fn(),
+		getVisibleSessions: () => baseContext.sessions,
 		isSplitViewLayoutActive: () =>
-			baseContext.splitViewEnabled && baseContext.activeSessionId !== null,
+			baseContext.agentOrchestrationEnabled &&
+			baseContext.splitViewEnabled &&
+			baseContext.activeSessionId !== null,
 		escapeHtml: (value: string) => value,
 		convertMarkdownLists: (value: string) => value,
 		processTableBuffer: (lines: string[]) => lines.join("\n"),
@@ -417,5 +423,20 @@ describe("rendering unread indicators", () => {
 		expect(
 			elements.sessionsCollapseBar.classList.contains("has-unread-indicator"),
 		).toBe(false);
+	});
+
+	it("hides the thread title when agent orchestration is off", () => {
+		const { context, elements } = createRenderingHarness();
+
+		context.sessions = [{ id: "session-1", title: "Agent 1", unread: false }];
+		context.activeSessionId = "session-1";
+
+		context.agentOrchestrationEnabled = false;
+		context.updateWelcomeSectionVisibility();
+		expect(elements.threadTitle.classList.contains("hidden")).toBe(true);
+
+		context.agentOrchestrationEnabled = true;
+		context.updateWelcomeSectionVisibility();
+		expect(elements.threadTitle.classList.contains("hidden")).toBe(false);
 	});
 });

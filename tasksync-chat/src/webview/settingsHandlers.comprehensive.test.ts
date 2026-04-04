@@ -16,6 +16,7 @@ import {
 	SESSION_WARNING_HOURS_MIN,
 } from "../constants/remoteConstants";
 import {
+	AGENT_ORCHESTRATION_MULTI_WAITING_WARNING,
 	applyAutoAppendToResponse,
 	broadcastAllSettingsToRemote,
 	buildSettingsPayload,
@@ -28,6 +29,8 @@ import {
 	handleRemoveReusablePrompt,
 	handleReorderAutopilotPrompts,
 	handleSearchSlashCommands,
+	handleStopSessionsAndDisableAgentOrchestration,
+	handleUpdateAgentOrchestrationSetting,
 	handleUpdateAutoAppendSetting,
 	handleUpdateAutoAppendText,
 	handleUpdateAutopilotSetting,
@@ -61,6 +64,7 @@ function createMockP(overrides: Partial<any> = {}) {
 	return {
 		_soundEnabled: true,
 		_interactiveApprovalEnabled: true,
+		_agentOrchestrationEnabled: true,
 		_autoAppendEnabled: false,
 		_autoAppendText: "",
 		_sendWithCtrlEnter: false,
@@ -74,18 +78,26 @@ function createMockP(overrides: Partial<any> = {}) {
 		_humanLikeDelayMin: DEFAULT_HUMAN_LIKE_DELAY_MIN,
 		_humanLikeDelayMax: DEFAULT_HUMAN_LIKE_DELAY_MAX,
 		_sessionWarningHours: DEFAULT_SESSION_WARNING_HOURS,
+		_sessionFrozenElapsed: null,
 		_consecutiveAutoResponses: 0,
 		_isUpdatingConfig: false,
 		_AUTOPILOT_DEFAULT_TEXT: "Continue",
+		_stopSessionTimerInterval: vi.fn(),
+		_updateViewTitle: vi.fn(),
 		_view: {
 			webview: {
 				postMessage: vi.fn(),
 			},
 		},
 		_remoteServer: null as any,
+		_updateSessionsUI: vi.fn(),
+		_getSingleSession: vi.fn(() => activeSession),
+		cancelPendingToolCall: vi.fn(() => true),
 		_saveSessionsToDisk: vi.fn(),
 		_sessionManager: {
 			getActiveSession: () => activeSession,
+			getActiveSessions: () => [activeSession],
+			getActiveSessionId: () => activeSession.id,
 		},
 		...overrides,
 	} as any;
@@ -391,6 +403,39 @@ describe("loadSettings", () => {
 		expect(p._autopilotPrompts).toEqual([]);
 		expect(p._autopilotText).toBe("Continue");
 	});
+
+	it("keeps default singleton collapse but can skip it for config refresh", () => {
+		const config = createMockConfig({
+			notificationSound: false,
+			interactiveApproval: false,
+			agentOrchestration: false,
+		});
+		config.inspect.mockReturnValue(undefined);
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+
+		// Default callers must keep the existing collapse behavior.
+		loadSettings(p);
+		expect(p._soundEnabled).toBe(false);
+		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(p._getSingleSession).toHaveBeenCalledTimes(1);
+
+		p._getSingleSession.mockClear();
+		p._soundEnabled = true;
+		p._interactiveApprovalEnabled = true;
+		p._agentOrchestrationEnabled = true;
+
+		// The config-refresh opt-in should still reload settings while skipping collapse.
+		loadSettings(p, { skipSingleSessionCollapse: true });
+		expect(p._soundEnabled).toBe(false);
+		expect(p._interactiveApprovalEnabled).toBe(false);
+		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(p._getSingleSession).not.toHaveBeenCalled();
+	});
 });
 
 // ─── buildSettingsPayload ───────────────────────────────────
@@ -421,6 +466,7 @@ describe("buildSettingsPayload", () => {
 
 		const payload = buildSettingsPayload(p);
 		expect(payload.soundEnabled).toBe(false);
+		expect(payload.agentOrchestrationEnabled).toBe(true);
 		expect(payload.autoAppendEnabled).toBe(false);
 		expect(payload.autoAppendText).toBe("");
 		expect(payload.autopilotEnabled).toBe(true);
@@ -524,6 +570,141 @@ describe("handleUpdateInteractiveApprovalSetting", () => {
 		await handleUpdateInteractiveApprovalSetting(p, false);
 		expect(p._interactiveApprovalEnabled).toBe(false);
 		expect(config.update).toHaveBeenCalled();
+	});
+});
+
+describe("handleUpdateAgentOrchestrationSetting", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("updates the workspace setting and resolves the singleton when disabled", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+		const broadcast = vi.fn();
+
+		const p = createMockP({
+			_remoteServer: { broadcast },
+		});
+		await handleUpdateAgentOrchestrationSetting(p, false);
+
+		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(config.update).toHaveBeenCalledWith(
+			"agentOrchestration",
+			false,
+			vscode.ConfigurationTarget.Workspace,
+		);
+		expect(p._getSingleSession).toHaveBeenCalledTimes(1);
+		expect(p._updateSessionsUI).toHaveBeenCalledTimes(1);
+		expect(broadcast).toHaveBeenCalledTimes(1);
+		expect(broadcast).toHaveBeenCalledWith(
+			"settingsChanged",
+			expect.objectContaining({ agentOrchestrationEnabled: false }),
+		);
+	});
+
+	it("does not resolve a singleton session when left enabled", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+
+		const p = createMockP();
+		await handleUpdateAgentOrchestrationSetting(p, true);
+
+		expect(p._agentOrchestrationEnabled).toBe(true);
+		expect(p._getSingleSession).not.toHaveBeenCalled();
+	});
+
+	it("refuses to disable when multiple active sessions are already waiting", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+		const warningSpy = vi
+			.spyOn(vscode.window, "showWarningMessage")
+			.mockResolvedValue(undefined as any);
+
+		const p = createMockP();
+		const activeSession = p._sessionManager.getActiveSession();
+		activeSession.waitingOnUser = true;
+		activeSession.pendingToolCallId = "tc_1";
+		const secondWaitingSession = {
+			...activeSession,
+			id: "2",
+			title: "Agent 2",
+			pendingToolCallId: "tc_2",
+		};
+		p._sessionManager.getActiveSessions = () => [
+			activeSession,
+			secondWaitingSession,
+		];
+
+		await handleUpdateAgentOrchestrationSetting(p, false);
+
+		expect(p._agentOrchestrationEnabled).toBe(true);
+		expect(config.update).not.toHaveBeenCalled();
+		expect(p._getSingleSession).not.toHaveBeenCalled();
+		expect(warningSpy).toHaveBeenCalledWith(
+			AGENT_ORCHESTRATION_MULTI_WAITING_WARNING,
+		);
+		expect(p._updateSessionsUI).toHaveBeenCalledTimes(1);
+	});
+
+	it("stops waiting sessions and then disables orchestration", async () => {
+		const config = createMockConfig({});
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue(
+			config as any,
+		);
+		const broadcast = vi.fn();
+
+		const p = createMockP({
+			_remoteServer: { broadcast },
+		});
+		const activeSession = p._sessionManager.getActiveSession();
+		activeSession.waitingOnUser = true;
+		activeSession.pendingToolCallId = "tc_1";
+		activeSession.sessionStartTime = 123;
+		activeSession.aiTurnActive = false;
+		activeSession.unread = true;
+		activeSession.sessionTerminated = false;
+		const secondWaitingSession = {
+			...activeSession,
+			id: "2",
+			title: "Agent 2",
+			pendingToolCallId: "tc_2",
+			sessionFrozenElapsed: null,
+		};
+		p._sessionManager.getActiveSessions = () => [
+			activeSession,
+			secondWaitingSession,
+		];
+
+		await handleStopSessionsAndDisableAgentOrchestration(p);
+
+		expect(p.cancelPendingToolCall).toHaveBeenCalledWith(
+			"[Session stopped before disabling Agent Orchestration]",
+			"1",
+		);
+		expect(p.cancelPendingToolCall).toHaveBeenCalledWith(
+			"[Session stopped before disabling Agent Orchestration]",
+			"2",
+		);
+		expect(activeSession.sessionTerminated).toBe(true);
+		expect(secondWaitingSession.sessionTerminated).toBe(true);
+		expect(config.update).toHaveBeenCalledWith(
+			"agentOrchestration",
+			false,
+			vscode.ConfigurationTarget.Workspace,
+		);
+		expect(p._agentOrchestrationEnabled).toBe(false);
+		expect(broadcast).toHaveBeenCalledTimes(1);
+		expect(broadcast).toHaveBeenCalledWith(
+			"settingsChanged",
+			expect.objectContaining({ agentOrchestrationEnabled: false }),
+		);
 	});
 });
 

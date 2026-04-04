@@ -69,6 +69,12 @@ Paste or drag-and-drop images directly into the chat input. Images are automatic
 - Access full history via the history button in the title bar
 - Remove individual entries or clear all history
 
+### Agent Orchestration
+Choose how TaskSync manages sessions:
+- **Enabled by default**: keep separate agent sessions, the sessions list, session switching, and split view
+- **Disabled**: stay in one single-session lane; TaskSync hides the sessions list, turns off split view, and routes every `ask_user` call into the active TaskSync session
+- Turning it off hides extra sessions. It does not delete them. Turn it back on to see them again.
+
 ### Auto Append
 Two features for appending text to every `ask_user` response:
 
@@ -224,7 +230,10 @@ In VS Code Settings (search "tasksync"):
 **Debug:**
 - `tasksync.debugLogging`: Verbose extension debug logging (default: false)
 
-All other settings (Autopilot, timeout, human-like delay, sound, etc.) are managed through the TaskSync Settings modal (gear icon).
+**Session Model:**
+- `tasksync.agentOrchestration`: Keep separate TaskSync agent sessions, the sessions list, switching, and split view. Turn it off to force single-session routing in the current workspace. (default: true)
+
+Most other settings (Autopilot, timeout, human-like delay, sound, etc.) are managed through the TaskSync Settings modal (gear icon).
 
 ## Requirements
 

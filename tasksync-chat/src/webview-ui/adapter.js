@@ -241,6 +241,16 @@ function mapToRemoteMessage(msg) {
 			return null;
 		// Multi-session operations — forward to server as-is
 		case "switchSession":
+			if (!agentOrchestrationEnabled) {
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(
+						serverActiveSessionId || activeSessionId || null,
+					);
+				}
+				renderSessionsList();
+				updateWelcomeSectionVisibility();
+				return null;
+			}
 			if (!msg.sessionId) {
 				// Back to hub — handle locally, no server round-trip needed
 				if (typeof saveActiveSessionComposerState === "function") {
@@ -689,6 +699,17 @@ function applySettingsData(s) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
 	}
+	if (s.agentOrchestrationEnabled !== undefined) {
+		agentOrchestrationEnabled = s.agentOrchestrationEnabled;
+		if (!agentOrchestrationEnabled) {
+			splitViewEnabled = false;
+			if (typeof syncClientSessionSelection === "function") {
+				syncClientSessionSelection(
+					serverActiveSessionId || activeSessionId || null,
+				);
+			}
+		}
+	}
 	if (s.autoAppendEnabled !== undefined) {
 		autoAppendEnabled = s.autoAppendEnabled;
 	}
@@ -837,6 +858,7 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
+	updateAgentOrchestrationToggleUI();
 	updateAutoAppendToggleUI();
 	updateAutoAppendTextUI();
 	updateSendWithCtrlEnterToggleUI();
@@ -849,6 +871,8 @@ function applySettingsToUI() {
 	workspacePromptListUI.render();
 	renderPromptsList();
 	updateQueueVisibility();
+	renderSessionsList();
+	updateWelcomeSectionVisibility();
 }
 
 // ==================== End Communication Adapter ====================

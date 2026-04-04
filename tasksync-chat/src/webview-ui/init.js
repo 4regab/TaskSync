@@ -10,6 +10,7 @@ function init() {
 		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
+		createDisableAgentOrchestrationModal();
 		createTimeoutWarningModal();
 		createSimpleAlertModal();
 		bindEventListeners();
@@ -211,6 +212,7 @@ function createHistoryModal() {
 	historyModal.setAttribute("role", "dialog");
 	historyModal.setAttribute("aria-modal", "true");
 	historyModal.setAttribute("aria-label", "Session History");
+	historyModal.tabIndex = -1;
 
 	// Modal header
 	let modalHeader = document.createElement("div");
@@ -355,6 +357,7 @@ function createSettingsModal() {
 	settingsModal.id = "settings-modal";
 	settingsModal.setAttribute("role", "dialog");
 	settingsModal.setAttribute("aria-labelledby", "settings-modal-title");
+	settingsModal.tabIndex = -1;
 
 	// Modal header
 	let modalHeader = document.createElement("div");
@@ -417,6 +420,20 @@ function createSettingsModal() {
 		'<div class="toggle-switch active" id="interactive-approval-toggle" role="switch" aria-checked="true" aria-label="Enable interactive approval and choice buttons" tabindex="0"></div>' +
 		"</div>";
 	modalContent.appendChild(approvalSection);
+
+	// Agent orchestration section - toggle between multi-session and single-session mode
+	let agentOrchestrationSection = document.createElement("div");
+	agentOrchestrationSection.className = "settings-section";
+	agentOrchestrationSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-layers"></span> Agent Orchestration' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync keeps separate agent sessions with the sessions list, switching, and split view. When disabled, TaskSync stays in one single-session lane and routes all ask_user calls into that session.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch active" id="agent-orchestration-toggle" role="switch" aria-checked="true" aria-label="Enable agent orchestration" tabindex="0"></div>' +
+		"</div>";
+	modalContent.appendChild(agentOrchestrationSection);
 
 	// Send shortcut section - switch between Enter and Ctrl/Cmd+Enter send
 	let sendShortcutSection = document.createElement("div");
@@ -605,6 +622,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
+	agentOrchestrationToggle = document.getElementById(
+		"agent-orchestration-toggle",
+	);
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
@@ -639,6 +659,7 @@ function createSessionSettingsModal() {
 		"aria-labelledby",
 		"session-settings-title",
 	);
+	sessionSettingsModal.tabIndex = -1;
 
 	// Modal header
 	var ssHeader = document.createElement("div");
@@ -762,6 +783,7 @@ function createSessionSettingsModal() {
 
 var newSessionModalOverlay = null;
 var resetSessionModalOverlay = null;
+var disableAgentOrchestrationModalOverlay = null;
 
 function createSessionActionModal(config) {
 	var overlay = document.createElement("div");
@@ -772,6 +794,7 @@ function createSessionActionModal(config) {
 	modal.className = "settings-modal new-session-modal";
 	modal.setAttribute("role", "dialog");
 	modal.setAttribute("aria-labelledby", config.titleId);
+	modal.tabIndex = -1;
 
 	var header = document.createElement("div");
 	header.className = "settings-modal-header";
@@ -847,6 +870,7 @@ function createSessionActionModal(config) {
 	modal.appendChild(content);
 	overlay.appendChild(modal);
 	document.body.appendChild(overlay);
+	overlay.__taskSyncInitialFocusSelector = config.initialFocusSelector || null;
 
 	overlay.addEventListener("click", function (e) {
 		if (e.target === overlay) closeSessionActionModal(overlay);
@@ -858,11 +882,13 @@ function createSessionActionModal(config) {
 function openSessionActionModal(overlay) {
 	if (!overlay) return;
 	overlay.classList.remove("hidden");
+	focusDialogSurface(overlay, overlay.__taskSyncInitialFocusSelector);
 }
 
 function closeSessionActionModal(overlay) {
 	if (!overlay) return;
 	overlay.classList.add("hidden");
+	restoreDialogFocus(overlay);
 }
 
 function createNewSessionModal() {
@@ -902,6 +928,7 @@ function createNewSessionModal() {
 		warningText:
 			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
+		initialFocusSelector: "#new-session-prompt",
 		actions: [
 			{
 				label: "New Session",
@@ -952,7 +979,10 @@ function openNewSessionModal() {
 		sessions.find(function (s) {
 			return s.id === activeSessionId;
 		});
-	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	var hasActiveSession =
+		agentOrchestrationEnabled &&
+		!!activeSession &&
+		!activeSession.sessionTerminated;
 	if (endBtn) {
 		endBtn.classList.toggle("hidden", !hasActiveSession);
 	}
@@ -961,7 +991,9 @@ function openNewSessionModal() {
 	if (warningEl) {
 		warningEl.textContent = hasActiveSession
 			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
-			: "Start a fresh Copilot chat session.";
+			: agentOrchestrationEnabled
+				? "Start a fresh Copilot chat session."
+				: "Start a fresh Copilot chat using the current TaskSync session.";
 	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
@@ -994,8 +1026,49 @@ function createResetSessionModal() {
 		warningText:
 			"This will clear the current session history without starting a fresh Copilot chat.",
 		confirmLabel: "Reset Session",
+		initialFocusSelector: ".form-btn-save",
 		messageType: "resetSession",
 	});
+}
+
+function createDisableAgentOrchestrationModal() {
+	disableAgentOrchestrationModalOverlay = createSessionActionModal({
+		overlayId: "disable-agent-orchestration-modal-overlay",
+		titleId: "disable-agent-orchestration-modal-title",
+		title: "Turn Off Agent Orchestration",
+		warningText: "",
+		initialFocusSelector: ".form-btn-cancel",
+		actions: [
+			{
+				label: "Cancel",
+				className: "form-btn form-btn-cancel",
+			},
+			{
+				id: "disable-agent-orchestration-confirm-btn",
+				label: "Stop current session(s) and turn off Agent Orchestration",
+				className: "form-btn form-btn-danger",
+				onClick: stopSessionsAndDisableAgentOrchestration,
+			},
+		],
+	});
+}
+
+function openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions) {
+	if (!disableAgentOrchestrationModalOverlay) {
+		showAgentOrchestrationDisableAlert(waitingSessions);
+		return;
+	}
+	var warningEl = disableAgentOrchestrationModalOverlay.querySelector(
+		".new-session-warning",
+	);
+	if (warningEl) {
+		warningEl.textContent =
+			waitingSessions.length === 1
+				? "1 session is still waiting on you. Stopping it will cancel that pending ask_user and then turn Agent Orchestration off."
+				: waitingSessions.length +
+					" sessions are still waiting on you. Stopping them will cancel those pending ask_user calls and then turn Agent Orchestration off.";
+	}
+	openSessionActionModal(disableAgentOrchestrationModalOverlay);
 }
 
 function openResetSessionModal() {
@@ -1151,10 +1224,7 @@ function showTimeoutWarning(value) {
 	}
 
 	timeoutWarningModalOverlay.classList.remove("hidden");
-
-	// Focus the cancel button for accessibility
-	var cancelBtn = document.getElementById("timeout-warning-cancel-btn");
-	if (cancelBtn) cancelBtn.focus();
+	focusDialogSurface(timeoutWarningModalOverlay, "#timeout-warning-cancel-btn");
 }
 
 function cancelTimeoutWarning() {
@@ -1162,6 +1232,7 @@ function cancelTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(timeoutWarningModalOverlay);
 	// Revert dropdown to current value and restore focus
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.value = String(responseTimeout);
@@ -1181,6 +1252,7 @@ function confirmTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(timeoutWarningModalOverlay);
 	// Restore focus to dropdown
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.focus();
@@ -1276,14 +1348,12 @@ function showSimpleAlert(title, message, iconClass) {
 	}
 
 	simpleAlertModalOverlay.classList.remove("hidden");
-
-	// Focus the OK button for keyboard accessibility
-	var okBtn = document.getElementById("simple-alert-ok-btn");
-	if (okBtn) okBtn.focus();
+	focusDialogSurface(simpleAlertModalOverlay, "#simple-alert-ok-btn");
 }
 
 function closeSimpleAlert() {
 	if (simpleAlertModalOverlay) {
 		simpleAlertModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(simpleAlertModalOverlay);
 }

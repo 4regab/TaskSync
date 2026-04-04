@@ -293,6 +293,16 @@ function mapToRemoteMessage(msg) {
 			return null;
 		// Multi-session operations — forward to server as-is
 		case "switchSession":
+			if (!agentOrchestrationEnabled) {
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(
+						serverActiveSessionId || activeSessionId || null,
+					);
+				}
+				renderSessionsList();
+				updateWelcomeSectionVisibility();
+				return null;
+			}
 			if (!msg.sessionId) {
 				// Back to hub — handle locally, no server round-trip needed
 				if (typeof saveActiveSessionComposerState === "function") {
@@ -741,6 +751,17 @@ function applySettingsData(s) {
 		queueEnabled = s.queueEnabled;
 		updateQueueVisibility();
 	}
+	if (s.agentOrchestrationEnabled !== undefined) {
+		agentOrchestrationEnabled = s.agentOrchestrationEnabled;
+		if (!agentOrchestrationEnabled) {
+			splitViewEnabled = false;
+			if (typeof syncClientSessionSelection === "function") {
+				syncClientSessionSelection(
+					serverActiveSessionId || activeSessionId || null,
+				);
+			}
+		}
+	}
 	if (s.autoAppendEnabled !== undefined) {
 		autoAppendEnabled = s.autoAppendEnabled;
 	}
@@ -889,6 +910,7 @@ function updatePendingUI() {
 function applySettingsToUI() {
 	updateSoundToggleUI();
 	updateInteractiveApprovalToggleUI();
+	updateAgentOrchestrationToggleUI();
 	updateAutoAppendToggleUI();
 	updateAutoAppendTextUI();
 	updateSendWithCtrlEnterToggleUI();
@@ -901,6 +923,8 @@ function applySettingsToUI() {
 	workspacePromptListUI.render();
 	renderPromptsList();
 	updateQueueVisibility();
+	renderSessionsList();
+	updateWelcomeSectionVisibility();
 }
 
 // ==================== End Communication Adapter ====================
@@ -1015,6 +1039,7 @@ let lastPendingContentHtml = "";
 // Settings state (initialized from constants to maintain SSOT)
 let soundEnabled = true;
 let interactiveApprovalEnabled = true;
+let agentOrchestrationEnabled = true;
 let autoAppendEnabled = false;
 let autoAppendText = ""; // Custom text appended to responses for the active session
 let alwaysAppendReminder = false; // Global AskUser reminder toggle
@@ -1116,6 +1141,7 @@ let simpleAlertModalOverlay = null;
 let settingsModal, settingsModalOverlay, settingsModalClose;
 let soundToggle,
 	interactiveApprovalToggle,
+	agentOrchestrationToggle,
 	autoAppendToggle,
 	autoAppendTextRow,
 	autoAppendTextInput,
@@ -1161,12 +1187,57 @@ function sessionExists(sessionId) {
 	);
 }
 
+function resolveSingleSessionId() {
+	if (sessionExists(serverActiveSessionId)) {
+		return serverActiveSessionId;
+	}
+	if (sessionExists(activeSessionId)) {
+		return activeSessionId;
+	}
+	var fallbackSession = Array.isArray(sessions)
+		? sessions.find(function (session) {
+				return session.status === "active";
+			})
+		: null;
+	return fallbackSession ? fallbackSession.id : null;
+}
+
+function getVisibleSessions() {
+	if (agentOrchestrationEnabled) {
+		return Array.isArray(sessions) ? sessions : [];
+	}
+	var singletonSessionId = resolveSingleSessionId();
+	if (!singletonSessionId) {
+		return [];
+	}
+	return sessions.filter(function (session) {
+		return session.id === singletonSessionId;
+	});
+}
+
+function getWaitingActiveSessions() {
+	return Array.isArray(sessions)
+		? sessions.filter(function (session) {
+				return (
+					session.status === "active" &&
+					(session.waitingOnUser || !!session.pendingToolCallId)
+				);
+			})
+		: [];
+}
+
 function requestFollowServerActiveSession() {
 	followServerActiveSessionOnce = true;
 }
 
 function syncClientSessionSelection(nextServerActiveSessionId) {
 	serverActiveSessionId = nextServerActiveSessionId || null;
+
+	if (!agentOrchestrationEnabled) {
+		activeSessionId = resolveSingleSessionId();
+		followServerActiveSessionOnce = false;
+		return;
+	}
 
 	if (!sessionExists(activeSessionId)) {
 		activeSessionId = null;
@@ -1196,7 +1267,11 @@ function getSubmitSessionId() {
 }
 
 function isSplitViewLayoutActive() {
-	return splitViewEnabled && sessionExists(activeSessionId);
+	return (
+		agentOrchestrationEnabled &&
+		splitViewEnabled &&
+		sessionExists(activeSessionId)
+	);
 }
 function init() {
 	try {
@@ -1210,6 +1285,7 @@ function init() {
 		initSessionPromptListUI();
 		createNewSessionModal();
 		createResetSessionModal();
+		createDisableAgentOrchestrationModal();
 		createTimeoutWarningModal();
 		createSimpleAlertModal();
 		bindEventListeners();
@@ -1411,6 +1487,7 @@ function createHistoryModal() {
 	historyModal.setAttribute("role", "dialog");
 	historyModal.setAttribute("aria-modal", "true");
 	historyModal.setAttribute("aria-label", "Session History");
+	historyModal.tabIndex = -1;
 
 	// Modal header
 	let modalHeader = document.createElement("div");
@@ -1555,6 +1632,7 @@ function createSettingsModal() {
 	settingsModal.id = "settings-modal";
 	settingsModal.setAttribute("role", "dialog");
 	settingsModal.setAttribute("aria-labelledby", "settings-modal-title");
+	settingsModal.tabIndex = -1;
 
 	// Modal header
 	let modalHeader = document.createElement("div");
@@ -1617,6 +1695,20 @@ function createSettingsModal() {
 		'<div class="toggle-switch active" id="interactive-approval-toggle" role="switch" aria-checked="true" aria-label="Enable interactive approval and choice buttons" tabindex="0"></div>' +
 		"</div>";
 	modalContent.appendChild(approvalSection);
+
+	// Agent orchestration section - toggle between multi-session and single-session mode
+	let agentOrchestrationSection = document.createElement("div");
+	agentOrchestrationSection.className = "settings-section";
+	agentOrchestrationSection.innerHTML =
+		'<div class="settings-section-header">' +
+		'<div class="settings-section-title">' +
+		'<span class="codicon codicon-layers"></span> Agent Orchestration' +
+		'<span class="settings-info-icon" title="When enabled, TaskSync keeps separate agent sessions with the sessions list, switching, and split view. When disabled, TaskSync stays in one single-session lane and routes all ask_user calls into that session.">' +
+		'<span class="codicon codicon-info"></span></span>' +
+		"</div>" +
+		'<div class="toggle-switch active" id="agent-orchestration-toggle" role="switch" aria-checked="true" aria-label="Enable agent orchestration" tabindex="0"></div>' +
+		"</div>";
+	modalContent.appendChild(agentOrchestrationSection);
 
 	// Send shortcut section - switch between Enter and Ctrl/Cmd+Enter send
 	let sendShortcutSection = document.createElement("div");
@@ -1805,6 +1897,9 @@ function createSettingsModal() {
 	interactiveApprovalToggle = document.getElementById(
 		"interactive-approval-toggle",
 	);
+	agentOrchestrationToggle = document.getElementById(
+		"agent-orchestration-toggle",
+	);
 	alwaysAppendReminderToggle = document.getElementById(
 		"always-append-reminder-toggle",
 	);
@@ -1839,6 +1934,7 @@ function createSessionSettingsModal() {
 		"aria-labelledby",
 		"session-settings-title",
 	);
+	sessionSettingsModal.tabIndex = -1;
 
 	// Modal header
 	var ssHeader = document.createElement("div");
@@ -1962,6 +2058,7 @@ function createSessionSettingsModal() {
 
 var newSessionModalOverlay = null;
 var resetSessionModalOverlay = null;
+var disableAgentOrchestrationModalOverlay = null;
 
 function createSessionActionModal(config) {
 	var overlay = document.createElement("div");
@@ -1972,6 +2069,7 @@ function createSessionActionModal(config) {
 	modal.className = "settings-modal new-session-modal";
 	modal.setAttribute("role", "dialog");
 	modal.setAttribute("aria-labelledby", config.titleId);
+	modal.tabIndex = -1;
 
 	var header = document.createElement("div");
 	header.className = "settings-modal-header";
@@ -2047,6 +2145,7 @@ function createSessionActionModal(config) {
 	modal.appendChild(content);
 	overlay.appendChild(modal);
 	document.body.appendChild(overlay);
+	overlay.__taskSyncInitialFocusSelector = config.initialFocusSelector || null;
 
 	overlay.addEventListener("click", function (e) {
 		if (e.target === overlay) closeSessionActionModal(overlay);
@@ -2058,11 +2157,13 @@ function createSessionActionModal(config) {
 function openSessionActionModal(overlay) {
 	if (!overlay) return;
 	overlay.classList.remove("hidden");
+	focusDialogSurface(overlay, overlay.__taskSyncInitialFocusSelector);
 }
 
 function closeSessionActionModal(overlay) {
 	if (!overlay) return;
 	overlay.classList.add("hidden");
+	restoreDialogFocus(overlay);
 }
 
 function createNewSessionModal() {
@@ -2102,6 +2203,7 @@ function createNewSessionModal() {
 		warningText:
 			"Start a fresh Copilot chat, or end the current session and start a fresh one.",
 		extraContent: extra,
+		initialFocusSelector: "#new-session-prompt",
 		actions: [
 			{
 				label: "New Session",
@@ -2152,7 +2254,10 @@ function openNewSessionModal() {
 		sessions.find(function (s) {
 			return s.id === activeSessionId;
 		});
-	var hasActiveSession = !!activeSession && !activeSession.sessionTerminated;
+	var hasActiveSession =
+		agentOrchestrationEnabled &&
+		!!activeSession &&
+		!activeSession.sessionTerminated;
 	if (endBtn) {
 		endBtn.classList.toggle("hidden", !hasActiveSession);
 	}
@@ -2161,7 +2266,9 @@ function openNewSessionModal() {
 	if (warningEl) {
 		warningEl.textContent = hasActiveSession
 			? "Start a fresh Copilot chat, or end the current session and start a fresh one."
-			: "Start a fresh Copilot chat session.";
+			: agentOrchestrationEnabled
+				? "Start a fresh Copilot chat session."
+				: "Start a fresh Copilot chat using the current TaskSync session.";
 	}
 	// Refresh queue checkbox visibility and label based on current queue state
 	var queueRow = document.getElementById("new-session-queue-row");
@@ -2194,8 +2301,49 @@ function createResetSessionModal() {
 		warningText:
 			"This will clear the current session history without starting a fresh Copilot chat.",
 		confirmLabel: "Reset Session",
+		initialFocusSelector: ".form-btn-save",
 		messageType: "resetSession",
 	});
+}
+
+function createDisableAgentOrchestrationModal() {
+	disableAgentOrchestrationModalOverlay = createSessionActionModal({
+		overlayId: "disable-agent-orchestration-modal-overlay",
+		titleId: "disable-agent-orchestration-modal-title",
+		title: "Turn Off Agent Orchestration",
+		warningText: "",
+		initialFocusSelector: ".form-btn-cancel",
+		actions: [
+			{
+				label: "Cancel",
+				className: "form-btn form-btn-cancel",
+			},
+			{
+				id: "disable-agent-orchestration-confirm-btn",
+				label: "Stop current session(s) and turn off Agent Orchestration",
+				className: "form-btn form-btn-danger",
+				onClick: stopSessionsAndDisableAgentOrchestration,
+			},
+		],
+	});
+}
+
+function openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions) {
+	if (!disableAgentOrchestrationModalOverlay) {
+		showAgentOrchestrationDisableAlert(waitingSessions);
+		return;
+	}
+	var warningEl = disableAgentOrchestrationModalOverlay.querySelector(
+		".new-session-warning",
+	);
+	if (warningEl) {
+		warningEl.textContent =
+			waitingSessions.length === 1
+				? "1 session is still waiting on you. Stopping it will cancel that pending ask_user and then turn Agent Orchestration off."
+				: waitingSessions.length +
+					" sessions are still waiting on you. Stopping them will cancel those pending ask_user calls and then turn Agent Orchestration off.";
+	}
+	openSessionActionModal(disableAgentOrchestrationModalOverlay);
 }
 
 function openResetSessionModal() {
@@ -2351,10 +2499,7 @@ function showTimeoutWarning(value) {
 	}
 
 	timeoutWarningModalOverlay.classList.remove("hidden");
-
-	// Focus the cancel button for accessibility
-	var cancelBtn = document.getElementById("timeout-warning-cancel-btn");
-	if (cancelBtn) cancelBtn.focus();
+	focusDialogSurface(timeoutWarningModalOverlay, "#timeout-warning-cancel-btn");
 }
 
 function cancelTimeoutWarning() {
@@ -2362,6 +2507,7 @@ function cancelTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(timeoutWarningModalOverlay);
 	// Revert dropdown to current value and restore focus
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.value = String(responseTimeout);
@@ -2381,6 +2527,7 @@ function confirmTimeoutWarning() {
 	if (timeoutWarningModalOverlay) {
 		timeoutWarningModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(timeoutWarningModalOverlay);
 	// Restore focus to dropdown
 	if (responseTimeoutSelect) {
 		responseTimeoutSelect.focus();
@@ -2476,18 +2623,227 @@ function showSimpleAlert(title, message, iconClass) {
 	}
 
 	simpleAlertModalOverlay.classList.remove("hidden");
-
-	// Focus the OK button for keyboard accessibility
-	var okBtn = document.getElementById("simple-alert-ok-btn");
-	if (okBtn) okBtn.focus();
+	focusDialogSurface(simpleAlertModalOverlay, "#simple-alert-ok-btn");
 }
 
 function closeSimpleAlert() {
 	if (simpleAlertModalOverlay) {
 		simpleAlertModalOverlay.classList.add("hidden");
 	}
+	restoreDialogFocus(simpleAlertModalOverlay);
 }
 // ==================== Event Listeners ====================
+
+/**
+ * Keep Escape handling centralized so dialogs created in different files close the same way.
+ */
+function isOverlayVisible(overlay) {
+	return !!(
+		overlay &&
+		overlay.classList &&
+		typeof overlay.classList.contains === "function" &&
+		!overlay.classList.contains("hidden")
+	);
+}
+
+/**
+ * Move keyboard focus into an opened dialog so keyboard shortcuts work immediately.
+ */
+function clearPendingDialogFocus(overlay) {
+	if (!overlay || overlay.__tasksyncFocusTimer == null) return;
+	clearTimeout(overlay.__tasksyncFocusTimer);
+	overlay.__tasksyncFocusTimer = null;
+}
+
+/**
+ * Resolve the best focus target inside an open dialog.
+ */
+function resolveDialogFocusTarget(overlay, preferredSelector) {
+	if (!overlay) return null;
+
+	var target = null;
+	if (preferredSelector && typeof overlay.querySelector === "function") {
+		target = overlay.querySelector(preferredSelector);
+	}
+	if (!target && typeof overlay.querySelector === "function") {
+		target = overlay.querySelector(
+			'textarea:not([disabled]), input:not([disabled]), select:not([disabled]), button:not([disabled]), [role="switch"][tabindex], [tabindex]:not([tabindex="-1"])',
+		);
+	}
+	if (!target && typeof overlay.querySelector === "function") {
+		target = overlay.querySelector('[role="dialog"], [role="alertdialog"]');
+	}
+	if (!target && typeof overlay.focus === "function") {
+		target = overlay;
+	}
+
+	return target;
+}
+
+/**
+ * Avoid restoring focus to toolbar-style opener buttons because their visible focus ring looks like a stale selection.
+ */
+function shouldRestoreDialogFocusTarget(target) {
+	if (!target || typeof target.focus !== "function") return false;
+
+	var tagName =
+		typeof target.tagName === "string" ? target.tagName.toUpperCase() : "";
+	if (tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT") {
+		return true;
+	}
+	if (target.isContentEditable) {
+		return true;
+	}
+
+	var role =
+		typeof target.getAttribute === "function"
+			? target.getAttribute("role")
+			: null;
+	if (role === "button" || role === "switch") {
+		return false;
+	}
+
+	if (tagName === "BUTTON") {
+		return false;
+	}
+
+	var classList = target.classList;
+	if (
+		classList &&
+		typeof classList.contains === "function" &&
+		(classList.contains("icon-btn") ||
+			classList.contains("remote-btn") ||
+			classList.contains("settings-modal-header-btn"))
+	) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Keep only the currently opened dialog eligible for deferred focus.
+ */
+function focusDialogSurface(overlay, preferredSelector) {
+	if (!overlay) return;
+	clearPendingDialogFocus(overlay);
+
+	if (
+		typeof document !== "undefined" &&
+		document.activeElement &&
+		document.activeElement !== document.body &&
+		document.activeElement !== overlay &&
+		(!overlay.contains || !overlay.contains(document.activeElement))
+	) {
+		overlay.__tasksyncReturnFocus = document.activeElement;
+	}
+
+	overlay.__tasksyncFocusTimer = setTimeout(function () {
+		overlay.__tasksyncFocusTimer = null;
+		if (!isOverlayVisible(overlay)) return;
+
+		var target = resolveDialogFocusTarget(overlay, preferredSelector);
+		if (target && typeof target.focus === "function") {
+			target.focus();
+		}
+	}, 0);
+}
+
+/**
+ * Return keyboard focus after a dialog closes so the user can continue without an extra click.
+ */
+function restoreDialogFocus(overlay) {
+	if (!overlay) return;
+	clearPendingDialogFocus(overlay);
+
+	var target = overlay.__tasksyncReturnFocus;
+	overlay.__tasksyncReturnFocus = null;
+
+	if (
+		shouldRestoreDialogFocusTarget(target) &&
+		target &&
+		typeof target.focus === "function" &&
+		typeof document !== "undefined" &&
+		typeof document.contains === "function" &&
+		document.contains(target)
+	) {
+		target.focus();
+		return;
+	}
+
+	if (chatInput && typeof chatInput.focus === "function") {
+		chatInput.focus();
+	}
+}
+
+/**
+ * Close only the topmost visible dialog so Escape never dismisses multiple layers at once.
+ */
+function handleGlobalDocumentKeydown(e) {
+	if (e.defaultPrevented || e.key !== "Escape") return;
+
+	if (isOverlayVisible(simpleAlertModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeSimpleAlert();
+		return;
+	}
+
+	if (isOverlayVisible(timeoutWarningModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		cancelTimeoutWarning();
+		return;
+	}
+
+	if (isOverlayVisible(disableAgentOrchestrationModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeSessionActionModal(disableAgentOrchestrationModalOverlay);
+		return;
+	}
+
+	if (isOverlayVisible(resetSessionModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeSessionActionModal(resetSessionModalOverlay);
+		return;
+	}
+
+	if (isOverlayVisible(newSessionModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeSessionActionModal(newSessionModalOverlay);
+		return;
+	}
+
+	if (isOverlayVisible(sessionSettingsOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeSessionSettingsModal();
+		return;
+	}
+
+	if (isOverlayVisible(settingsModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeSettingsModal();
+		return;
+	}
+
+	if (isOverlayVisible(historyModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeHistoryModal();
+		return;
+	}
+
+	if (isOverlayVisible(changesModalOverlay)) {
+		e.preventDefault();
+		e.stopPropagation();
+		toggleChangesPanel(false);
+	}
+}
 
 function bindEventListeners() {
 	if (chatInput) {
@@ -2560,6 +2916,7 @@ function bindEventListeners() {
 	document.addEventListener("contextmenu", handleContextMenu);
 	// Intercept Copy when nothing is selected and copy clicked message text as-is.
 	document.addEventListener("copy", handleCopy);
+	document.addEventListener("keydown", handleGlobalDocumentKeydown);
 
 	if (queueHeader)
 		queueHeader.addEventListener("click", handleQueueHeaderClick);
@@ -2576,6 +2933,7 @@ function bindEventListeners() {
 	// Hub & Thread Shell events
 	if (threadBackBtn) {
 		threadBackBtn.addEventListener("click", function () {
+			if (!agentOrchestrationEnabled) return;
 			saveActiveSessionComposerState();
 			activeSessionId = null;
 			restoreActiveSessionComposerState();
@@ -2594,6 +2952,7 @@ function bindEventListeners() {
 	var threadEditBtn = document.getElementById("thread-edit-btn");
 	if (threadEditBtn) {
 		threadEditBtn.addEventListener("click", function () {
+			if (!agentOrchestrationEnabled) return;
 			var titleEl = document.getElementById("thread-title");
 			if (!titleEl || !activeSessionId) return;
 			var currentTitle = titleEl.textContent || "";
@@ -2679,6 +3038,18 @@ function bindEventListeners() {
 			if (e.key === "Enter" || e.key === " ") {
 				e.preventDefault();
 				toggleInteractiveApprovalSetting();
+			}
+		});
+	}
+	if (agentOrchestrationToggle) {
+		agentOrchestrationToggle.addEventListener(
+			"click",
+			toggleAgentOrchestrationSetting,
+		);
+		agentOrchestrationToggle.addEventListener("keydown", function (e) {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				toggleAgentOrchestrationSetting();
 			}
 		});
 	}
@@ -2865,11 +3236,13 @@ function openHistoryModal() {
 	}
 
 	historyModalOverlay.classList.remove("hidden");
+	focusDialogSurface(historyModalOverlay, "#history-modal");
 }
 
 function closeHistoryModal() {
 	if (!historyModalOverlay) return;
 	historyModalOverlay.classList.add("hidden");
+	restoreDialogFocus(historyModalOverlay);
 }
 
 function clearAllPersistedHistory() {
@@ -3593,6 +3966,15 @@ function handleExtensionMessage(event) {
 		case "updateSettings":
 			soundEnabled = message.soundEnabled !== false;
 			interactiveApprovalEnabled = message.interactiveApprovalEnabled !== false;
+			agentOrchestrationEnabled = message.agentOrchestrationEnabled !== false;
+			if (!agentOrchestrationEnabled) {
+				splitViewEnabled = false;
+				if (typeof syncClientSessionSelection === "function") {
+					syncClientSessionSelection(
+						serverActiveSessionId || activeSessionId || null,
+					);
+				}
+			}
 			autoAppendEnabled = message.autoAppendEnabled === true;
 			autoAppendText =
 				typeof message.autoAppendText === "string"
@@ -3635,6 +4017,7 @@ function handleExtensionMessage(event) {
 					: DEFAULT_HUMAN_DELAY_MAX;
 			updateSoundToggleUI();
 			updateInteractiveApprovalToggleUI();
+			updateAgentOrchestrationToggleUI();
 			updateAutoAppendToggleUI();
 			updateAutoAppendTextUI();
 			updateAlwaysAppendReminderToggleUI();
@@ -3647,6 +4030,8 @@ function handleExtensionMessage(event) {
 			updateRemoteMaxDevicesUI();
 			updateHumanDelayUI();
 			renderPromptsList();
+			renderSessionsList();
+			updateWelcomeSectionVisibility();
 			break;
 		case "slashCommandResults":
 			showSlashDropdown(message.prompts || []);
@@ -4551,6 +4936,13 @@ function renderMermaidDiagrams() {
  * On narrow viewports (<= 480 px) CSS flips this to vertical automatically.
  */
 function toggleSplitView() {
+	if (!agentOrchestrationEnabled) {
+		splitViewEnabled = false;
+		syncSplitViewLayout();
+		updateWelcomeSectionVisibility();
+		saveWebviewState();
+		return;
+	}
 	splitViewEnabled = !splitViewEnabled;
 	syncSplitViewLayout();
 	updateWelcomeSectionVisibility();
@@ -4706,6 +5098,16 @@ function syncHiddenListUnreadIndicators() {
 	var backBtn = document.getElementById("thread-back-btn");
 	var collapseBar = document.getElementById("sessions-collapse-bar");
 	var hubEl = document.getElementById("workspace-hub");
+	if (!agentOrchestrationEnabled) {
+		if (backBtn) {
+			backBtn.classList.remove("has-unread-indicator");
+		}
+		if (collapseBar) {
+			collapseBar.classList.remove("has-unread-indicator");
+			collapseBar.classList.add("hidden");
+		}
+		return;
+	}
 	var hasOpenSession = !!activeSessionId;
 	var hasUnreadOtherSession = (sessions || []).some(function (session) {
 		return session.id !== activeSessionId && session.unread === true;
@@ -4755,7 +5157,8 @@ function syncSplitViewLayout() {
 		resizer.classList.toggle("hidden", !effectiveSplitView);
 	}
 	if (remoteSplitBtn) {
-		remoteSplitBtn.classList.toggle("active", splitViewEnabled);
+		remoteSplitBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+		remoteSplitBtn.classList.toggle("active", effectiveSplitView);
 	}
 
 	if (effectiveSplitView) {
@@ -4787,6 +5190,19 @@ function updateWelcomeSectionVisibility() {
 	var placeholderEl = document.getElementById("split-placeholder");
 	var threadHeadEl = document.getElementById("thread-head");
 	var composerEl = document.getElementById("input-area-container");
+	var threadTitle = document.getElementById("thread-title");
+	var backBtn = document.getElementById("thread-back-btn");
+	var editBtn = document.getElementById("thread-edit-btn");
+
+	if (threadTitle) {
+		threadTitle.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
+	if (backBtn) {
+		backBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
+	if (editBtn) {
+		editBtn.classList.toggle("hidden", !agentOrchestrationEnabled);
+	}
 
 	syncSplitViewLayout();
 
@@ -4803,7 +5219,6 @@ function updateWelcomeSectionVisibility() {
 			var activeSession = (sessions || []).find(function (s) {
 				return s.id === activeSessionId;
 			});
-			var threadTitle = document.getElementById("thread-title");
 			if (activeSession && threadTitle) {
 				threadTitle.textContent = activeSession.title;
 			}
@@ -4830,7 +5245,6 @@ function updateWelcomeSectionVisibility() {
 		var activeSession = (sessions || []).find(function (s) {
 			return s.id === activeSessionId;
 		});
-		var threadTitle = document.getElementById("thread-title");
 		if (activeSession) {
 			if (threadTitle) threadTitle.textContent = activeSession.title;
 		}
@@ -4860,16 +5274,29 @@ function scrollToBottom() {
 function renderSessionsList() {
 	var sessionsListEl = document.getElementById("sessions-list");
 	var sessionsPanelEl = document.getElementById("sessions-panel");
+	var visibleSessions = getVisibleSessions();
 	if (!sessionsListEl) return;
 
 	// Update collapse bar session count
 	var countEl = document.getElementById("sessions-collapse-count");
 	if (countEl) {
 		countEl.textContent =
-			sessions.length > 0 ? "(" + sessions.length + ")" : "";
+			agentOrchestrationEnabled && visibleSessions.length > 0
+				? "(" + visibleSessions.length + ")"
+				: "";
 	}
 
-	if (!sessions || sessions.length === 0) {
+	if (!agentOrchestrationEnabled) {
+		sessionsListEl.innerHTML = "";
+		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
+		if (welcomeSection) {
+			welcomeSection.classList.toggle("hidden", visibleSessions.length > 0);
+		}
+		syncHiddenListUnreadIndicators();
+		return;
+	}
+
+	if (!visibleSessions || visibleSessions.length === 0) {
 		sessionsListEl.innerHTML = "";
 		if (sessionsPanelEl) sessionsPanelEl.classList.add("hidden");
 		if (welcomeSection) welcomeSection.classList.remove("hidden");
@@ -4881,7 +5308,7 @@ function renderSessionsList() {
 	if (welcomeSection) welcomeSection.classList.add("hidden");
 
 	// Sort: active sessions first (newest first), then archived
-	var sorted = sessions.slice().sort(function (a, b) {
+	var sorted = visibleSessions.slice().sort(function (a, b) {
 		if (a.status !== b.status) {
 			return a.status === "active" ? -1 : 1;
 		}
@@ -5750,14 +6177,17 @@ function createPromptListUI(opts) {
 
 function openSettingsModal() {
 	if (!settingsModalOverlay) return;
-	vscode.postMessage({ type: "openSettingsModal" });
+	// Keep modal opening local so a stale settings refresh cannot override
+	// a user's first orchestration toggle while the modal is already opening.
 	settingsModalOverlay.classList.remove("hidden");
+	focusDialogSurface(settingsModalOverlay, "#settings-modal");
 }
 
 function closeSettingsModal() {
 	if (!settingsModalOverlay) return;
 	settingsModalOverlay.classList.add("hidden");
 	hideAddPromptForm();
+	restoreDialogFocus(settingsModalOverlay);
 }
 
 function toggleSoundSetting() {
@@ -5781,6 +6211,66 @@ function toggleInteractiveApprovalSetting() {
 
 function updateInteractiveApprovalToggleUI() {
 	setToggle(interactiveApprovalToggle, interactiveApprovalEnabled);
+}
+
+function showAgentOrchestrationDisableAlert(waitingSessions) {
+	var message =
+		waitingSessions.length === 1
+			? "There is still 1 session waiting on you."
+			: "There are still " +
+				waitingSessions.length +
+				" sessions waiting on you.";
+	showSimpleAlert(
+		"Keep Agent Orchestration On",
+		message +
+			" Reply to them or stop those sessions before turning Agent Orchestration off.",
+		"codicon-warning",
+	);
+}
+
+function stopSessionsAndDisableAgentOrchestration() {
+	vscode.postMessage({ type: "disableAgentOrchestrationAndStopSessions" });
+}
+
+function toggleAgentOrchestrationSetting() {
+	if (agentOrchestrationEnabled) {
+		var waitingSessions =
+			typeof getWaitingActiveSessions === "function"
+				? getWaitingActiveSessions()
+				: [];
+		if (waitingSessions.length > 1) {
+			if (
+				typeof openStopSessionsAndDisableAgentOrchestrationModal === "function"
+			) {
+				openStopSessionsAndDisableAgentOrchestrationModal(waitingSessions);
+			} else {
+				showAgentOrchestrationDisableAlert(waitingSessions);
+			}
+			return;
+		}
+	}
+	agentOrchestrationEnabled = !agentOrchestrationEnabled;
+	if (!agentOrchestrationEnabled) {
+		splitViewEnabled = false;
+	}
+	if (typeof syncClientSessionSelection === "function") {
+		syncClientSessionSelection(
+			serverActiveSessionId || activeSessionId || null,
+		);
+	}
+	updateAgentOrchestrationToggleUI();
+	renderSessionsList();
+	updateWelcomeSectionVisibility();
+	saveWebviewState();
+	vscode.postMessage({
+		type: "updateAgentOrchestrationSetting",
+		enabled: agentOrchestrationEnabled,
+	});
+}
+
+function updateAgentOrchestrationToggleUI() {
+	if (!agentOrchestrationToggle) return;
+	setToggle(agentOrchestrationToggle, agentOrchestrationEnabled);
 }
 
 function toggleAutoAppendSetting() {
@@ -6264,6 +6754,7 @@ function openSessionSettingsModal() {
 	if (!sessionSettingsOverlay) return;
 	vscode.postMessage({ type: "requestSessionSettings" });
 	sessionSettingsOverlay.classList.remove("hidden");
+	focusDialogSurface(sessionSettingsOverlay, "#ss-close-btn");
 }
 
 function closeSessionSettingsModal() {
@@ -6272,6 +6763,7 @@ function closeSessionSettingsModal() {
 	saveSessionSettings();
 	sessionSettingsOverlay.classList.add("hidden");
 	ssHideAddPromptForm();
+	restoreDialogFocus(sessionSettingsOverlay);
 }
 
 function saveSessionSettings() {
@@ -7274,6 +7766,7 @@ async function toggleChangesPanel(forceVisible) {
 		if (changesModalOverlay) {
 			changesModalOverlay.classList.add("hidden");
 		}
+		restoreDialogFocus(changesModalOverlay);
 		updateChangesHeaderButton();
 		return;
 	}
@@ -7310,6 +7803,7 @@ async function toggleChangesPanel(forceVisible) {
 			changesPanelVisible = true;
 			if (changesModalOverlay) {
 				changesModalOverlay.classList.remove("hidden");
+				focusDialogSurface(changesModalOverlay, "#changes-close-btn");
 			}
 			updateChangesHeaderButton();
 			applyChangesState(data);
@@ -7329,6 +7823,7 @@ async function toggleChangesPanel(forceVisible) {
 	changesPanelVisible = true;
 	if (changesModalOverlay) {
 		changesModalOverlay.classList.remove("hidden");
+		focusDialogSurface(changesModalOverlay, "#changes-close-btn");
 	}
 	updateChangesHeaderButton();
 	requestChangesRefresh();

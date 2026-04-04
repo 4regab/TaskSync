@@ -44,6 +44,25 @@ export interface UserResponseResult {
 	queue: boolean;
 	attachments: AttachmentInfo[];
 	cancelled?: boolean; // Indicates if the request was superseded by a new one
+	directive?: AskUserDirective;
+}
+
+export interface AskUserDirective {
+	kind: "bootstrap" | "cancelled" | "rejected";
+	reason:
+		| "auto_assigned_session"
+		| "superseded"
+		| "missing_session_id"
+		| "stale_session_id"
+		| "deleted_session"
+		| "terminated_session";
+	action:
+		| "call_ask_user_again"
+		| "call_ask_user_again_with_auto_session"
+		| "pass_exact_session_id"
+		| "start_new_chat_with_new_session_id";
+	sessionId?: string;
+	reaskExactSameQuestion?: boolean;
 }
 
 // Tool call history entry
@@ -131,6 +150,7 @@ export type ToWebviewMessage =
 			type: "updateSettings";
 			soundEnabled: boolean;
 			interactiveApprovalEnabled: boolean;
+			agentOrchestrationEnabled: boolean;
 			autoAppendEnabled: boolean;
 			autoAppendText: string;
 			autopilotEnabled: boolean;
@@ -230,6 +250,8 @@ export type FromWebviewMessage =
 	| { type: "openSettingsModal" }
 	| { type: "updateSoundSetting"; enabled: boolean }
 	| { type: "updateInteractiveApprovalSetting"; enabled: boolean }
+	| { type: "updateAgentOrchestrationSetting"; enabled: boolean }
+	| { type: "disableAgentOrchestrationAndStopSessions" }
 	| { type: "updateAutoAppendSetting"; enabled: boolean }
 	| { type: "updateAutoAppendText"; text: string }
 	| { type: "updateAlwaysAppendReminderSetting"; enabled: boolean }

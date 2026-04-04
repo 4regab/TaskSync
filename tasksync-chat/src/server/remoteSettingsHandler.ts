@@ -32,6 +32,17 @@ export async function dispatchSettingsMessage(
 			broadcastSettingsChanged(provider, broadcastFn);
 			return true;
 
+		case "updateAgentOrchestrationSetting":
+			await settingsH.handleUpdateAgentOrchestrationSetting(
+				provider,
+				msg.enabled === true,
+			);
+			return true;
+
+		case "disableAgentOrchestrationAndStopSessions":
+			await settingsH.handleStopSessionsAndDisableAgentOrchestration(provider);
+			return true;
+
 		case "updateAutoAppendSetting":
 			await settingsH.handleUpdateAutoAppendSetting(
 				provider,

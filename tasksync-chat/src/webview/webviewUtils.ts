@@ -25,7 +25,7 @@ export { generateId };
 
 /**
  * Debug log — only outputs when `tasksync.debugLogging` is enabled.
- * Uses console.error to appear in the VS Code debug console.
+ * Uses console.info so debug traces do not appear as errors in the VS Code debug console.
  */
 export function debugLog(...args: unknown[]): void {
 	if (
@@ -33,7 +33,7 @@ export function debugLog(...args: unknown[]): void {
 			.getConfiguration(CONFIG_SECTION)
 			.get<boolean>("debugLogging", false)
 	) {
-		console.error("[TaskSync]", ...args);
+		console.info("[TaskSync]", ...args);
 	}
 }
 

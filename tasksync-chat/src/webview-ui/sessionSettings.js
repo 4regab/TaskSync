@@ -71,6 +71,7 @@ function openSessionSettingsModal() {
 	if (!sessionSettingsOverlay) return;
 	vscode.postMessage({ type: "requestSessionSettings" });
 	sessionSettingsOverlay.classList.remove("hidden");
+	focusDialogSurface(sessionSettingsOverlay, "#ss-close-btn");
 }
 
 function closeSessionSettingsModal() {
@@ -79,6 +80,7 @@ function closeSessionSettingsModal() {
 	saveSessionSettings();
 	sessionSettingsOverlay.classList.add("hidden");
 	ssHideAddPromptForm();
+	restoreDialogFocus(sessionSettingsOverlay);
 }
 
 function saveSessionSettings() {

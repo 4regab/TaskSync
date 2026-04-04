@@ -153,6 +153,7 @@ export class TaskSyncWebviewProvider
 
 	// Interactive approval buttons enabled (loaded from VS Code settings)
 	_interactiveApprovalEnabled: boolean = true;
+	_agentOrchestrationEnabled: boolean = true;
 	// Mirrors the ACTIVE session's Auto Append state.
 	_autoAppendEnabled: boolean = false;
 	_autoAppendText: string = "";
@@ -253,35 +254,52 @@ export class TaskSyncWebviewProvider
 		// Listen for settings changes
 		this._disposables.push(
 			vscode.workspace.onDidChangeConfiguration((e) => {
-				// Skip reload if we're the ones updating config (prevents race condition)
-				if (this._isUpdatingConfig) {
-					return;
-				}
-				if (
-					e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
-					e.affectsConfiguration(
-						`${CONFIG_SECTION}.alwaysAppendAskUserReminder`,
-					) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.sessionWarningHours`) ||
-					e.affectsConfiguration(
-						`${CONFIG_SECTION}.maxConsecutiveAutoResponses`,
-					) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelay`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMin`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMax`) ||
-					e.affectsConfiguration(`${CONFIG_SECTION}.sendWithCtrlEnter`)
-				) {
-					this._loadSettings();
-					this._updateSettingsUI();
-					// Broadcast all settings to remote clients
-					settingsH.broadcastAllSettingsToRemote(this);
-				}
+				this._handleConfigurationChange(e);
 			}),
 		);
+	}
+
+	public _handleConfigurationChange(e: vscode.ConfigurationChangeEvent): void {
+		if (this._isUpdatingConfig) {
+			return;
+		}
+		const orchestrationChanged = e.affectsConfiguration(
+			`${CONFIG_SECTION}.agentOrchestration`,
+		);
+		if (
+			e.affectsConfiguration(`${CONFIG_SECTION}.notificationSound`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.interactiveApproval`) ||
+			orchestrationChanged ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.alwaysAppendAskUserReminder`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.reusablePrompts`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.responseTimeout`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.remoteMaxDevices`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.sessionWarningHours`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.maxConsecutiveAutoResponses`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelay`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMin`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.humanLikeDelayMax`) ||
+			e.affectsConfiguration(`${CONFIG_SECTION}.sendWithCtrlEnter`)
+		) {
+			this._loadSettings({ skipSingleSessionCollapse: true });
+			if (
+				orchestrationChanged &&
+				!this._agentOrchestrationEnabled &&
+				settingsH.getWaitingActiveSessions(this).length > 1
+			) {
+				vscode.window.showWarningMessage(
+					settingsH.AGENT_ORCHESTRATION_MULTI_WAITING_WARNING,
+				);
+				void settingsH.handleUpdateAgentOrchestrationSetting(this, true);
+				return;
+			}
+			if (orchestrationChanged && !this._agentOrchestrationEnabled) {
+				this._getSingleSession();
+			}
+			this._updateSettingsUI();
+			settingsH.sendSessionSettingsToWebview(this);
+			settingsH.broadcastAllSettingsToRemote(this);
+		}
 	}
 
 	/**
@@ -316,6 +334,7 @@ export class TaskSyncWebviewProvider
 	}
 
 	public openHistoryModal(): void {
+		this._view?.show(false);
 		this._view?.webview.postMessage({
 			type: "openHistoryModal",
 		} satisfies ToWebviewMessage);
@@ -323,6 +342,7 @@ export class TaskSyncWebviewProvider
 	}
 
 	public openSettingsModal(): void {
+		this._view?.show(false);
 		this._view?.webview.postMessage({
 			type: "openSettingsModal",
 		} satisfies ToWebviewMessage);
@@ -387,6 +407,10 @@ export class TaskSyncWebviewProvider
 	}
 
 	public _setActiveSession(sessionId: string | null): boolean {
+		if (!this._agentOrchestrationEnabled) {
+			this._getSingleSession();
+			return true;
+		}
 		const switched = this._sessionManager.setActiveSession(sessionId);
 		if (switched) {
 			this._syncActiveSessionState();
@@ -449,7 +473,49 @@ export class TaskSyncWebviewProvider
 		this._updateSettingsUI();
 	}
 
+	public _getSingleSession(): ChatSession {
+		const activeSession = this._sessionManager.getActiveSession();
+		const preferredSession = settingsH.getWaitingActiveSessions(this)[0];
+		if (
+			activeSession &&
+			!activeSession.sessionTerminated &&
+			(!preferredSession || preferredSession.id === activeSession.id)
+		) {
+			return activeSession;
+		}
+
+		const fallbackSession =
+			preferredSession ??
+			this._sessionManager
+				.getActiveSessions()
+				.find((session) => !session.sessionTerminated);
+		if (fallbackSession) {
+			this._sessionManager.setActiveSession(fallbackSession.id);
+			this._syncActiveSessionState();
+			// Keep remote clients aligned with the newly active singleton's full state.
+			this._remoteServer?.broadcast("state", this.getRemoteState());
+			this._updateSessionsUI();
+			this._saveSessionsToDisk();
+			return fallbackSession;
+		}
+
+		const session = this._sessionManager.createSession(
+			this._sessionManager.getNextAgentTitle(),
+			undefined,
+			this._sessionDefaults(),
+		);
+		this._syncActiveSessionState();
+		// Keep remote clients aligned with the newly created singleton's full state.
+		this._remoteServer?.broadcast("state", this.getRemoteState());
+		this._updateSessionsUI();
+		this._saveSessionsToDisk();
+		return session;
+	}
+
 	public _bindSession(sessionId: string): ChatSession {
+		if (!this._agentOrchestrationEnabled) {
+			return this._getSingleSession();
+		}
 		return this._ensureSession(
 			sessionId,
 			this._sessionManager.getNextAgentTitle(),
@@ -457,6 +523,9 @@ export class TaskSyncWebviewProvider
 	}
 
 	public createSessionForMissingId(): ChatSession {
+		if (!this._agentOrchestrationEnabled) {
+			return this._getSingleSession();
+		}
 		const session = this._sessionManager.createSession(
 			this._sessionManager.getNextAgentTitle(),
 			this._sessionManager.getNextSessionId(),
@@ -488,7 +557,9 @@ export class TaskSyncWebviewProvider
 		useQueuedPrompt?: boolean;
 		stopCurrentSession?: boolean;
 	}): Promise<void> {
-		const previousActiveSession = this._sessionManager.getActiveSession();
+		const previousActiveSession = this._agentOrchestrationEnabled
+			? this._sessionManager.getActiveSession()
+			: this._getSingleSession();
 		let queuedPromptFromPrevious: QueuedPrompt | undefined;
 		const useQueuedPrompt = options?.useQueuedPrompt;
 
@@ -501,7 +572,33 @@ export class TaskSyncWebviewProvider
 			}
 		}
 
-		if (options?.stopCurrentSession && previousActiveSession) {
+		if (!this._agentOrchestrationEnabled && previousActiveSession) {
+			if (options?.stopCurrentSession) {
+				if (previousActiveSession.pendingToolCallId) {
+					this.cancelPendingToolCall(
+						"[Session stopped by user]",
+						previousActiveSession.id,
+					);
+				}
+				markSessionTerminated(this, previousActiveSession);
+				this._saveSessionsToDisk();
+			} else {
+				// Plain "New Session" must stop the old waiting state without
+				// terminating the old session, otherwise the singleton chooser can
+				// collapse back to the stale waiting session.
+				if (previousActiveSession.pendingToolCallId) {
+					this.cancelPendingToolCall(
+						"[Session reset by user]",
+						previousActiveSession.id,
+					);
+				}
+				previousActiveSession.pendingToolCallId = null;
+				previousActiveSession.waitingOnUser = false;
+				previousActiveSession.unread = false;
+				previousActiveSession.aiTurnActive = false;
+				this._saveSessionsToDisk();
+			}
+		} else if (options?.stopCurrentSession && previousActiveSession) {
 			if (previousActiveSession.pendingToolCallId) {
 				this.cancelPendingToolCall(
 					"[Session stopped by user]",
@@ -579,6 +676,7 @@ export class TaskSyncWebviewProvider
 
 	public openNewSessionModal(): boolean {
 		if (!this._view) return false;
+		this._view.show(false);
 		this._view.webview.postMessage({
 			type: "openNewSessionModal",
 		} satisfies ToWebviewMessage);
@@ -587,6 +685,7 @@ export class TaskSyncWebviewProvider
 
 	public openResetSessionModal(): boolean {
 		if (!this._view) return false;
+		this._view.show(false);
 		this._view.webview.postMessage({
 			type: "openResetSessionModal",
 		} satisfies ToWebviewMessage);
@@ -609,8 +708,8 @@ export class TaskSyncWebviewProvider
 		session.stopSessionTimerInterval(this);
 	}
 
-	_loadSettings(): void {
-		settingsH.loadSettings(this);
+	_loadSettings(options?: settingsH.LoadSettingsOptions): void {
+		settingsH.loadSettings(this, options);
 	}
 
 	/**

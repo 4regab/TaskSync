@@ -670,6 +670,7 @@ async function toggleChangesPanel(forceVisible) {
 		if (changesModalOverlay) {
 			changesModalOverlay.classList.add("hidden");
 		}
+		restoreDialogFocus(changesModalOverlay);
 		updateChangesHeaderButton();
 		return;
 	}
@@ -706,6 +707,7 @@ async function toggleChangesPanel(forceVisible) {
 			changesPanelVisible = true;
 			if (changesModalOverlay) {
 				changesModalOverlay.classList.remove("hidden");
+				focusDialogSurface(changesModalOverlay, "#changes-close-btn");
 			}
 			updateChangesHeaderButton();
 			applyChangesState(data);
@@ -725,6 +727,7 @@ async function toggleChangesPanel(forceVisible) {
 	changesPanelVisible = true;
 	if (changesModalOverlay) {
 		changesModalOverlay.classList.remove("hidden");
+		focusDialogSurface(changesModalOverlay, "#changes-close-btn");
 	}
 	updateChangesHeaderButton();
 	requestChangesRefresh();

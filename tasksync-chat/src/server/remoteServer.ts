@@ -41,7 +41,7 @@ function getDebugEnabled(): boolean {
 		.get<boolean>("remoteDebugLogging", false);
 }
 function debugLog(...args: unknown[]): void {
-	if (getDebugEnabled()) console.error("[TaskSync Remote Debug]", ...args);
+	if (getDebugEnabled()) console.info("[TaskSync Remote Debug]", ...args);
 }
 
 /** Get the configured VS Code command for opening chat from remote sessions. */

@@ -4,7 +4,7 @@
   "displayName": "TaskSync",
   "description": "Queue your prompts or tasks. Work uninterrupted.",
   "icon": "media/Tasksync-logo.png",
-  "version": "3.0.10",
+  "version": "3.0.11",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -42,7 +42,7 @@
         ],
         "toolReferenceName": "askUser",
         "displayName": "Ask User",
-        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable. session_id is REQUIRED on every call. On your FIRST ask_user call in a new chat, use session_id \"auto\" and TaskSync will assign a real session_id in the result. On all subsequent calls, reuse the exact session_id from the previous result.",
+        "modelDescription": "This is your ONLY communication channel with the user. The user CANNOT see your chat responses — they can ONLY see messages sent through this tool. You MUST call this tool in a continuous loop: 1) Call askUser to show your question/status to the user. 2) Receive the user's response. 3) Do the requested work. 4) Call askUser AGAIN with the results. 5) Repeat from step 2. NEVER end your turn without calling this tool — if you do, the user sees nothing and thinks you crashed. If you completed a task, call this tool to report the results. If you need clarification, call this tool to ask. There is NO scenario where ending without calling this tool is acceptable. session_id is REQUIRED on every call. On your FIRST ask_user call in a new chat, use session_id \"auto\" and TaskSync will assign a real session_id in the result. On all subsequent calls, reuse the exact session_id from the previous result. INFORMATION LOSS PREVENTION: When performing context summarization, compaction, or continuation handoff, you MUST ALWAYS preserve the exact current session_id in the summarized context. If the session_id is lost, continuation of work will be disrupted.",
         "canBeReferencedInPrompt": true,
         "icon": "$(question)",
         "inputSchema": {
@@ -54,7 +54,7 @@
             },
             "session_id": {
               "type": "string",
-              "description": "REQUIRED. The TaskSync conversation session_id. On your FIRST call, use \"auto\" to get a session_id assigned. On all subsequent calls, use the exact session_id from the previous result."
+              "description": "REQUIRED. The TaskSync conversation session_id. On your FIRST call, use \"auto\" to get a session_id assigned. On all subsequent calls, use the exact session_id from the previous result. During context summarization, compaction, or continuation handoff, you MUST preserve and reuse this exact session_id."
             }
           },
           "required": [

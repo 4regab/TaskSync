@@ -13,6 +13,9 @@ export const HOOK_STOP_REASON =
 export const HOOK_PRECOMPACT_MESSAGE =
 	"CRITICAL: After compaction, continue calling ask_user with session_id on every turn. Reuse the session_id from your previous ask_user result. NEVER end without calling ask_user.";
 
+export const HOOK_SUBAGENT_START_MESSAGE =
+	"You are a subagent. DO NOT call ask_user. Complete your task and return results. STOP after returning.";
+
 /** Build the full hook file JSON object for writing to disk. */
 export function buildHookFileContent(): object {
 	return {
@@ -27,6 +30,12 @@ export function buildHookFileContent(): object {
 				{
 					type: "command",
 					command: `echo '{"systemMessage":"${HOOK_PRECOMPACT_MESSAGE}"}'`,
+				},
+			],
+			SubagentStart: [
+				{
+					type: "command",
+					command: `echo '{"systemMessage":"${HOOK_SUBAGENT_START_MESSAGE}"}'`,
 				},
 			],
 		},

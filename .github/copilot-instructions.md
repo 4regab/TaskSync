@@ -20,6 +20,8 @@ TaskSync is a human-in-the-loop workflow toolkit for AI-assisted development. Th
 - `tasksync-chat/biome.json` — Biome linter/formatter config
 - `tasksync-chat/vitest.config.ts` — Test config
 - `tasksync-chat/web/` — Remote access PWA (login, service worker)
+- `tasksync-chat/src/constants/hookContent.ts` — Copilot hook message SSOT
+- `.github/hooks/tasksync-stop.json` — Copilot hooks (Stop + PreCompact) for ask_user enforcement
 - `Prompt/` — Standalone prompt/protocol markdown files (not actively developed)
 
 ## Build, Test, and Validate
@@ -98,3 +100,4 @@ Follow OWASP Top 10 principles. Specific patterns enforced in this codebase:
 - Debounced history saves (2 s) for disk I/O performance.
 - Remote server uses WebSocket over HTTP with PIN-based auth and session tokens.
 - `esbuild.js` watch mode monitors `remoteConstants.ts` changes and rebuilds shared constants with 100ms debounce.
+- **Copilot Hooks:** Hook messages are defined in `src/constants/hookContent.ts` (SSOT). `.github/hooks/tasksync-stop.json` is the committed copy for this repo. The `TaskSync: Setup Copilot Hooks` command generates these files in any workspace from the SSOT. Agent-scoped hooks can also be set in `.agent.md` frontmatter.

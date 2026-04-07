@@ -1,0 +1,16 @@
+{
+    "hooks": {
+        "Stop": [
+            {
+                "type": "command",
+                "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"Stop\",\"decision\":\"block\",\"reason\":\"MANDATORY: Call ask_user with session_id before ending. The user CANNOT see your response without ask_user. Reuse the session_id from your previous ask_user result. NEVER end without calling ask_user.\"}}'"
+            }
+        ],
+        "PreCompact": [
+            {
+                "type": "command",
+                "command": "echo '{\"systemMessage\":\"CRITICAL: After compaction, continue calling ask_user with session_id on every turn. Reuse the session_id from your previous ask_user result. NEVER end without calling ask_user.\"}'"
+            }
+        ]
+    }
+}

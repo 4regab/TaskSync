@@ -1,4 +1,6 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
+import { buildHookFileContent } from "./constants/hookContent";
 import {
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_PORT,
@@ -13,6 +15,38 @@ import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
 let webviewProvider: TaskSyncWebviewProvider | undefined;
 let contextManager: ContextManager | undefined;
 let remoteServer: RemoteServer | undefined;
+
+/** Auto-create .github/hooks/tasksync-stop.json if workspace exists and file is missing. */
+async function ensureCopilotHooks(): Promise<void> {
+	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+	if (!workspaceFolder) return;
+
+	const hookFile = vscode.Uri.file(
+		path.join(
+			workspaceFolder.uri.fsPath,
+			".github",
+			"hooks",
+			"tasksync-stop.json",
+		),
+	);
+
+	try {
+		await vscode.workspace.fs.stat(hookFile);
+		return; // File already exists — nothing to do
+	} catch {
+		// File doesn't exist — create it
+	}
+
+	const hooksDir = vscode.Uri.file(
+		path.join(workspaceFolder.uri.fsPath, ".github", "hooks"),
+	);
+	const content = JSON.stringify(buildHookFileContent(), null, 4);
+	await vscode.workspace.fs.createDirectory(hooksDir);
+	await vscode.workspace.fs.writeFile(
+		hookFile,
+		Buffer.from(`${content}\n`, "utf-8"),
+	);
+}
 
 export function activate(context: vscode.ExtensionContext): void {
 	// Initialize context manager for #terminal, #problems features
@@ -38,6 +72,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Preload template asynchronously so first webview resolve avoids sync I/O
 	preloadBodyTemplate(context.extensionUri).catch(() => {
 		/* fallback to sync read */
+	});
+
+	// Auto-setup Copilot hooks if workspace exists and hooks file is missing
+	ensureCopilotHooks().catch(() => {
+		/* best-effort — no user-facing error */
 	});
 
 	// Register VS Code LM Tools (always available for Copilot)
@@ -308,6 +347,52 @@ export function activate(context: vscode.ExtensionContext): void {
 		},
 	);
 
+	// Setup Copilot hooks command — writes .github/hooks/ to workspace
+	const setupHooksCmd = vscode.commands.registerCommand(
+		"tasksync.setupHooks",
+		async () => {
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (!workspaceFolder) {
+				vscode.window.showErrorMessage(
+					"No workspace folder open. Open a folder first.",
+				);
+				return;
+			}
+
+			const hooksDir = vscode.Uri.file(
+				path.join(workspaceFolder.uri.fsPath, ".github", "hooks"),
+			);
+			const hookFile = vscode.Uri.file(
+				path.join(hooksDir.fsPath, "tasksync-stop.json"),
+			);
+
+			// Check if file already exists
+			try {
+				await vscode.workspace.fs.stat(hookFile);
+				const overwrite = await vscode.window.showWarningMessage(
+					"tasksync-stop.json already exists. Overwrite?",
+					{ modal: true },
+					"Overwrite",
+				);
+				if (overwrite !== "Overwrite") return;
+			} catch {
+				// File doesn't exist — proceed
+			}
+
+			const hookContent = JSON.stringify(buildHookFileContent(), null, 4);
+
+			await vscode.workspace.fs.createDirectory(hooksDir);
+			await vscode.workspace.fs.writeFile(
+				hookFile,
+				Buffer.from(hookContent + "\n", "utf-8"),
+			);
+
+			vscode.window.showInformationMessage(
+				"TaskSync hooks created at .github/hooks/tasksync-stop.json",
+			);
+		},
+	);
+
 	context.subscriptions.push(
 		sendMessageCmd,
 		openHistoryCmd,
@@ -318,6 +403,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		startRemoteLanCmd,
 		stopRemoteCmd,
 		goRemoteCmd,
+		setupHooksCmd,
 	);
 }
 

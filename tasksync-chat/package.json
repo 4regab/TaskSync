@@ -345,6 +345,10 @@
         "command": "tasksync.goRemote",
         "title": "Remote",
         "icon": "$(broadcast)"
+      },
+      {
+        "command": "tasksync.setupHooks",
+        "title": "TaskSync: Setup Copilot Hooks"
       }
     ],
     "menus": {

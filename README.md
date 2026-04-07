@@ -80,6 +80,15 @@ Recommended settings for agent mode:
 
 **Enable "Auto Approve" in settings for uninterrupted agent operation. Sessions beyond 2 hours may produce lower-quality results — TaskSync will warn you when it's time to consider starting a fresh session.**
 
+### Copilot Hooks (Preview)
+
+TaskSync includes [Copilot hooks](https://code.visualstudio.com/docs/copilot/copilot-extensibility-overview#_hooks) that prevent the agent from ending without calling `ask_user`. Run **`TaskSync: Setup Copilot Hooks`** from the command palette to generate `.github/hooks/tasksync-stop.json` in your workspace. This adds:
+
+- **Stop hook** — blocks the agent from stopping until it calls `ask_user`
+- **PreCompact hook** — reminds the agent to preserve `session_id` after context compaction
+
+Requires VS Code 1.109.3+ and the `chat.agent.hooks` setting enabled.
+
 ## Discussions
 
 The TaskSync community can be found on [GitHub Discussions](https://github.com/4regab/TaskSync/discussions) where you can ask questions, voice ideas, and share your prompts with other people. Contributions to TaskSync are welcome and highly appreciated.

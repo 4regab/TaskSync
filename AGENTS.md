@@ -23,6 +23,9 @@ TaskSync/
 ├── CHANGELOG.md            # Release history
 ├── README.md               # Project overview
 ├── LICENSE
+├── .github/
+│   └── hooks/
+│       └── tasksync-stop.json  # Copilot hooks (Stop + PreCompact)
 ├── Prompt/                 # Standalone prompt/protocol markdown files
 │   ├── tasksync-v5.2.md
 │   ├── tasksync-v5.1.md
@@ -137,6 +140,7 @@ These principles are mandatory for all changes:
 - Session state uses a boolean `sessionTerminated` flag — do not use string matching for termination detection.
 - Debounced history saves (2 s) are used for disk I/O performance.
 - New Session now supports a modal-first flow and starts a fresh Copilot chat session via `startFreshCopilotChatWithQuery`.
+- **Copilot Hooks:** Hook messages are defined in `src/constants/hookContent.ts` (SSOT). `.github/hooks/tasksync-stop.json` is the committed copy for this repo. The `TaskSync: Setup Copilot Hooks` command generates these files in any workspace from the SSOT. Agent-scoped hooks can also be defined in `.agent.md` frontmatter.
 - Remote Code Review is read-only by design:
     - Diff browsing is available (`/api/changes`, `/api/diff`)
     - Write operations (stage/unstage/discard/commit/push) are blocked remotely

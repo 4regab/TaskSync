@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import * as vscode from "vscode";
 import { buildHookFileContent } from "./constants/hookContent";
 import {
@@ -21,14 +20,8 @@ async function ensureCopilotHooks(): Promise<void> {
 	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 	if (!workspaceFolder) return;
 
-	const hookFile = vscode.Uri.file(
-		path.join(
-			workspaceFolder.uri.fsPath,
-			".github",
-			"hooks",
-			"tasksync-stop.json",
-		),
-	);
+	const hooksDir = vscode.Uri.joinPath(workspaceFolder.uri, ".github", "hooks");
+	const hookFile = vscode.Uri.joinPath(hooksDir, "tasksync-stop.json");
 
 	try {
 		await vscode.workspace.fs.stat(hookFile);
@@ -36,10 +29,6 @@ async function ensureCopilotHooks(): Promise<void> {
 	} catch {
 		// File doesn't exist — create it
 	}
-
-	const hooksDir = vscode.Uri.file(
-		path.join(workspaceFolder.uri.fsPath, ".github", "hooks"),
-	);
 	const content = JSON.stringify(buildHookFileContent(), null, 4);
 	await vscode.workspace.fs.createDirectory(hooksDir);
 	await vscode.workspace.fs.writeFile(
@@ -359,12 +348,12 @@ export function activate(context: vscode.ExtensionContext): void {
 				return;
 			}
 
-			const hooksDir = vscode.Uri.file(
-				path.join(workspaceFolder.uri.fsPath, ".github", "hooks"),
+			const hooksDir = vscode.Uri.joinPath(
+				workspaceFolder.uri,
+				".github",
+				"hooks",
 			);
-			const hookFile = vscode.Uri.file(
-				path.join(hooksDir.fsPath, "tasksync-stop.json"),
-			);
+			const hookFile = vscode.Uri.joinPath(hooksDir, "tasksync-stop.json");
 
 			// Check if file already exists
 			try {
@@ -381,15 +370,21 @@ export function activate(context: vscode.ExtensionContext): void {
 
 			const hookContent = JSON.stringify(buildHookFileContent(), null, 4);
 
-			await vscode.workspace.fs.createDirectory(hooksDir);
-			await vscode.workspace.fs.writeFile(
-				hookFile,
-				Buffer.from(hookContent + "\n", "utf-8"),
-			);
+			try {
+				await vscode.workspace.fs.createDirectory(hooksDir);
+				await vscode.workspace.fs.writeFile(
+					hookFile,
+					Buffer.from(hookContent + "\n", "utf-8"),
+				);
 
-			vscode.window.showInformationMessage(
-				"TaskSync hooks created at .github/hooks/tasksync-stop.json",
-			);
+				vscode.window.showInformationMessage(
+					"TaskSync hooks created at .github/hooks/tasksync-stop.json",
+				);
+			} catch (err) {
+				vscode.window.showErrorMessage(
+					`Failed to create TaskSync hooks: ${getSafeErrorMessage(err)}`,
+				);
+			}
 		},
 	);
 

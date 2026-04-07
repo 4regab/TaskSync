@@ -87,7 +87,7 @@ TaskSync includes [Copilot hooks](https://code.visualstudio.com/docs/copilot/cop
 - **Stop hook** — blocks the agent from stopping until it calls `ask_user`
 - **PreCompact hook** — reminds the agent to preserve `session_id` after context compaction
 
-Requires VS Code 1.109.3+ and the `chat.agent.hooks` setting enabled.
+Copilot Hooks require VS Code 1.109.3+ and the `chat.agent.hooks` setting enabled. The extension itself runs on older supported VS Code versions without hooks.
 
 ## Discussions
 

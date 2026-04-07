@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## TaskSync v3.0.11 (07-09-25)
+## TaskSync v3.0.11 (04-07-26)
 - feat: add Copilot hooks enforcement (Stop + PreCompact) and `TaskSync: Setup Copilot Hooks` command
 
 ## TaskSync v3.0.10 (04-03-26)

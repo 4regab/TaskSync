@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## TaskSync v3.0.12 (04-07-26)
-- feat: add Copilot hooks enforcement (Stop + PreCompact) and `TaskSync: Setup Copilot Hooks` command
+- feat: add global Copilot hooks setup with non-blocking SessionStart, PreCompact, and SubagentStart guidance for `ask_user`
 
 ## TaskSync v3.0.10 (04-03-26)
 - feat: add agent orchestration toggle, single-session routing mode, and always-returned session_id tool payloads

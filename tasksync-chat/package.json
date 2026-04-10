@@ -348,7 +348,7 @@
       },
       {
         "command": "tasksync.setupHooks",
-        "title": "TaskSync: Setup Copilot Hooks"
+        "title": "TaskSync: Setup Global Copilot Hooks"
       }
     ],
     "menus": {

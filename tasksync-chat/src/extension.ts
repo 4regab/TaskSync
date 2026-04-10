@@ -1,3 +1,5 @@
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { buildHookFileContent } from "./constants/hookContent";
 import {
@@ -15,13 +17,24 @@ let webviewProvider: TaskSyncWebviewProvider | undefined;
 let contextManager: ContextManager | undefined;
 let remoteServer: RemoteServer | undefined;
 
-/** Auto-create .github/hooks/tasksync-stop.json if workspace exists and file is missing. */
-async function ensureCopilotHooks(): Promise<void> {
-	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-	if (!workspaceFolder) return;
+const GLOBAL_HOOKS_DIR_PATH = path.join(os.homedir(), ".copilot", "hooks");
+const GLOBAL_HOOK_FILE_NAME = "tasksync.json";
+const GLOBAL_HOOK_FILE_DISPLAY_PATH = `~/.copilot/hooks/${GLOBAL_HOOK_FILE_NAME}`;
 
-	const hooksDir = vscode.Uri.joinPath(workspaceFolder.uri, ".github", "hooks");
-	const hookFile = vscode.Uri.joinPath(hooksDir, "tasksync-stop.json");
+function getGlobalHooksDirUri(): vscode.Uri {
+	return vscode.Uri.file(GLOBAL_HOOKS_DIR_PATH);
+}
+
+function getGlobalHookFileUri(): vscode.Uri {
+	return vscode.Uri.file(
+		path.join(GLOBAL_HOOKS_DIR_PATH, GLOBAL_HOOK_FILE_NAME),
+	);
+}
+
+/** Auto-create ~/.copilot/hooks/tasksync.json if it is missing. */
+async function ensureCopilotHooks(): Promise<void> {
+	const hooksDir = getGlobalHooksDirUri();
+	const hookFile = getGlobalHookFileUri();
 
 	try {
 		await vscode.workspace.fs.stat(hookFile);
@@ -336,30 +349,18 @@ export function activate(context: vscode.ExtensionContext): void {
 		},
 	);
 
-	// Setup Copilot hooks command — writes .github/hooks/ to workspace
+	// Setup Copilot hooks command — writes ~/.copilot/hooks/tasksync.json to user profile
 	const setupHooksCmd = vscode.commands.registerCommand(
 		"tasksync.setupHooks",
 		async () => {
-			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-			if (!workspaceFolder) {
-				vscode.window.showErrorMessage(
-					"No workspace folder open. Open a folder first.",
-				);
-				return;
-			}
-
-			const hooksDir = vscode.Uri.joinPath(
-				workspaceFolder.uri,
-				".github",
-				"hooks",
-			);
-			const hookFile = vscode.Uri.joinPath(hooksDir, "tasksync-stop.json");
+			const hooksDir = getGlobalHooksDirUri();
+			const hookFile = getGlobalHookFileUri();
 
 			// Check if file already exists
 			try {
 				await vscode.workspace.fs.stat(hookFile);
 				const overwrite = await vscode.window.showWarningMessage(
-					"tasksync-stop.json already exists. Overwrite?",
+					`${GLOBAL_HOOK_FILE_DISPLAY_PATH} already exists. Overwrite?`,
 					{ modal: true },
 					"Overwrite",
 				);
@@ -378,7 +379,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				);
 
 				vscode.window.showInformationMessage(
-					"TaskSync hooks created at .github/hooks/tasksync-stop.json",
+					`TaskSync hooks created at ${GLOBAL_HOOK_FILE_DISPLAY_PATH}`,
 				);
 			} catch (err) {
 				vscode.window.showErrorMessage(

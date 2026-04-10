@@ -1,0 +1,23 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "type": "command",
+                "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"MANDATORY: You MUST call ask_user with session_id after EVERY completed task and whenever you need user input. Plain chat is invisible to the user. Reuse the previous session_id. NEVER finish silently.\"}}'"
+            }
+        ],
+        "PreCompact": [
+            {
+                "type": "command",
+                "command": "echo '{\"systemMessage\":\"CRITICAL: You MUST keep calling ask_user with session_id on every turn after compaction. Reuse the previous session_id. NEVER end without ask_user.\"}'"
+            }
+        ],
+        "SubagentStart": [
+            {
+                "type": "command",
+                "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SubagentStart\",\"additionalContext\":\"MANDATORY: You are a subagent. NEVER call ask_user. Return results to the main agent, then STOP.\"}}'"
+            }
+        ]
+    },
+    "version": 1
+}

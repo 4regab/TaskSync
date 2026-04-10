@@ -2,28 +2,43 @@
  * Copilot hook content constants (SSOT)
  *
  * Used by:
- * - extension.ts → setupHooksCmd (generates .github/hooks/tasksync-stop.json)
- * - .github/hooks/tasksync-stop.json (committed copy for this repo)
- * - tasksync.agent.md (agent-scoped hooks — wording should match)
+ * - extension.ts → setupHooksCmd (generates ~/.copilot/hooks/tasksync.json)
  */
 
-export const HOOK_STOP_REASON =
-	"MANDATORY: Call ask_user with session_id before ending. The user CANNOT see your response without ask_user. Reuse the session_id from your previous ask_user result. NEVER end without calling ask_user.";
+export const HOOK_SESSION_START_MESSAGE =
+	"MANDATORY: You MUST call ask_user with session_id after EVERY completed task and whenever you need user input. Plain chat is invisible to the user. Reuse the previous session_id. NEVER finish silently.";
 
 export const HOOK_PRECOMPACT_MESSAGE =
-	"CRITICAL: After compaction, continue calling ask_user with session_id on every turn. Reuse the session_id from your previous ask_user result. NEVER end without calling ask_user.";
+	"CRITICAL: You MUST keep calling ask_user with session_id on every turn after compaction. Reuse the previous session_id. NEVER end without ask_user.";
 
 export const HOOK_SUBAGENT_START_MESSAGE =
-	"You are a subagent. DO NOT call ask_user. Complete your task and return results. STOP after returning.";
+	"MANDATORY: You are a subagent. NEVER call ask_user. Return results to the main agent, then STOP.";
+
+function buildAdditionalContextCommand(
+	hookEventName: "SessionStart" | "SubagentStart",
+	additionalContext: string,
+): string {
+	const payload = JSON.stringify({
+		hookSpecificOutput: {
+			hookEventName,
+			additionalContext,
+		},
+	});
+
+	return `echo '${payload}'`;
+}
 
 /** Build the full hook file JSON object for writing to disk. */
 export function buildHookFileContent(): object {
 	return {
 		hooks: {
-			Stop: [
+			SessionStart: [
 				{
 					type: "command",
-					command: `echo '{"hookSpecificOutput":{"hookEventName":"Stop","decision":"block","reason":"${HOOK_STOP_REASON}"}}'`,
+					command: buildAdditionalContextCommand(
+						"SessionStart",
+						HOOK_SESSION_START_MESSAGE,
+					),
 				},
 			],
 			PreCompact: [
@@ -35,7 +50,10 @@ export function buildHookFileContent(): object {
 			SubagentStart: [
 				{
 					type: "command",
-					command: `echo '{"systemMessage":"${HOOK_SUBAGENT_START_MESSAGE}"}'`,
+					command: buildAdditionalContextCommand(
+						"SubagentStart",
+						HOOK_SUBAGENT_START_MESSAGE,
+					),
 				},
 			],
 		},

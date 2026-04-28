@@ -1,13 +1,4 @@
-> [!WARNING]
-> **GitHub Security Notice:**  
-> GitHub prohibits use of their servers for excessive automated bulk activity or any activity that places undue burden on their infrastructure.
-> Please review:
->
-> - [GitHub Acceptable Use Policies](https://docs.github.com/site-policy/acceptable-use-policies/github-acceptable-use-policies#4-spam-and-inauthentic-activity-on-github)
-> - [GitHub Copilot Terms](https://docs.github.com/site-policy/github-terms/github-terms-for-additional-products-and-features#github-copilot)
->   
-> **Use TaskSync responsibly and at your own risk. You are responsible for ensuring your usage complies with GitHub's terms of service.**
-<h1>TaskSync</h1>
+> # **This project now only works for the old request-based system.** Unfortunately, Taskysync is deprecated due to recent changes in Copilot billing: [GitHub Copilot is moving to usage-based billing](https://github.blog/news-insights/company-news/github-copilot-is-moving-to-usage-based-billing/)
 
 Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop workflows. TaskSync provides three options to integrate feedback loops into your AI-assisted development.
 

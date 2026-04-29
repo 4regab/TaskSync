@@ -1,4 +1,7 @@
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
+import { buildHookFileContent } from "./constants/hookContent";
 import {
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_PORT,
@@ -13,6 +16,39 @@ import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
 let webviewProvider: TaskSyncWebviewProvider | undefined;
 let contextManager: ContextManager | undefined;
 let remoteServer: RemoteServer | undefined;
+
+const GLOBAL_HOOKS_DIR_PATH = path.join(os.homedir(), ".copilot", "hooks");
+const GLOBAL_HOOK_FILE_NAME = "tasksync.json";
+const GLOBAL_HOOK_FILE_DISPLAY_PATH = `~/.copilot/hooks/${GLOBAL_HOOK_FILE_NAME}`;
+
+function getGlobalHooksDirUri(): vscode.Uri {
+	return vscode.Uri.file(GLOBAL_HOOKS_DIR_PATH);
+}
+
+function getGlobalHookFileUri(): vscode.Uri {
+	return vscode.Uri.file(
+		path.join(GLOBAL_HOOKS_DIR_PATH, GLOBAL_HOOK_FILE_NAME),
+	);
+}
+
+/** Auto-create ~/.copilot/hooks/tasksync.json if it is missing. */
+async function ensureCopilotHooks(): Promise<void> {
+	const hooksDir = getGlobalHooksDirUri();
+	const hookFile = getGlobalHookFileUri();
+
+	try {
+		await vscode.workspace.fs.stat(hookFile);
+		return; // File already exists — nothing to do
+	} catch {
+		// File doesn't exist — create it
+	}
+	const content = JSON.stringify(buildHookFileContent(), null, 4);
+	await vscode.workspace.fs.createDirectory(hooksDir);
+	await vscode.workspace.fs.writeFile(
+		hookFile,
+		Buffer.from(`${content}\n`, "utf-8"),
+	);
+}
 
 export function activate(context: vscode.ExtensionContext): void {
 	// Initialize context manager for #terminal, #problems features
@@ -38,6 +74,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Preload template asynchronously so first webview resolve avoids sync I/O
 	preloadBodyTemplate(context.extensionUri).catch(() => {
 		/* fallback to sync read */
+	});
+
+	// Auto-setup Copilot hooks if workspace exists and hooks file is missing
+	ensureCopilotHooks().catch(() => {
+		/* best-effort — no user-facing error */
 	});
 
 	// Register VS Code LM Tools (always available for Copilot)
@@ -308,6 +349,46 @@ export function activate(context: vscode.ExtensionContext): void {
 		},
 	);
 
+	// Setup Copilot hooks command — writes ~/.copilot/hooks/tasksync.json to user profile
+	const setupHooksCmd = vscode.commands.registerCommand(
+		"tasksync.setupHooks",
+		async () => {
+			const hooksDir = getGlobalHooksDirUri();
+			const hookFile = getGlobalHookFileUri();
+
+			// Check if file already exists
+			try {
+				await vscode.workspace.fs.stat(hookFile);
+				const overwrite = await vscode.window.showWarningMessage(
+					`${GLOBAL_HOOK_FILE_DISPLAY_PATH} already exists. Overwrite?`,
+					{ modal: true },
+					"Overwrite",
+				);
+				if (overwrite !== "Overwrite") return;
+			} catch {
+				// File doesn't exist — proceed
+			}
+
+			const hookContent = JSON.stringify(buildHookFileContent(), null, 4);
+
+			try {
+				await vscode.workspace.fs.createDirectory(hooksDir);
+				await vscode.workspace.fs.writeFile(
+					hookFile,
+					Buffer.from(hookContent + "\n", "utf-8"),
+				);
+
+				vscode.window.showInformationMessage(
+					`TaskSync hooks created at ${GLOBAL_HOOK_FILE_DISPLAY_PATH}`,
+				);
+			} catch (err) {
+				vscode.window.showErrorMessage(
+					`Failed to create TaskSync hooks: ${getSafeErrorMessage(err)}`,
+				);
+			}
+		},
+	);
+
 	context.subscriptions.push(
 		sendMessageCmd,
 		openHistoryCmd,
@@ -318,6 +399,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		startRemoteLanCmd,
 		stopRemoteCmd,
 		goRemoteCmd,
+		setupHooksCmd,
 	);
 }
 

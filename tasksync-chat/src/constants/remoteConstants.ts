@@ -6,6 +6,10 @@
 // Extension configuration section name
 export const CONFIG_SECTION = "tasksync";
 
+// MCP Server configuration
+export const MCP_SERVER_NAME = "tasksync";
+export const MCP_SERVER_VERSION = "1.0.0";
+
 // Server configuration
 export const DEFAULT_REMOTE_PORT = 3580;
 export const WS_MAX_PAYLOAD = 1024 * 1024; // 1MB WebSocket message limit

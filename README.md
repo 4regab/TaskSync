@@ -1,6 +1,6 @@
-> # **This project now only works for the old request-based system.** Unfortunately, Taskysync is deprecated due to recent changes in Copilot billing: [GitHub Copilot is moving to usage-based billing](https://github.blog/news-insights/company-news/github-copilot-is-moving-to-usage-based-billing/)
+## Tasksync
 
-Reduce premium AI requests and manage tasks seamlessly with human-in-the-loop workflows. TaskSync provides three options to integrate feedback loops into your AI-assisted development.
+Reduce premium AI credits cost and manage tasks seamlessly with human-in-the-loop workflows. TaskSync provides three options to integrate feedback loops into your AI-assisted development.
 
 ## Choose Your Option
 

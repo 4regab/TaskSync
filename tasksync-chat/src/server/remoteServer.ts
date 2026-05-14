@@ -635,6 +635,38 @@ export class RemoteServer {
 				);
 				break;
 			}
+			case "mcpAskUser": {
+				const question = typeof msg.question === "string" ? msg.question : "";
+				const sessionId =
+					typeof msg.sessionId === "string" ? msg.sessionId : "auto";
+				if (!question) {
+					sendWsError(ws, "Missing question", ErrorCode.INVALID_INPUT);
+					return;
+				}
+				try {
+					const result = await this.provider.waitForUserResponse(
+						question,
+						sessionId,
+					);
+					ws.send(
+						JSON.stringify({
+							type: "mcpAskUserResult",
+							response: result.value,
+							sessionId: sessionId,
+							attachments: result.attachments.map((a) => a.uri || a.name),
+							queue: result.queue,
+						}),
+					);
+				} catch (err) {
+					ws.send(
+						JSON.stringify({
+							type: "mcpAskUserResult",
+							error: getSafeErrorMessage(err),
+						}),
+					);
+				}
+				break;
+			}
 			case "newSession": {
 				debugLog("newSession: starting fresh remote chat");
 				void this.provider

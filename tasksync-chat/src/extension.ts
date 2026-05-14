@@ -1,21 +1,19 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import {
 	CONFIG_SECTION,
 	DEFAULT_REMOTE_PORT,
 } from "./constants/remoteConstants";
 import { ContextManager } from "./context";
-import { McpServerManager } from "./mcp";
 import { RemoteServer } from "./server/remoteServer";
 import { getSafeErrorMessage } from "./server/serverUtils";
-import { askUser, type Input, registerTools } from "./tools";
+import { registerTools } from "./tools";
 import { preloadBodyTemplate } from "./webview/lifecycleHandlers";
 import { TaskSyncWebviewProvider } from "./webview/webviewProvider";
-import { debugLog } from "./webview/webviewUtils";
 
 let webviewProvider: TaskSyncWebviewProvider | undefined;
 let contextManager: ContextManager | undefined;
 let remoteServer: RemoteServer | undefined;
-let mcpServer: McpServerManager | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
 	// Initialize context manager for #terminal, #problems features
@@ -129,70 +127,29 @@ export function activate(context: vscode.ExtensionContext): void {
 		},
 	});
 
-	// Initialize MCP server
-	mcpServer = new McpServerManager({
-		askUserHandler: async (question: string, sessionId: string) => {
-			const nonCancellableToken: vscode.CancellationToken = {
-				isCancellationRequested: false,
-				onCancellationRequested: new vscode.EventEmitter<void>().event,
-			};
-			const params: Input = { question, session_id: sessionId };
-			const result = await askUser(params, provider, nonCancellableToken);
-			return {
-				response: result.response,
-				sessionId: result.sessionId,
-				attachments: result.attachments,
-				queue: result.queue,
-			};
-		},
-		debug: vscode.workspace
-			.getConfiguration(CONFIG_SECTION)
-			.get<boolean>("debugLogging", false),
-	});
-
-	const mcpEnabled = vscode.workspace
-		.getConfiguration(CONFIG_SECTION)
-		.get<boolean>("mcpEnabled", false);
-	if (mcpEnabled) {
-		mcpServer.start().catch((err) => {
-			debugLog("Failed to start MCP server:", getSafeErrorMessage(err));
-		});
-	}
-
-	// Listen for MCP config changes
-	const mcpConfigListener = vscode.workspace.onDidChangeConfiguration((e) => {
-		if (e.affectsConfiguration(`${CONFIG_SECTION}.mcpEnabled`)) {
-			const enabled = vscode.workspace
-				.getConfiguration(CONFIG_SECTION)
-				.get<boolean>("mcpEnabled", false);
-			if (enabled && mcpServer && !mcpServer.isRunning()) {
-				mcpServer.start().catch((err) => {
-					debugLog("Failed to start MCP server:", getSafeErrorMessage(err));
-				});
-			} else if (!enabled && mcpServer?.isRunning()) {
-				mcpServer.stop().catch((err) => {
-					debugLog("Failed to stop MCP server:", getSafeErrorMessage(err));
-				});
-			}
-		}
-	});
-
-	context.subscriptions.push(mcpConfigListener);
-	context.subscriptions.push({
-		dispose: () => {
-			mcpServer?.stop();
-		},
-	});
-
-	// Toggle MCP Server command
-	const toggleMcpCmd = vscode.commands.registerCommand(
-		"tasksync.toggleMcp",
+	// Copy MCP Configuration command
+	const copyMcpConfigCmd = vscode.commands.registerCommand(
+		"tasksync.copyMcpConfig",
 		async () => {
 			const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-			const currentValue = config.get<boolean>("mcpEnabled", false);
-			await config.update("mcpEnabled", !currentValue, true);
+			const port = config.get<number>("remotePort", DEFAULT_REMOTE_PORT);
+			const mcpServerPath = path.join(
+				context.extensionUri.fsPath,
+				"dist",
+				"mcp-server.js",
+			);
+
+			const mcpConfig = {
+				tasksync: {
+					command: "node",
+					args: [mcpServerPath, `--port=${port}`],
+					type: "stdio",
+				},
+			};
+
+			await vscode.env.clipboard.writeText(JSON.stringify(mcpConfig, null, 2));
 			vscode.window.showInformationMessage(
-				`MCP Server ${!currentValue ? "enabled" : "disabled"}`,
+				"MCP configuration copied to clipboard. Paste it into your AI tool's MCP settings.",
 			);
 		},
 	);
@@ -282,7 +239,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				}
 
 				const pick = await vscode.window.showQuickPick(items, {
-					title: `Remote Access Active`,
+					title: "Remote Access Active",
 					placeHolder: directUrl,
 				});
 
@@ -389,17 +346,11 @@ export function activate(context: vscode.ExtensionContext): void {
 		startRemoteLanCmd,
 		stopRemoteCmd,
 		goRemoteCmd,
-		toggleMcpCmd,
+		copyMcpConfigCmd,
 	);
 }
 
 export async function deactivate(): Promise<void> {
-	// Stop MCP server
-	if (mcpServer) {
-		await mcpServer.stop();
-		mcpServer = undefined;
-	}
-
 	// Stop remote server
 	if (remoteServer) {
 		remoteServer.stop();

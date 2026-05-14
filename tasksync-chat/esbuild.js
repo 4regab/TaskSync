@@ -246,8 +246,26 @@ async function main() {
         resolveExtensions: [".ts", ".js", ".mjs"],
     });
 
+    // Build standalone MCP server (separate entry point, no vscode dependency)
+    const mcpCtx = await esbuild.context({
+        entryPoints: ["src/mcp/mcpServer.ts"],
+        bundle: true,
+        outfile: "dist/mcp-server.js",
+        external: [],
+        format: "cjs",
+        platform: "node",
+        target: "node18",
+        sourcemap: true,
+        minify: !watch,
+        banner: { js: "#!/usr/bin/env node" },
+        mainFields: ["module", "main"],
+        conditions: ["import", "node"],
+        resolveExtensions: [".ts", ".js", ".mjs"],
+    });
+
     if (watch) {
         await ctx.watch();
+        await mcpCtx.watch();
         console.log("Watching extension for changes...");
 
         // Also watch webview source files for changes
@@ -296,6 +314,8 @@ async function main() {
     } else {
         await ctx.rebuild();
         await ctx.dispose();
+        await mcpCtx.rebuild();
+        await mcpCtx.dispose();
         console.log("Build complete");
     }
 }

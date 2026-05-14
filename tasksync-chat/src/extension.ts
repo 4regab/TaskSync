@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import {
 	CONFIG_SECTION,
@@ -126,6 +127,50 @@ export function activate(context: vscode.ExtensionContext): void {
 		},
 	});
 
+	// Copy MCP Configuration command
+	const copyMcpConfigCmd = vscode.commands.registerCommand(
+		"tasksync.copyMcpConfig",
+		async () => {
+			const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+			const port = config.get<number>("remotePort", DEFAULT_REMOTE_PORT);
+			const mcpServerPath = path.join(
+				context.extensionUri.fsPath,
+				"dist",
+				"mcp-server.js",
+			);
+
+			const args = [mcpServerPath, `--port=${port}`];
+
+			// Include PIN if remote server is running with PIN auth
+			if (remoteServer?.isRunning()) {
+				const info = remoteServer.getConnectionInfo();
+				if (info.pin) {
+					args.push(`--pin=${info.pin}`);
+				}
+			} else {
+				const pinEnabled = config.get<boolean>("remotePinEnabled", true);
+				if (pinEnabled) {
+					vscode.window.showWarningMessage(
+						"Start Remote Access first (Command Palette > TaskSync: Start Remote Access) then copy the MCP config again to include the PIN.",
+					);
+				}
+			}
+
+			const mcpConfig = {
+				tasksync: {
+					command: "node",
+					args,
+					type: "stdio",
+				},
+			};
+
+			await vscode.env.clipboard.writeText(JSON.stringify(mcpConfig, null, 2));
+			vscode.window.showInformationMessage(
+				"MCP configuration copied to clipboard. Paste it into your AI tool's MCP settings.",
+			);
+		},
+	);
+
 	// Start Remote Access (LAN) command
 	const startRemoteLanCmd = vscode.commands.registerCommand(
 		"tasksync.startRemoteLan",
@@ -211,7 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				}
 
 				const pick = await vscode.window.showQuickPick(items, {
-					title: `Remote Access Active`,
+					title: "Remote Access Active",
 					placeHolder: directUrl,
 				});
 
@@ -318,6 +363,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		startRemoteLanCmd,
 		stopRemoteCmd,
 		goRemoteCmd,
+		copyMcpConfigCmd,
 	);
 }
 

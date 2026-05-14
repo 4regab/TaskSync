@@ -139,10 +139,27 @@ export function activate(context: vscode.ExtensionContext): void {
 				"mcp-server.js",
 			);
 
+			const args = [mcpServerPath, `--port=${port}`];
+
+			// Include PIN if remote server is running with PIN auth
+			if (remoteServer?.isRunning()) {
+				const info = remoteServer.getConnectionInfo();
+				if (info.pin) {
+					args.push(`--pin=${info.pin}`);
+				}
+			} else {
+				const pinEnabled = config.get<boolean>("remotePinEnabled", true);
+				if (pinEnabled) {
+					vscode.window.showWarningMessage(
+						"Start Remote Access first (Command Palette > TaskSync: Start Remote Access) then copy the MCP config again to include the PIN.",
+					);
+				}
+			}
+
 			const mcpConfig = {
 				tasksync: {
 					command: "node",
-					args: [mcpServerPath, `--port=${port}`],
+					args,
 					type: "stdio",
 				},
 			};

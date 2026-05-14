@@ -203,6 +203,34 @@ describe("MCP Standalone Server", () => {
 			expect(parsed.session_id).toBe("new-session-id");
 		});
 
+		it("fails fast with clear error when requireAuth arrives without PIN", async () => {
+			const originalArgv = process.argv;
+			process.argv = ["node", "mcp-server.js", "--port=3580"];
+
+			vi.resetModules();
+			await import("./mcpServer");
+
+			process.argv = originalArgv;
+
+			const handler = toolHandlers.get("ask_user")!;
+			const handlerPromise = handler({
+				question: "No PIN?",
+				session_id: "auto",
+			});
+
+			const wsInstance = mockWsInstances[0];
+			const messageHandler = wsInstance.handlers.get("message");
+
+			// Server requires auth but no PIN was provided
+			messageHandler!(JSON.stringify({ type: "requireAuth" }));
+
+			const result = await handlerPromise;
+			expect(result.isError).toBe(true);
+			const parsed = JSON.parse(result.content[0].text);
+			expect(parsed.error).toContain("requires PIN authentication");
+			expect(parsed.error).toContain("--pin=XXXX");
+		});
+
 		it("returns isError on WebSocket connection failure", async () => {
 			vi.resetModules();
 			await import("./mcpServer");

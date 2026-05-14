@@ -88,8 +88,22 @@ function connectToExtension(
 			try {
 				const msg = JSON.parse(data.toString());
 
-				if (msg.type === "requireAuth" && pin) {
-					ws.send(JSON.stringify({ type: "auth", pin }));
+				if (msg.type === "requireAuth") {
+					if (pin) {
+						ws.send(JSON.stringify({ type: "auth", pin }));
+					} else {
+						settled = true;
+						clearTimeout(timeout);
+						ws.close();
+						reject(
+							new Error(
+								"TaskSync remote server requires PIN authentication. " +
+									"Pass --pin=XXXX or re-copy MCP config from VS Code " +
+									"(Command Palette > TaskSync: Copy MCP Configuration) " +
+									"after starting Remote Access.",
+							),
+						);
+					}
 					return;
 				}
 

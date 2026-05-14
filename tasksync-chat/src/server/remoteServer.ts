@@ -648,22 +648,26 @@ export class RemoteServer {
 						question,
 						sessionId,
 					);
-					ws.send(
-						JSON.stringify({
-							type: "mcpAskUserResult",
-							response: result.value,
-							sessionId: sessionId,
-							attachments: result.attachments.map((a) => a.uri || a.name),
-							queue: result.queue,
-						}),
-					);
+					if (ws.readyState === WebSocket.OPEN) {
+						ws.send(
+							JSON.stringify({
+								type: "mcpAskUserResult",
+								response: result.value,
+								sessionId: sessionId,
+								attachments: result.attachments.map((a) => a.uri || a.name),
+								queue: result.queue,
+							}),
+						);
+					}
 				} catch (err) {
-					ws.send(
-						JSON.stringify({
-							type: "mcpAskUserResult",
-							error: getSafeErrorMessage(err),
-						}),
-					);
+					if (ws.readyState === WebSocket.OPEN) {
+						ws.send(
+							JSON.stringify({
+								type: "mcpAskUserResult",
+								error: getSafeErrorMessage(err),
+							}),
+						);
+					}
 				}
 				break;
 			}

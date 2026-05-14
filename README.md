@@ -71,6 +71,20 @@ Recommended settings for agent mode:
 
 **Enable "Auto Approve" in settings for uninterrupted agent operation. Sessions beyond 2 hours may produce lower-quality results — TaskSync will warn you when it's time to consider starting a fresh session.**
 
+### Copilot Hooks (Preview)
+
+TaskSync includes [Copilot hooks](https://code.visualstudio.com/docs/copilot/customization/hooks) that inject the `ask_user` contract at session start and preserve it through context compaction. Run **`TaskSync: Setup Global Copilot Hooks`** from the command palette to generate `~/.copilot/hooks/tasksync.json` in your user profile. This repo also keeps a matching workspace hook file at `.github/hooks/tasksync.json`. This adds:
+
+- **SessionStart hook** — injects the `ask_user` contract when a session begins
+- **PreCompact hook** — reminds the agent to preserve `session_id` after context compaction
+- **SubagentStart hook** — tells subagents not to call `ask_user`
+
+The default hook set is non-blocking, so it does not force extra turns at stop time. In this repository, the committed workspace hook file mirrors the same hook content, so workspace scope wins without changing behavior.
+
+This is a user-scoped setup by default, so it applies across workspaces. If a workspace hook exists for the same event, VS Code will prefer the workspace hook.
+
+Copilot Hooks require VS Code 1.109.3+ and the `chat.agent.hooks` setting enabled. The extension itself runs on older supported VS Code versions without hooks.
+
 ## Discussions
 
 The TaskSync community can be found on [GitHub Discussions](https://github.com/4regab/TaskSync/discussions) where you can ask questions, voice ideas, and share your prompts with other people. Contributions to TaskSync are welcome and highly appreciated.
